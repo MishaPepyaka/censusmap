@@ -67,6 +67,15 @@
     return value !== undefined && value !== null && String(value).trim().length > 0;
   }
 
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
   function setStatus(message, isError) {
     if (!statusEl) return;
     statusEl.textContent = message;
