@@ -996,6 +996,12 @@
 
   if (editableLayer.getLayers().length > 0 || dwellingsLayer.getLayers().length > 0) {
     fitMapToActiveRegion();
+    map.whenReady(() => {
+      window.setTimeout(() => {
+        map.invalidateSize();
+        fitMapToActiveRegion();
+      }, 0);
+    });
   } else {
     setStatus(
       `No region geometry loaded for CLD ${cld}.`,
