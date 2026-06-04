@@ -1,0 +1,21 @@
+Cloudflare Pages deploy (free) with password protection
+
+Project folder:
+/home/misha/Projects/selfhost-map-cmp/deploy/cloudflare-pages-norway
+
+1) Install Wrangler (if missing)
+npm i -g wrangler
+
+2) Login to Cloudflare
+wrangler login
+
+3) Deploy to Pages
+cd /home/misha/Projects/selfhost-map-cmp/deploy/cloudflare-pages-norway
+wrangler pages deploy . --project-name norway-house-census-map
+
+Password protection:
+- HTTP Basic Auth is enabled by functions/_middleware.js
+- Username: any non-empty value
+- Password: norway
+
+After deploy, Cloudflare will print the public URL (*.pages.dev).

@@ -1,0 +1,32 @@
+services:
+  app:
+    build:
+      context: ./backend
+    container_name: selfhost-map-app
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      USE_FILE_STORE: "${USE_FILE_STORE:-true}"
+      FILE_STORE_PATH: /data/file-store.json
+      EDIT_USERNAME: "${EDIT_USERNAME:-admin}"
+      EDIT_PASSWORD: "${EDIT_PASSWORD:-}"
+      BASE_TILE_URL: "${BASE_TILE_URL:-https://tile.openstreetmap.org/{z}/{x}/{y}.png}"
+      BASE_TILE_ATTRIBUTION: "${BASE_TILE_ATTRIBUTION:-&copy; OpenStreetMap contributors}"
+      CMP_MODE: "${CMP_MODE:-wms}"
+      CMP_WMS_URL: "${CMP_WMS_URL:-}"
+      CMP_WMS_LAYERS: "${CMP_WMS_LAYERS:-}"
+      CMP_WMS_FORMAT: "${CMP_WMS_FORMAT:-image/png}"
+      CMP_WMS_VERSION: "${CMP_WMS_VERSION:-1.1.1}"
+      CMP_WMS_ATTRIBUTION: "${CMP_WMS_ATTRIBUTION:-Source: Statistics Canada}"
+      CMP_XYZ_URL: "${CMP_XYZ_URL:-}"
+      CMP_XYZ_ATTRIBUTION: "${CMP_XYZ_ATTRIBUTION:-Source: Statistics Canada}"
+      CMP_ARCGIS_URL: "${CMP_ARCGIS_URL:-}"
+      CMP_ARCGIS_ATTRIBUTION: "${CMP_ARCGIS_ATTRIBUTION:-Source: Statistics Canada}"
+      CMP_ARCGIS_LAYERS: "${CMP_ARCGIS_LAYERS:-}"
+      CMP_ARCGIS_USE_LOCAL_PROXY: "${CMP_ARCGIS_USE_LOCAL_PROXY:-true}"
+      CMP_ARCGIS_COOKIE: "${CMP_ARCGIS_COOKIE:-}"
+    volumes:
+      - ./data:/data
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    restart: unless-stopped

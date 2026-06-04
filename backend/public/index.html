@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CLD Map Viewer</title>
+    <link rel="icon" type="image/svg+xml" href="/flag-logo.svg?v=20260604c" />
+    <link rel="apple-touch-icon" href="/flag-logo.svg?v=20260604c" />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260604c" />
+    <link rel="stylesheet" href="/styles.css?v=20260604c" />
+  </head>
+  <body>
+    <main id="map"></main>
+
+    <section id="route-ui" aria-label="Region actions">
+      <div class="route-ui-top">
+        <div id="route-label">Loading region...</div>
+        <div id="route-subtitle"></div>
+      </div>
+      <div class="route-ui-actions">
+        <a id="back-home-link" class="route-link-btn" href="/">Find CLD</a>
+        <a id="edit-route-link" class="route-link-btn route-link-btn-accent" href="#">Edit</a>
+      </div>
+    </section>
+
+    <section id="search-ui" aria-label="Dwelling search">
+      <input
+        id="dwelling-search-input"
+        type="text"
+        inputmode="numeric"
+        autocomplete="off"
+        placeholder="462211020079"
+        maxlength="16"
+      />
+      <button id="dwelling-search-btn" type="button">Find</button>
+      <div id="dwelling-search-status" aria-live="polite"></div>
+    </section>
+
+    <div id="map-ui">
+      <button id="locate-btn" class="map-action-btn" type="button" aria-label="Focus on my location" title="Focus on my location"></button>
+      <button id="basemap-btn" class="map-action-btn map-action-btn-leaf" type="button" aria-label="Switch base map (current: Satellite)" title="Switch base map (current: Satellite)"></button>
+    </div>
+
+    <script src="/vendor/leaflet/leaflet.js?v=20260604c"></script>
+    <script src="/app.js?v=20260604c"></script>
+  </body>
+</html>

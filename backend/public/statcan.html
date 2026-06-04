@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StatCan Viewer</title>
+    <link rel="icon" type="image/svg+xml" href="./flag-logo.svg?v=20260524a" />
+    <link rel="apple-touch-icon" href="./flag-logo.svg?v=20260524a" />
+    <link rel="stylesheet" href="./vendor/leaflet/leaflet.css?v=20260524a" />
+    <link rel="stylesheet" href="./styles.css?v=20260524a" />
+  </head>
+  <body>
+    <main id="map"></main>
+    <section id="search-ui" aria-label="Dwelling search">
+      <input
+        id="dwelling-search-input"
+        type="text"
+        inputmode="numeric"
+        autocomplete="off"
+        placeholder="462210550033"
+        maxlength="16"
+      />
+      <button id="dwelling-search-btn" type="button">Find</button>
+      <div id="dwelling-search-status" aria-live="polite"></div>
+    </section>
+
+    <script src="./vendor/leaflet/leaflet.js?v=20260524a"></script>
+    <script src="./vendor/esri-leaflet/esri-leaflet.js?v=20260524a"></script>
+    <script src="./app-statcan.js?v=20260524a"></script>
+  </body>
+</html>

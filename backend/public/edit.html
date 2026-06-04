@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CLD Region Editor</title>
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260604c" />
+    <link rel="stylesheet" href="/vendor/leaflet-draw/leaflet.draw.css?v=20260604c" />
+    <link rel="stylesheet" href="/styles.css?v=20260604c" />
+  </head>
+  <body>
+    <main id="map"></main>
+
+    <div id="map-ui">
+      <button id="locate-btn" class="map-action-btn" type="button" aria-label="Focus on my location" title="Focus on my location"></button>
+      <button id="basemap-btn" class="map-action-btn map-action-btn-leaf" type="button" aria-label="Switch base map (current: Satellite)" title="Switch base map (current: Satellite)"></button>
+    </div>
+
+    <section id="editor-panel">
+      <div class="editor-route-head">
+        <div id="editor-route-label">Loading editor...</div>
+        <div class="editor-route-links">
+          <a id="editor-view-link" class="route-link-btn" href="#">Viewer</a>
+          <a class="route-link-btn" href="/">Find CLD</a>
+        </div>
+      </div>
+
+      <button id="dwellings-collapse-btn" type="button" class="editor-collapse-btn" aria-expanded="true">Region Editor</button>
+      <div id="dwellings-form-wrap">
+        <div class="editor-help">
+          Tap a `CU` or `Block` to select it. Use `Add a dwelling` for the iPhone camera flow, or `Upload photos` to attach media without creating a new dwelling.
+        </div>
+
+        <details class="editor-group" open>
+          <summary class="editor-group-title">Quick Actions</summary>
+          <div class="editor-group-body">
+            <div class="editor-row-actions editor-row-actions-two">
+              <button id="dwelling-add-btn" type="button" class="editor-save-btn">Add a dwelling</button>
+              <button id="photo-upload-btn" type="button" class="editor-save-btn">Upload photos</button>
+            </div>
+            <input id="dwelling-photo-capture-input" type="file" accept="image/*" capture="environment" hidden />
+            <input id="editor-photo-upload-input" type="file" accept="image/*" multiple hidden />
+            <div id="upload-status" class="editor-inline-status"></div>
+          </div>
+        </details>
+
+        <details class="editor-group" open>
+          <summary class="editor-group-title">Dwelling Details</summary>
+          <div class="editor-group-body">
+            <label class="editor-label">CU
+              <input id="dwelling-cu" class="editor-input" type="text" placeholder="46221114" />
+            </label>
+            <label class="editor-label">Block
+              <input id="dwelling-block" class="editor-input" type="text" placeholder="01" />
+            </label>
+            <label class="editor-label">Dwelling No
+              <input id="dwelling-no" class="editor-input" type="text" placeholder="0001" />
+            </label>
+            <label class="editor-label">Type
+              <input id="dwelling-type" class="editor-input" type="text" placeholder="1" />
+            </label>
+            <label class="editor-label">Civic
+              <input id="dwelling-civic" class="editor-input" type="text" placeholder="Optional" />
+            </label>
+            <label class="editor-label">Status
+              <input id="dwelling-status" class="editor-input" type="text" placeholder="Optional" />
+            </label>
+            <label class="editor-label">Contact
+              <input id="dwelling-contact" class="editor-input" type="text" placeholder="Optional" />
+            </label>
+            <label class="editor-label">External Link
+              <input id="dwelling-link" class="editor-input" type="url" placeholder="https://..." />
+            </label>
+            <label class="editor-label">Photo URL
+              <input id="dwelling-photo" class="editor-input" type="url" placeholder="/media/cld/..." />
+            </label>
+            <label class="editor-label">Description
+              <textarea id="dwelling-description" class="editor-input editor-textarea" rows="3" placeholder="Description"></textarea>
+            </label>
+            <label class="editor-label">Notes
+              <textarea id="dwelling-notes" class="editor-input editor-textarea" rows="2" placeholder="Notes"></textarea>
+            </label>
+
+            <label class="editor-checkbox-row">
+              <input id="dwelling-occupied" type="checkbox" checked />
+              <span>Occupied</span>
+            </label>
+
+            <div class="editor-row-actions">
+              <button id="dwelling-new-btn" type="button" class="editor-save-btn">New</button>
+              <button id="dwelling-save-btn" type="button" class="editor-save-btn">Save</button>
+              <button id="dwelling-delete-btn" type="button" class="editor-danger-btn">Delete</button>
+            </div>
+          </div>
+        </details>
+
+        <details class="editor-group" open>
+          <summary class="editor-group-title">Bulk Actions</summary>
+          <div class="editor-group-body">
+            <div class="editor-help">Selection source: active alignment box, or selected `CU`/`Block` polygon.</div>
+            <button id="dwelling-save-all-btn" type="button" class="editor-save-btn" disabled>Save All Dwellings</button>
+            <button id="dwelling-delete-selection-btn" type="button" class="editor-danger-btn">Delete Dwellings In Selection</button>
+          </div>
+        </details>
+
+        <details class="editor-group" open>
+          <summary class="editor-group-title">Sketch Alignment</summary>
+          <div class="editor-group-body">
+            <label class="editor-label">Source tag
+              <input id="align-source" class="editor-input" type="text" value="manual_sketch_2026-05-17" />
+            </label>
+            <div class="editor-row-actions">
+              <button id="align-start-btn" type="button" class="editor-save-btn">Box</button>
+              <button id="align-apply-btn" type="button" class="editor-save-btn">Save+Close</button>
+              <button id="align-cancel-btn" type="button" class="editor-danger-btn">Cancel</button>
+            </div>
+          </div>
+        </details>
+
+        <details class="editor-group" open>
+          <summary class="editor-group-title">Zone Geometry</summary>
+          <div class="editor-group-body">
+            <div class="editor-help">Boundary editing is enabled for both `CU` and `Block` polygons.</div>
+            <button id="save-edits-btn" type="button" class="editor-save-btn" disabled>Save Geometry</button>
+            <div id="editor-status">No pending changes</div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <script src="/vendor/leaflet/leaflet.js?v=20260604c"></script>
+    <script src="/vendor/leaflet-draw/leaflet.draw.js?v=20260604c"></script>
+    <script src="/app-edit.js?v=20260604c"></script>
+  </body>
+</html>
