@@ -965,21 +965,20 @@
   updateDwellingSaveAllState();
 
   function fitMapToActiveRegion() {
+    const fitOptions = {
+      paddingTopLeft: [340, 20],
+      paddingBottomRight: [20, 20],
+      maxZoom: 17
+    };
     const blockBounds = L.featureGroup(blockLayers).getBounds();
     if (blockBounds.isValid()) {
-      map.fitBounds(blockBounds, {
-        padding: [20, 20],
-        maxZoom: 17
-      });
+      map.fitBounds(blockBounds, fitOptions);
       return;
     }
     if (editableLayer.getLayers().length > 0) {
       const zoneBounds = editableLayer.getBounds();
       if (zoneBounds.isValid()) {
-        map.fitBounds(zoneBounds, {
-          padding: [20, 20],
-          maxZoom: 17
-        });
+        map.fitBounds(zoneBounds, fitOptions);
         return;
       }
     }
@@ -987,7 +986,8 @@
       const dwellingBounds = dwellingsLayer.getBounds();
       if (dwellingBounds.isValid()) {
         map.fitBounds(dwellingBounds, {
-          padding: [20, 20],
+          paddingTopLeft: [340, 20],
+          paddingBottomRight: [20, 20],
           maxZoom: 18
         });
       }
@@ -997,10 +997,15 @@
   if (editableLayer.getLayers().length > 0 || dwellingsLayer.getLayers().length > 0) {
     fitMapToActiveRegion();
     map.whenReady(() => {
-      window.setTimeout(() => {
+      const refit = () => {
         map.invalidateSize();
         fitMapToActiveRegion();
-      }, 0);
+      };
+      window.setTimeout(refit, 0);
+      window.setTimeout(refit, 250);
+      window.addEventListener("load", refit, { once: true });
+      window.addEventListener("pageshow", refit, { once: true });
+      window.addEventListener("resize", refit);
     });
   } else {
     setStatus(
