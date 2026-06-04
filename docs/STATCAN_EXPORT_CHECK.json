@@ -1,0 +1,87 @@
+{
+  "serviceUrl": "https://geoprod.statcan.gc.ca/geo_wa/rest/services/2026_GM_CAM_CFOP_EN_202506/MapServer",
+  "bbox": [
+    5813525.98973438,
+    1994482.7669431788,
+    5821123.857188448,
+    1999516.8548696882
+  ],
+  "size": [
+    1138,
+    754
+  ],
+  "scale": 25234.050468102574,
+  "requestedLayers": [
+    {
+      "id": 0,
+      "name": "RCC",
+      "minScale": 25839549,
+      "maxScale": 1576,
+      "visibleAtScale": true
+    },
+    {
+      "id": 1,
+      "name": "FOM",
+      "minScale": 25839549,
+      "maxScale": 1576,
+      "visibleAtScale": true
+    },
+    {
+      "id": 8,
+      "name": "Label",
+      "minScale": 25839549,
+      "maxScale": 1576,
+      "visibleAtScale": true
+    },
+    {
+      "id": 9,
+      "name": "Label",
+      "minScale": 25839549,
+      "maxScale": 1576,
+      "visibleAtScale": true
+    },
+    {
+      "id": 4,
+      "name": "ZONE",
+      "minScale": 1614973,
+      "maxScale": 1576,
+      "visibleAtScale": true
+    },
+    {
+      "id": 3,
+      "name": "CLD",
+      "minScale": 3229944,
+      "maxScale": 1576,
+      "visibleAtScale": true
+    },
+    {
+      "id": 6,
+      "name": "COLB",
+      "minScale": 50469,
+      "maxScale": 1576,
+      "visibleAtScale": true
+    },
+    {
+      "id": 5,
+      "name": "CU",
+      "minScale": 807487,
+      "maxScale": 1576,
+      "visibleAtScale": true
+    }
+  ],
+  "expectedLabelLayerIds": [
+    8,
+    9,
+    12,
+    11,
+    14,
+    13
+  ],
+  "missingExpectedLabelLayerIds": [
+    12,
+    11,
+    14,
+    13
+  ],
+  "recommendation": "Use layers=show:0,1,8,9,4,3,6,5,12,11,14,13"
+}
