@@ -376,6 +376,7 @@
   const editableLayer = L.featureGroup().addTo(map);
   const badgeLayer = L.layerGroup().addTo(map);
   const dwellingsLayer = L.layerGroup().addTo(map);
+  const blockLayers = [];
 
   function updateDwellingSaveAllState() {
     if (!dwellingSaveAllBtn) return;
@@ -458,8 +459,14 @@
   }
 
   function resolveZoneForDwellingAdd(latlng) {
+    for (const layer of blockLayers) {
+      if (featureContainsLatLng(layer.feature, latlng)) return layer;
+    }
     const directZone = findZoneLayerByLatLng(latlng);
     if (directZone && getZoneKind(directZone.feature?.properties || {}) === "block") return directZone;
+    if (selectedPolygonLayer && getZoneKind(selectedPolygonLayer.feature?.properties || {}) === "block") {
+      return selectedPolygonLayer;
+    }
     return null;
   }
 
@@ -515,6 +522,9 @@
       });
       layer.on("tap", (event) => selectZone(layer, { showPopup: true, popupLatLng: event?.latlng || null }));
       editableLayer.addLayer(layer);
+      if (getZoneKind(layer.feature?.properties || {}) === "block") {
+        blockLayers.push(layer);
+      }
     });
   }
 
@@ -954,8 +964,38 @@
   }
   updateDwellingSaveAllState();
 
-  if (editableLayer.getLayers().length > 0) {
-    map.fitBounds(editableLayer.getBounds(), { padding: [20, 20] });
+  function fitMapToActiveRegion() {
+    const blockBounds = L.featureGroup(blockLayers).getBounds();
+    if (blockBounds.isValid()) {
+      map.fitBounds(blockBounds, {
+        padding: [20, 20],
+        maxZoom: 17
+      });
+      return;
+    }
+    if (editableLayer.getLayers().length > 0) {
+      const zoneBounds = editableLayer.getBounds();
+      if (zoneBounds.isValid()) {
+        map.fitBounds(zoneBounds, {
+          padding: [20, 20],
+          maxZoom: 17
+        });
+        return;
+      }
+    }
+    if (dwellingsLayer.getLayers().length > 0) {
+      const dwellingBounds = dwellingsLayer.getBounds();
+      if (dwellingBounds.isValid()) {
+        map.fitBounds(dwellingBounds, {
+          padding: [20, 20],
+          maxZoom: 18
+        });
+      }
+    }
+  }
+
+  if (editableLayer.getLayers().length > 0 || dwellingsLayer.getLayers().length > 0) {
+    fitMapToActiveRegion();
   } else {
     setStatus(
       `No region geometry loaded for CLD ${cld}.`,
@@ -1357,7 +1397,9 @@
         return;
       }
 
-      const zoneLayer = preferredZoneLayer || resolveZoneForDwellingAdd(latlng);
+      const zoneLayer = preferredZoneLayer && getZoneKind(preferredZoneLayer.feature?.properties || {}) === "block"
+        ? preferredZoneLayer
+        : resolveZoneForDwellingAdd(latlng);
       if (!zoneLayer || getZoneKind(zoneLayer.feature?.properties || {}) !== "block") {
         setStatus("Right-click inside a block polygon to create a dwelling.", true);
         return;
@@ -1409,7 +1451,9 @@
       const saved = await persistDwellingMarker(marker, { selectAfterSave: true });
       if (!saved) {
         setStatus("Dwelling marker created, but save failed.", true);
+        return;
       }
+      map.flyTo(latlng, Math.max(map.getZoom(), 18), { duration: 0.35 });
     } finally {
       addDwellingInProgress = false;
     }
