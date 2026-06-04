@@ -964,52 +964,13 @@
   }
   updateDwellingSaveAllState();
 
-  function fitMapToActiveRegion() {
-    const fitOptions = {
-      paddingTopLeft: [340, 20],
-      paddingBottomRight: [20, 20],
-      maxZoom: 17
-    };
-    const blockBounds = L.featureGroup(blockLayers).getBounds();
-    if (blockBounds.isValid()) {
-      map.fitBounds(blockBounds, fitOptions);
-      return;
+  if (editableLayer.getLayers().length > 0) {
+    map.fitBounds(editableLayer.getBounds(), { padding: [20, 20] });
+  } else if (dwellingsLayer.getLayers().length > 0) {
+    const dwellingBounds = dwellingsLayer.getBounds();
+    if (dwellingBounds.isValid()) {
+      map.fitBounds(dwellingBounds, { padding: [20, 20] });
     }
-    if (editableLayer.getLayers().length > 0) {
-      const zoneBounds = editableLayer.getBounds();
-      if (zoneBounds.isValid()) {
-        map.fitBounds(zoneBounds, fitOptions);
-        return;
-      }
-    }
-    if (dwellingsLayer.getLayers().length > 0) {
-      const dwellingBounds = dwellingsLayer.getBounds();
-      if (dwellingBounds.isValid()) {
-        map.fitBounds(dwellingBounds, {
-          paddingTopLeft: [340, 20],
-          paddingBottomRight: [20, 20],
-          maxZoom: 18
-        });
-      }
-    }
-  }
-
-  if (editableLayer.getLayers().length > 0 || dwellingsLayer.getLayers().length > 0) {
-    fitMapToActiveRegion();
-    map.whenReady(() => {
-      const refit = () => {
-        map.invalidateSize();
-        fitMapToActiveRegion();
-      };
-      window.setTimeout(refit, 0);
-      window.setTimeout(refit, 250);
-      window.setTimeout(refit, 1000);
-      satelliteLayer.once("load", refit);
-      schematicLayer.once("load", refit);
-      window.addEventListener("load", refit, { once: true });
-      window.addEventListener("pageshow", refit, { once: true });
-      window.addEventListener("resize", refit);
-    });
   } else {
     setStatus(
       `No region geometry loaded for CLD ${cld}.`,
