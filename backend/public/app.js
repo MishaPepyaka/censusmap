@@ -47,26 +47,39 @@
       .replaceAll("'", "&#039;");
   }
 
+  function isPolygonGeometry(geometry) {
+    return geometry?.type === "Polygon" || geometry?.type === "MultiPolygon";
+  }
+
+  function isPointGeometry(geometry) {
+    return geometry?.type === "Point";
+  }
+
+  function hasDwellingIdentifier(props) {
+    return isNonEmpty(props?.dwellingNo) || isNonEmpty(props?.DWELLING_NO) || isNonEmpty(props?.vrNumber) || isNonEmpty(props?.VR_NUMBER);
+  }
+
   function getZoneKind(props) {
     const group = String(props?._group || "").trim().toLowerCase();
     if (group === "cu" || group === "cus") return "cu";
     if (group === "blocks" || group === "block") return "block";
     if (isNonEmpty(props?.COLB_UID) || isNonEmpty(props?.CB_COLCODE)) return "block";
-    return "cu";
+    if (isNonEmpty(props?.CU_TYPE) || isNonEmpty(props?.CUID) || isNonEmpty(props?.cu)) return "cu";
+    return "";
   }
 
-  function isZoneFeature(props) {
-    return getZoneKind(props) === "cu" || getZoneKind(props) === "block";
+  function isZoneFeature(feature) {
+    const props = feature?.properties || {};
+    const geometry = feature?.geometry || {};
+    return isPolygonGeometry(geometry) && (getZoneKind(props) === "cu" || getZoneKind(props) === "block");
   }
 
   function isDwellingFeature(props, geometry) {
     if (!props || typeof props !== "object") return false;
     const group = String(props._group || "").trim().toLowerCase();
-    if (group === "dwellings") return true;
-    if (isNonEmpty(props.dwellingNo) || isNonEmpty(props.DWELLING_NO) || isNonEmpty(props.vrNumber) || isNonEmpty(props.VR_NUMBER)) {
-      return geometry?.type === "Point";
-    }
-    return false;
+    if (!isPointGeometry(geometry)) return false;
+    if (group === "dwellings" || group === "dwelling") return true;
+    return hasDwellingIdentifier(props);
   }
 
   function extractCuCode(props) {
@@ -78,7 +91,6 @@
   }
 
   function extractBlockCode(props) {
-    if (getZoneKind(props) !== "block") return "";
     if (isNonEmpty(props.CB_COLCODE)) return String(props.CB_COLCODE).trim().padStart(2, "0");
     if (isNonEmpty(props.block)) return String(props.block).trim().padStart(2, "0");
     if (isNonEmpty(props.GEOCODE)) return String(props.GEOCODE).trim().slice(-2);
@@ -124,7 +136,7 @@
   function parseFeatures(payload) {
     const features = Array.isArray(payload?.features) ? payload.features : [];
     return {
-      zones: features.filter((feature) => isZoneFeature(feature.properties || {})),
+      zones: features.filter((feature) => isZoneFeature(feature)),
       dwellings: features.filter((feature) => isDwellingFeature(feature.properties || {}, feature.geometry || {}))
     };
   }
@@ -319,20 +331,13 @@
   function rebuildBadges() {
     badgeLayer.clearLayers();
     const currentZoom = map.getZoom();
-    if (currentZoom >= 16) return;
-    const cuOnly = currentZoom <= 12;
-    const seenCu = new Set();
+    if (currentZoom <= 12 || currentZoom >= 16) return;
     polygonLayer.eachLayer((layer) => {
       const props = layer.feature?.properties || {};
       const zoneKind = getZoneKind(props);
+      if (zoneKind !== "block") return;
       const cu = extractCuCode(props);
-      if (cuOnly) {
-        if (seenCu.has(cu)) return;
-        if (zoneKind !== "cu") return;
-        seenCu.add(cu);
-      }
-
-      const code = zoneKind === "cu" ? "CU" : extractBlockCode(props);
+      const code = extractBlockCode(props);
       const center = getZoneCenter(layer);
       const icon = L.divIcon({
         className: "zone-chip-wrap",
@@ -349,6 +354,16 @@
   });
   badgesReady = true;
   rebuildBadges();
+
+  function redrawPolygonLayers() {
+    polygonLayer.eachLayer((layer) => {
+      layer.redraw?.();
+    });
+    if (badgesReady) rebuildBadges();
+  }
+  map.on("zoomend", redrawPolygonLayers);
+  map.on("moveend", redrawPolygonLayers);
+  map.on("viewreset", redrawPolygonLayers);
 
   function dwellingSquareIcon(no, selected = false) {
     const cls = selected ? "dwelling-marker selected" : "dwelling-marker";

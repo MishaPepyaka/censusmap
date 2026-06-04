@@ -148,15 +148,25 @@ function extractClDFromProperties(properties) {
   return normalizeClD(raw);
 }
 
-function isCuFeature(properties) {
+function isPolygonGeometry(geometry) {
+  return geometry?.type === "Polygon" || geometry?.type === "MultiPolygon";
+}
+
+function isPointGeometry(geometry) {
+  return geometry?.type === "Point";
+}
+
+function isCuFeature(properties, geometry = null) {
   if (!properties || typeof properties !== "object") return false;
+  if (!isPolygonGeometry(geometry)) return false;
   const group = String(properties._group || "").trim().toLowerCase();
   if (group === "cu" || group === "cus") return true;
   return hasText(properties.CU_TYPE) && !hasText(properties.COLB_UID) && !hasText(properties.CB_COLCODE);
 }
 
-function isBlockFeature(properties) {
+function isBlockFeature(properties, geometry = null) {
   if (!properties || typeof properties !== "object") return false;
+  if (!isPolygonGeometry(geometry)) return false;
   const group = String(properties._group || "").trim().toLowerCase();
   if (group === "blocks" || group === "block") return true;
   return hasText(properties.COLB_UID) || hasText(properties.CB_COLCODE);
@@ -164,18 +174,19 @@ function isBlockFeature(properties) {
 
 function isDwellingFeature(properties, geometry = null) {
   if (!properties || typeof properties !== "object") return false;
+  if (!isPointGeometry(geometry)) return false;
   const group = String(properties._group || "").trim().toLowerCase();
   if (group === "dwellings" || group === "dwelling") return true;
   const rawDwellingNo = properties.dwellingNo ?? properties.DWELLING_NO ?? properties.vrNumber ?? properties.VR_NUMBER;
-  return hasText(rawDwellingNo) && geometry?.type === "Point";
+  return hasText(rawDwellingNo);
 }
 
 function classifyFeature(feature) {
   const properties = feature?.properties || {};
   const geometry = feature?.geometry || {};
   if (isDwellingFeature(properties, geometry)) return "dwellings";
-  if (isBlockFeature(properties)) return "blocks";
-  if (isCuFeature(properties)) return "cu";
+  if (isBlockFeature(properties, geometry)) return "blocks";
+  if (isCuFeature(properties, geometry)) return "cu";
   return "other";
 }
 

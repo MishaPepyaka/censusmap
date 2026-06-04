@@ -15,15 +15,6 @@ body {
   height: 100%;
 }
 
-/* .leaflet-zoom-anim .leaflet-zoom-animated {
-  transition: none !important;
-}
-
-svg.leaflet-zoom-animated,
-.leaflet-zoom-animated {
-  will-change: auto !important;
-} */
-
 #search-ui {
   position: fixed;
   left: 12px;

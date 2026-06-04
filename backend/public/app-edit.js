@@ -84,26 +84,40 @@
     saveBtn.disabled = dirtyIds.size === 0;
   }
 
+  function isPolygonGeometry(geometry) {
+    return geometry?.type === "Polygon" || geometry?.type === "MultiPolygon";
+  }
+
+  function isPointGeometry(geometry) {
+    return geometry?.type === "Point";
+  }
+
+  function hasDwellingIdentifier(props) {
+    return isNonEmpty(props?.dwellingNo) || isNonEmpty(props?.DWELLING_NO) || isNonEmpty(props?.vrNumber) || isNonEmpty(props?.VR_NUMBER);
+  }
+
   function getZoneKind(props) {
     if (!props || typeof props !== "object") return "";
     const group = String(props._group || "").trim().toLowerCase();
     if (group === "cu" || group === "cus") return "cu";
     if (group === "blocks" || group === "block") return "block";
     if (isNonEmpty(props.COLB_UID) || isNonEmpty(props.CB_COLCODE)) return "block";
-    return "cu";
+    if (isNonEmpty(props.CU_TYPE) || isNonEmpty(props.CUID) || isNonEmpty(props.cu)) return "cu";
+    return "";
   }
 
-  function isZoneFeature(props) {
-    return getZoneKind(props) === "cu" || getZoneKind(props) === "block";
+  function isZoneFeature(feature) {
+    const props = feature?.properties || {};
+    const geometry = feature?.geometry || {};
+    return isPolygonGeometry(geometry) && (getZoneKind(props) === "cu" || getZoneKind(props) === "block");
   }
 
   function isDwellingFeature(props, geometry) {
     if (!props || typeof props !== "object") return false;
-    if (props._group === "dwellings") return true;
-    if (isNonEmpty(props.dwellingNo) || isNonEmpty(props.DWELLING_NO)) {
-      return geometry?.type === "Point";
-    }
-    return false;
+    if (!isPointGeometry(geometry)) return false;
+    const group = String(props._group || "").trim().toLowerCase();
+    if (group === "dwellings" || group === "dwelling") return true;
+    return hasDwellingIdentifier(props);
   }
 
   function extractCuCode(props) {
@@ -122,7 +136,6 @@
   }
 
   function extractBlockCode(props) {
-    if (getZoneKind(props) !== "block") return "";
     if (isNonEmpty(props.CB_COLCODE)) return String(props.CB_COLCODE).trim().padStart(2, "0");
     if (isNonEmpty(props.block)) return String(props.block).trim().padStart(2, "0");
     if (isNonEmpty(props.GEOCODE)) return String(props.GEOCODE).trim().slice(-2);
@@ -171,7 +184,7 @@
       return {
         source: "api",
         loadError: "",
-        blocks: features.filter((f) => isZoneFeature(f.properties || {})),
+        blocks: features.filter((f) => isZoneFeature(f)),
         dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {}))
       };
     } catch (apiError) {
@@ -446,27 +459,20 @@
 
   function resolveZoneForDwellingAdd(latlng) {
     const directZone = findZoneLayerByLatLng(latlng);
-    if (directZone) return directZone;
-    if (selectedPolygonLayer) return selectedPolygonLayer;
+    if (directZone && getZoneKind(directZone.feature?.properties || {}) === "block") return directZone;
     return null;
   }
 
   function rebuildBadges() {
     badgeLayer.clearLayers();
     const currentZoom = map.getZoom();
-    if (currentZoom >= 16) return;
-    const cuOnly = currentZoom <= 12;
-    const seenCu = new Set();
+    if (currentZoom <= 12 || currentZoom >= 16) return;
     editableLayer.eachLayer((layer) => {
       const props = layer.feature?.properties || {};
-      const cu = extractCuCode(props);
       const zoneKind = getZoneKind(props);
-      if (cuOnly) {
-        if (zoneKind !== "cu") return;
-        if (seenCu.has(cu)) return;
-        seenCu.add(cu);
-      }
-      const code = zoneKind === "cu" ? "CU" : extractBlockCode(props);
+      if (zoneKind !== "block") return;
+      const cu = extractCuCode(props);
+      const code = extractBlockCode(props);
       const center = getZoneCenter(layer);
       const icon = L.divIcon({
         className: "zone-chip-wrap",
@@ -503,13 +509,9 @@
       });
       layer.on("contextmenu", (event) => {
         const src = event?.originalEvent;
-        const isAddIntent = Boolean(src && (src.ctrlKey || src.metaKey || src.button === 2));
-        if (isAddIntent) {
-          src.preventDefault?.();
-          src.stopPropagation?.();
-          void addDwellingAt(event.latlng, layer);
-          return;
-        }
+        src?.preventDefault?.();
+        src?.stopPropagation?.();
+        void addDwellingAt(event.latlng, layer);
       });
       layer.on("tap", (event) => selectZone(layer, { showPopup: true, popupLatLng: event?.latlng || null }));
       editableLayer.addLayer(layer);
@@ -937,6 +939,16 @@
   rebuildBadges();
   badgesReady = true;
 
+  function redrawEditableZones() {
+    editableLayer.eachLayer((layer) => {
+      layer.redraw?.();
+    });
+    if (badgesReady) rebuildBadges();
+  }
+  map.on("zoomend", redrawEditableZones);
+  map.on("moveend", redrawEditableZones);
+  map.on("viewreset", redrawEditableZones);
+
   for (const feature of dwellings) {
     createDwellingMarker(feature);
   }
@@ -1346,8 +1358,8 @@
       }
 
       const zoneLayer = preferredZoneLayer || resolveZoneForDwellingAdd(latlng);
-      if (!zoneLayer) {
-        setStatus("Ctrl+Click/RightClick inside a block polygon (or select a block first).", true);
+      if (!zoneLayer || getZoneKind(zoneLayer.feature?.properties || {}) !== "block") {
+        setStatus("Right-click inside a block polygon to create a dwelling.", true);
         return;
       }
 
@@ -1414,7 +1426,6 @@
 
   map.on("contextmenu", (event) => {
     const src = event?.originalEvent;
-    if (!isAddDwellingPointerIntent(src)) return;
     if (src?.target?.closest?.("#editor-panel, #map-ui")) return;
     src.preventDefault?.();
     src.stopPropagation?.();
