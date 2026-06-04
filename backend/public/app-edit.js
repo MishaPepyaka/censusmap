@@ -1003,6 +1003,9 @@
       };
       window.setTimeout(refit, 0);
       window.setTimeout(refit, 250);
+      window.setTimeout(refit, 1000);
+      satelliteLayer.once("load", refit);
+      schematicLayer.once("load", refit);
       window.addEventListener("load", refit, { once: true });
       window.addEventListener("pageshow", refit, { once: true });
       window.addEventListener("resize", refit);
