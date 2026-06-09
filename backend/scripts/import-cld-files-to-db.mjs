@@ -7,7 +7,20 @@ import { Pool } from "pg";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..", "..");
-const cldRootDir = path.join(repoRoot, "data", "cld");
+
+async function resolveClDRootDir() {
+  const candidates = [
+    process.env.CLD_ROOT_DIR,
+    process.env.DATA_ROOT ? path.join(process.env.DATA_ROOT, "cld") : null,
+    path.join(repoRoot, "data", "cld"),
+    "/data/cld"
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (await exists(candidate)) return candidate;
+  }
+  return candidates[0] || path.join(repoRoot, "data", "cld");
+}
 
 function buildFeatureCollection(features) {
   return {
@@ -78,7 +91,7 @@ async function initDb(pool) {
   }
 }
 
-async function listClDDirectories() {
+async function listClDDirectories(cldRootDir) {
   if (!(await exists(cldRootDir))) return [];
   const entries = await fs.readdir(cldRootDir, { withFileTypes: true });
   return entries
@@ -87,7 +100,7 @@ async function listClDDirectories() {
     .sort();
 }
 
-async function readRegionFiles(cld) {
+async function readRegionFiles(cldRootDir, cld) {
   const regionDir = path.join(cldRootDir, cld);
   const index = await readJsonFile(path.join(regionDir, "index.json"), {
     cld,
@@ -106,8 +119,8 @@ async function readRegionFiles(cld) {
   };
 }
 
-async function importClD(pool, cld) {
-  const region = await readRegionFiles(cld);
+async function importClD(pool, cldRootDir, cld) {
+  const region = await readRegionFiles(cldRootDir, cld);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -194,7 +207,8 @@ async function main() {
 
   try {
     await initDb(pool);
-    const clds = await listClDDirectories();
+    const cldRootDir = await resolveClDRootDir();
+    const clds = await listClDDirectories(cldRootDir);
     if (clds.length === 0) {
       throw new Error(`No CLD directories found in ${cldRootDir}`);
     }
@@ -204,7 +218,7 @@ async function main() {
     let totalDwellings = 0;
 
     for (const cld of clds) {
-      const summary = await importClD(pool, cld);
+      const summary = await importClD(pool, cldRootDir, cld);
       totalCu += summary.cu;
       totalBlocks += summary.blocks;
       totalDwellings += summary.dwellings;
