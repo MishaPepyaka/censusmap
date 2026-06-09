@@ -302,12 +302,10 @@
     });
   }
 
-  const [summary, mapData] = await Promise.all([loadRegionSummary(), getMapData()]);
+  const summary = await loadRegionSummary();
+  const mapData = await getMapData();
   routeLabel.textContent = summary.label || `CLD ${cld}`;
-  const ssidLabel = Array.isArray(summary.ssids) && summary.ssids.length > 0
-    ? `SSID: ${summary.ssids.map((ssid) => formatSsidDisplay(ssid)).join(", ")}`
-    : "No SSID metadata";
-  routeSubtitle.textContent = `${ssidLabel} · ${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${summary.counts?.dwellings || 0} dwellings`;
+  routeSubtitle.textContent = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks`;
 
   const zones = mapData.zones;
   const dwellings = mapData.dwellings;
