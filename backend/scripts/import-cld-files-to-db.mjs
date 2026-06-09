@@ -50,7 +50,6 @@ async function readJsonFile(filePath, fallback = null) {
 function normalizeFeature(feature) {
   return {
     type: "Feature",
-    ...(feature?.id !== undefined ? { id: Number(feature.id) } : {}),
     properties: feature?.properties && typeof feature.properties === "object" ? { ...feature.properties } : {},
     geometry: feature?.geometry || null
   };
@@ -150,35 +149,13 @@ async function importClD(pool, cldRootDir, cld) {
     })) {
       for (const feature of features) {
         if (!feature.geometry) continue;
-        if (Number.isFinite(Number(feature.id))) {
-          await client.query(
-            `
-              INSERT INTO region_features (id, cld, feature_type, properties, geom)
-              VALUES ($1, $2, $3, $4::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326))
-              ON CONFLICT (id) DO UPDATE SET
-                cld = EXCLUDED.cld,
-                feature_type = EXCLUDED.feature_type,
-                properties = EXCLUDED.properties,
-                geom = EXCLUDED.geom,
-                updated_at = NOW();
-            `,
-            [
-              Number(feature.id),
-              cld,
-              featureType,
-              JSON.stringify(feature.properties || {}),
-              JSON.stringify(feature.geometry)
-            ]
-          );
-        } else {
-          await client.query(
-            `
-              INSERT INTO region_features (cld, feature_type, properties, geom)
-              VALUES ($1, $2, $3::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326));
-            `,
-            [cld, featureType, JSON.stringify(feature.properties || {}), JSON.stringify(feature.geometry)]
-          );
-        }
+        await client.query(
+          `
+            INSERT INTO region_features (cld, feature_type, properties, geom)
+            VALUES ($1, $2, $3::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326));
+          `,
+          [cld, featureType, JSON.stringify(feature.properties || {}), JSON.stringify(feature.geometry)]
+        );
       }
     }
     await client.query("COMMIT");
