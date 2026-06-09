@@ -242,6 +242,32 @@ async function initDb() {
   try {
     await client.query("CREATE EXTENSION IF NOT EXISTS postgis;");
     await client.query(`
+      CREATE TABLE IF NOT EXISTS cld_regions (
+        cld TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        ssids TEXT[] NOT NULL DEFAULT '{}',
+        cu_codes TEXT[] NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS region_features (
+        id BIGSERIAL PRIMARY KEY,
+        cld TEXT NOT NULL REFERENCES cld_regions(cld) ON DELETE CASCADE,
+        feature_type TEXT NOT NULL CHECK (feature_type IN ('cu', 'blocks', 'dwellings')),
+        properties JSONB NOT NULL DEFAULT '{}'::jsonb,
+        geom geometry(Geometry, 4326) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query("CREATE INDEX IF NOT EXISTS idx_region_features_cld_type ON region_features (cld, feature_type);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_region_features_geom ON region_features USING GIST (geom);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_region_features_properties ON region_features USING GIN (properties);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_cld_regions_cu_codes ON cld_regions USING GIN (cu_codes);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_cld_regions_ssids ON cld_regions USING GIN (ssids);");
+    await client.query(`
       CREATE TABLE IF NOT EXISTS map_features (
         id BIGSERIAL PRIMARY KEY,
         name TEXT,
@@ -254,6 +280,72 @@ async function initDb() {
   } finally {
     client.release();
   }
+}
+
+async function regionExists(cld) {
+  if (useFileStore) {
+    return exists(path.join(cldRootDir, cld, "index.json"));
+  }
+  const { rows } = await pool.query("SELECT 1 FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);
+  return rows.length > 0;
+}
+
+async function ensureRegionMediaDirs(cld) {
+  const regionDir = path.join(cldRootDir, cld);
+  await ensureDir(path.join(regionDir, "media", "dwellings"));
+  await ensureDir(path.join(regionDir, "media", "uploads"));
+}
+
+function regionRowToIndex(row) {
+  return {
+    cld: row.cld,
+    label: row.label || `CLD ${row.cld}`,
+    ssids: Array.isArray(row.ssids) ? row.ssids : [],
+    cuCodes: Array.isArray(row.cu_codes) ? row.cu_codes : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function regionFeatureRowToFeature(row) {
+  return {
+    type: "Feature",
+    id: row.id,
+    properties: row.properties || {},
+    geometry: row.geometry
+  };
+}
+
+async function ensureRegionRecord(cld, label = `CLD ${cld}`) {
+  await pool.query(
+    `
+      INSERT INTO cld_regions (cld, label)
+      VALUES ($1, $2)
+      ON CONFLICT (cld) DO NOTHING;
+    `,
+    [cld, label]
+  );
+}
+
+async function syncRegionCuCodes(cld) {
+  const { rows } = await pool.query(
+    `
+      SELECT DISTINCT COALESCE(properties->>'CUID', properties->>'cu') AS cu_code
+      FROM region_features
+      WHERE cld = $1 AND feature_type = 'cu'
+      ORDER BY cu_code;
+    `,
+    [cld]
+  );
+  const cuCodes = rows.map((row) => String(row.cu_code || "").trim()).filter(Boolean);
+  await pool.query(
+    `
+      UPDATE cld_regions
+      SET cu_codes = $2::text[], updated_at = NOW()
+      WHERE cld = $1;
+    `,
+    [cld, cuCodes]
+  );
 }
 
 async function ensureFileStore() {
@@ -321,10 +413,16 @@ function extractClDForFeature(feature, cuToClDMap) {
 }
 
 async function ensureEmptyRegionFiles(cld) {
+  if (!useFileStore) {
+    if (!(await regionExists(cld))) {
+      throw new Error(`Unknown CLD ${cld}`);
+    }
+    await ensureRegionMediaDirs(cld);
+    return;
+  }
   const regionDir = path.join(cldRootDir, cld);
   const names = featureFileNames();
-  await ensureDir(path.join(regionDir, "media", "dwellings"));
-  await ensureDir(path.join(regionDir, "media", "uploads"));
+  await ensureRegionMediaDirs(cld);
   const initialFiles = [
     path.join(regionDir, names.cu),
     path.join(regionDir, names.blocks),
@@ -404,6 +502,10 @@ async function migrateLegacyDataToClDStore() {
 }
 
 async function listClDNumbers() {
+  if (!useFileStore) {
+    const { rows } = await pool.query("SELECT cld FROM cld_regions ORDER BY cld;");
+    return rows.map((row) => row.cld);
+  }
   await ensureDir(cldRootDir);
   const entries = await fs.readdir(cldRootDir, { withFileTypes: true }).catch(() => []);
   return entries
@@ -414,6 +516,21 @@ async function listClDNumbers() {
 }
 
 async function readRegionIndex(cld) {
+  if (!useFileStore) {
+    const { rows } = await pool.query(
+      `
+        SELECT cld, label, ssids, cu_codes, created_at, updated_at
+        FROM cld_regions
+        WHERE cld = $1
+        LIMIT 1;
+      `,
+      [cld]
+    );
+    if (rows.length === 0) {
+      throw new Error(`Unknown CLD ${cld}`);
+    }
+    return regionRowToIndex(rows[0]);
+  }
   const regionDir = path.join(cldRootDir, cld);
   const index = await readJsonFile(path.join(regionDir, "index.json"), null);
   if (!index) {
@@ -423,6 +540,27 @@ async function readRegionIndex(cld) {
 }
 
 async function writeRegionIndex(cld, index) {
+  if (!useFileStore) {
+    await ensureRegionRecord(cld, index.label || `CLD ${cld}`);
+    await pool.query(
+      `
+        UPDATE cld_regions
+        SET
+          label = $2,
+          ssids = $3::text[],
+          cu_codes = $4::text[],
+          updated_at = NOW()
+        WHERE cld = $1;
+      `,
+      [
+        cld,
+        index.label || `CLD ${cld}`,
+        Array.isArray(index.ssids) ? index.ssids : [],
+        Array.isArray(index.cuCodes) ? index.cuCodes : []
+      ]
+    );
+    return;
+  }
   const regionDir = path.join(cldRootDir, cld);
   await writeJsonFile(path.join(regionDir, "index.json"), {
     ...index,
@@ -432,6 +570,19 @@ async function writeRegionIndex(cld, index) {
 }
 
 async function readRegionFeatures(cld, type) {
+  if (!useFileStore) {
+    const dbType = type;
+    const { rows } = await pool.query(
+      `
+        SELECT id, properties, ST_AsGeoJSON(geom)::json AS geometry
+        FROM region_features
+        WHERE cld = $1 AND feature_type = $2
+        ORDER BY id;
+      `,
+      [cld, dbType]
+    );
+    return rows.map((row) => normalizeRegionFeature(regionFeatureRowToFeature(row)));
+  }
   const names = featureFileNames();
   const fileName = names[type];
   if (!fileName) throw new Error(`Unsupported region file type: ${type}`);
@@ -442,6 +593,62 @@ async function readRegionFeatures(cld, type) {
 }
 
 async function writeRegionFeatures(cld, type, features) {
+  if (!useFileStore) {
+    const dbType = type;
+    await ensureRegionRecord(cld);
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM region_features WHERE cld = $1 AND feature_type = $2;", [cld, dbType]);
+      for (const feature of features) {
+        const normalized = normalizeRegionFeature(feature);
+        if (!normalized.geometry) continue;
+        if (Number.isFinite(Number(normalized.id))) {
+          await client.query(
+            `
+              INSERT INTO region_features (id, cld, feature_type, properties, geom)
+              VALUES ($1, $2, $3, $4::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326))
+              ON CONFLICT (id) DO UPDATE SET
+                cld = EXCLUDED.cld,
+                feature_type = EXCLUDED.feature_type,
+                properties = EXCLUDED.properties,
+                geom = EXCLUDED.geom,
+                updated_at = NOW();
+            `,
+            [
+              Number(normalized.id),
+              cld,
+              dbType,
+              JSON.stringify(normalized.properties || {}),
+              JSON.stringify(normalized.geometry)
+            ]
+          );
+        } else {
+          await client.query(
+            `
+              INSERT INTO region_features (cld, feature_type, properties, geom)
+              VALUES ($1, $2, $3::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326));
+            `,
+            [cld, dbType, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
+          );
+        }
+      }
+      if (dbType === "cu") {
+        const cuCodes = uniqueSorted(features.map((feature) => extractCuCode(feature?.properties || {})));
+        await client.query(
+          "UPDATE cld_regions SET cu_codes = $2::text[], updated_at = NOW() WHERE cld = $1;",
+          [cld, cuCodes]
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    return;
+  }
   const names = featureFileNames();
   const fileName = names[type];
   if (!fileName) throw new Error(`Unsupported region file type: ${type}`);
@@ -450,7 +657,9 @@ async function writeRegionFeatures(cld, type, features) {
 }
 
 async function readRegionBundle(cld) {
-  await ensureEmptyRegionFiles(cld);
+  if (useFileStore) {
+    await ensureEmptyRegionFiles(cld);
+  }
   const [index, cu, blocks, dwellings] = await Promise.all([
     readRegionIndex(cld),
     readRegionFeatures(cld, "cu"),
@@ -516,6 +725,25 @@ function inferFileTypeFromFeature(feature) {
 }
 
 async function findRegionFeatureById(cld, id) {
+  if (!useFileStore) {
+    const { rows } = await pool.query(
+      `
+        SELECT id, feature_type, properties, ST_AsGeoJSON(geom)::json AS geometry
+        FROM region_features
+        WHERE cld = $1 AND id = $2
+        LIMIT 1;
+      `,
+      [cld, Number(id)]
+    );
+    if (rows.length === 0) {
+      return { type: null, feature: null, bundle: null };
+    }
+    return {
+      type: rows[0].feature_type,
+      feature: normalizeRegionFeature(regionFeatureRowToFeature(rows[0])),
+      bundle: null
+    };
+  }
   const bundle = await readRegionBundle(cld);
   for (const type of ["cu", "blocks", "dwellings"]) {
     const collection = bundle[type];
@@ -533,12 +761,31 @@ async function createRegionFeature(cld, feature) {
     throw new Error("Feature geometry is required");
   }
 
-  const index = await readRegionIndex(cld);
+  if (!(await regionExists(cld))) {
+    throw new Error(`Unknown CLD ${cld}`);
+  }
+
   const type = inferFileTypeFromFeature(normalized);
   const collection = await readRegionFeatures(cld, type);
   const dwellings = type === "dwellings" ? collection : await readRegionFeatures(cld, "dwellings");
   await assertDwellingNoUnique(normalized, dwellings);
 
+  if (!useFileStore) {
+    const properties = normalized.properties || {};
+    const query = `
+      INSERT INTO region_features (cld, feature_type, properties, geom)
+      VALUES ($1, $2, $3::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326))
+      RETURNING id;
+    `;
+    const values = [cld, type, JSON.stringify(properties), JSON.stringify(normalized.geometry)];
+    const { rows } = await pool.query(query, values);
+    if (type === "cu") {
+      await syncRegionCuCodes(cld);
+    }
+    return rows[0].id;
+  }
+
+  const index = await readRegionIndex(cld);
   const nextId = Number.isFinite(Number(index.nextFeatureId)) ? Number(index.nextFeatureId) : 1;
   normalized.id = nextId;
   collection.push(normalized);
@@ -575,6 +822,23 @@ async function updateRegionFeature(cld, id, feature) {
 
   const dwellings = existing.type === "dwellings" ? collection : await readRegionFeatures(cld, "dwellings");
   await assertDwellingNoUnique(normalized, dwellings, Number(id));
+  if (!useFileStore) {
+    await pool.query(
+      `
+        UPDATE region_features
+        SET
+          properties = $3::jsonb,
+          geom = ST_SetSRID(ST_GeomFromGeoJSON($4), 4326),
+          updated_at = NOW()
+        WHERE id = $1 AND cld = $2;
+      `,
+      [id, cld, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
+    );
+    if (existing.type === "cu") {
+      await syncRegionCuCodes(cld);
+    }
+    return true;
+  }
   collection[targetIndex] = normalized;
   await writeRegionFeatures(cld, existing.type, collection);
   return true;
@@ -587,11 +851,29 @@ async function deleteRegionFeature(cld, id) {
   const collection = await readRegionFeatures(cld, existing.type);
   const next = collection.filter((item) => Number(item?.id) !== Number(id));
   if (next.length === collection.length) return false;
+  if (!useFileStore) {
+    await pool.query("DELETE FROM region_features WHERE id = $1 AND cld = $2;", [id, cld]);
+    if (existing.type === "cu") {
+      await syncRegionCuCodes(cld);
+    }
+    return true;
+  }
   await writeRegionFeatures(cld, existing.type, next);
   return true;
 }
 
 async function buildLookupRecords() {
+  if (!useFileStore) {
+    const { rows } = await pool.query(
+      "SELECT cld, label, ssids, cu_codes, created_at, updated_at FROM cld_regions ORDER BY cld;"
+    );
+    return rows.map((row) => ({
+      cld: row.cld,
+      label: row.label || `CLD ${row.cld}`,
+      ssids: Array.isArray(row.ssids) ? row.ssids : [],
+      cuCodes: Array.isArray(row.cu_codes) ? row.cu_codes : []
+    }));
+  }
   const clds = await listClDNumbers();
   const records = [];
   for (const cld of clds) {
@@ -610,6 +892,47 @@ async function buildLookupRecords() {
 async function resolveClDFromLookup(queryValue) {
   const normalizedDigits = normalizeClD(queryValue);
   const normalizedText = normalizeSsid(queryValue);
+
+  if (!useFileStore) {
+    if (normalizedDigits) {
+      const { rows: directRows } = await pool.query(
+        "SELECT cld, label FROM cld_regions WHERE cld = $1 LIMIT 1;",
+        [normalizedDigits]
+      );
+      if (directRows.length > 0) {
+        return { cld: directRows[0].cld, matchedBy: "cld", label: directRows[0].label };
+      }
+
+      const { rows: cuRows } = await pool.query(
+        "SELECT cld, label FROM cld_regions WHERE $1 = ANY(cu_codes) LIMIT 1;",
+        [normalizedDigits]
+      );
+      if (cuRows.length > 0) {
+        return { cld: cuRows[0].cld, matchedBy: "cu", label: cuRows[0].label };
+      }
+    }
+
+    if (normalizedText) {
+      const { rows: ssidRows } = await pool.query(
+        `
+          SELECT cld, label
+          FROM cld_regions
+          WHERE EXISTS (
+            SELECT 1
+            FROM unnest(ssids) AS ssid
+            WHERE UPPER(BTRIM(ssid)) = $1
+          )
+          LIMIT 1;
+        `,
+        [normalizedText]
+      );
+      if (ssidRows.length > 0) {
+        return { cld: ssidRows[0].cld, matchedBy: "ssid", label: ssidRows[0].label };
+      }
+    }
+    return null;
+  }
+
   const records = await buildLookupRecords();
 
   const directClD = records.find((record) => record.cld === normalizedDigits);
@@ -880,7 +1203,10 @@ app.post("/api/cld/:cld/uploads", requireEditAuth, async (req, res) => {
     return res.status(400).json({ error: "Invalid CLD" });
   }
   try {
-    await ensureEmptyRegionFiles(cld);
+    if (!(await regionExists(cld))) {
+      return res.status(404).json({ error: `Unknown CLD ${cld}` });
+    }
+    await ensureRegionMediaDirs(cld);
     const upload = await createImageUpload(cld, req.body || {});
     return res.status(201).json({ ok: true, upload });
   } catch (error) {
@@ -1151,7 +1477,7 @@ app.get("/", (_req, res) => {
 app.get("/:cld/edit", requireEditAuth, async (req, res, next) => {
   const cld = normalizeClD(req.params.cld);
   if (!cld) return next();
-  if (!(await exists(path.join(cldRootDir, cld, "index.json")))) {
+  if (!(await regionExists(cld))) {
     return res.status(404).sendFile(path.join(publicDir, "landing.html"));
   }
   return res.sendFile(path.join(publicDir, "edit.html"));
@@ -1162,7 +1488,7 @@ app.use(express.static(publicDir));
 app.get("/:cld", async (req, res, next) => {
   const cld = normalizeClD(req.params.cld);
   if (!cld) return next();
-  if (!(await exists(path.join(cldRootDir, cld, "index.json")))) {
+  if (!(await regionExists(cld))) {
     return res.status(404).sendFile(path.join(publicDir, "landing.html"));
   }
   return res.sendFile(path.join(publicDir, "index.html"));
@@ -1176,7 +1502,9 @@ const startup = useFileStore ? ensureFileStore() : initDb();
 
 startup
   .then(async () => {
-    await migrateLegacyDataToClDStore();
+    if (useFileStore) {
+      await migrateLegacyDataToClDStore();
+    }
     app.listen(port, () => {
       console.log(`Map app is running on port ${port} (${useFileStore ? "file-store mode" : "postgis mode"})`);
     });

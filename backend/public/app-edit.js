@@ -163,15 +163,34 @@
     return Number.isFinite(numeric) ? String(numeric) : normalized;
   }
 
+  function hashText(value) {
+    const text = String(value || "");
+    let hash = 0;
+    for (let i = 0; i < text.length; i += 1) {
+      hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+    }
+    return hash;
+  }
+
   function buildColorMap(cuCodes) {
     const unique = [...new Set(cuCodes)].sort();
     const map = new Map();
-    const total = unique.length;
+    const variants = [
+      { strokeS: 78, strokeL: 28, fillS: 82, fillL: 52 },
+      { strokeS: 72, strokeL: 34, fillS: 76, fillL: 60 },
+      { strokeS: 86, strokeL: 24, fillS: 88, fillL: 48 },
+      { strokeS: 68, strokeL: 30, fillS: 72, fillL: 56 }
+    ];
     for (let i = 0; i < unique.length; i += 1) {
-      const hue = total <= 1 ? 30 : Math.floor((i * 359) / (total - 1));
-      map.set(unique[i], {
-        stroke: `hsl(${hue} 75% 38%)`,
-        fill: `hsl(${hue} 78% 55%)`
+      const code = unique[i];
+      const seed = hashText(code);
+      const orderHue = (i * 137.508) % 360;
+      const hueJitter = (seed % 31) - 15;
+      const hue = Math.round((orderHue + hueJitter + 360) % 360);
+      const variant = variants[seed % variants.length];
+      map.set(code, {
+        stroke: `hsl(${hue} ${variant.strokeS}% ${variant.strokeL}%)`,
+        fill: `hsl(${hue} ${variant.fillS}% ${variant.fillL}%)`
       });
     }
     return map;
