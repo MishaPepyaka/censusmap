@@ -4,14 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StatCan Viewer</title>
-    <link rel="icon" type="image/svg+xml" href="./flag-logo.svg?v=20260609a" />
-    <link rel="apple-touch-icon" href="./flag-logo.svg?v=20260609a" />
-    <link rel="stylesheet" href="./vendor/leaflet/leaflet.css?v=20260609a" />
-    <link rel="stylesheet" href="./styles.css?v=20260609a" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
+    <link rel="stylesheet" href="./vendor/leaflet/leaflet.css?v=20260609b" />
+    <link rel="stylesheet" href="./styles.css?v=20260609b" />
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260609a</div>
+    <div class="app-version-badge">v20260609b</div>
+
+    <footer class="app-attribution">
+      The 2025 Census Subdivision Boundary File is portrayed in Lambert conformal conic projection (North American Datum of 1983 [NAD83]) and is available as a national file.
+      <a href="https://geo.statcan.gc.ca/geo_wa/rest/services/2025/lcsd000a25s_e/MapServer" target="_blank" rel="noreferrer">MapServer</a>.
+      Maps are used under <a href="https://www.statcan.gc.ca/en/reference/licence" target="_blank" rel="noreferrer">Statistics Canada Open Licence</a>.
+    </footer>
+
     <section id="search-ui" aria-label="Dwelling search">
       <input
         id="dwelling-search-input"
@@ -25,8 +31,8 @@
       <div id="dwelling-search-status" aria-live="polite"></div>
     </section>
 
-    <script src="./vendor/leaflet/leaflet.js?v=20260609a"></script>
-    <script src="./vendor/esri-leaflet/esri-leaflet.js?v=20260609a"></script>
-    <script src="./app-statcan.js?v=20260609a"></script>
+    <script src="./vendor/leaflet/leaflet.js?v=20260609b"></script>
+    <script src="./vendor/esri-leaflet/esri-leaflet.js?v=20260609b"></script>
+    <script src="./app-statcan.js?v=20260609b"></script>
   </body>
 </html>

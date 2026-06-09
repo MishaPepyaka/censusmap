@@ -18,3 +18,9 @@ backend/public/file-store.json
 
 # IDE / OS
 .DS_Store
+
+# local SSH keys
+.ssh/
+
+# local infrastructure secrets
+SERVER_ACCESS.md

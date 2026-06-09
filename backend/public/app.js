@@ -530,33 +530,10 @@
   const DWELLINGS_MIN_VISIBLE_ZOOM = 13;
 
   function renderVisibleDwellingMarkers() {
-    const currentZoom = map.getZoom();
-    const markersAllowed = currentZoom >= DWELLINGS_MIN_VISIBLE_ZOOM;
-
-    if (!markersAllowed) {
-      dwellingsLayer.clearLayers();
-      dwellingMarkerByKey.clear();
-      selectedDwellingMarker = null;
-      return;
-    }
-
-    if (dwellingMarkerByKey.size === dwellingRecords.length) {
-      dwellingsLayer.eachLayer((marker) => {
-        const info = marker.__dwellingInfo;
-        if (info) {
-          const isSelected = marker === selectedDwellingMarker;
-          marker.setIcon(getDwellingIconForZoom(info.displayNo, isSelected));
-        }
-      });
-      return;
-    }
-
     dwellingsLayer.clearLayers();
     dwellingMarkerByKey.clear();
     selectedDwellingMarker = null;
-    for (const record of dwellingRecords) {
-      createDwellingMarker(record);
-    }
+    return;
   }
 
   for (let index = 0; index < dwellings.length; index += 1) {
