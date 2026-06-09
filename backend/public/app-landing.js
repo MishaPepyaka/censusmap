@@ -21,7 +21,7 @@
   async function submitLookup(rawValue) {
     const value = String(rawValue || "").trim();
     if (!value) {
-      setStatus("Enter a CLD number or SSID.", true);
+      setStatus("Enter a CLD number.", true);
       return;
     }
     setStatus("Resolving...");
