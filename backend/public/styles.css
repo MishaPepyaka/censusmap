@@ -976,6 +976,16 @@ body {
 }
 
 @media (max-width: 640px) {
+  .user-profile-widget {
+    top: 64px;
+    right: 12px;
+    align-items: flex-end;
+  }
+
+  .user-dropdown {
+    width: min(220px, calc(100vw - 24px));
+  }
+
   .user-profile-name {
     display: none;
   }
