@@ -29,9 +29,17 @@
   const searchInput = document.getElementById("dwelling-search-input");
   const searchBtn = document.getElementById("dwelling-search-btn");
   const searchStatus = document.getElementById("dwelling-search-status");
+  let currentUser = null;
 
-  if (editRouteLink) {
-    editRouteLink.href = `/${cld}/edit`;
+  async function loadCurrentUser() {
+    try {
+      const response = await fetch("/api/me");
+      if (!response.ok) return;
+      const payload = await response.json();
+      currentUser = payload.user || null;
+    } catch {
+      currentUser = null;
+    }
   }
 
   function isNonEmpty(value) {
@@ -300,6 +308,13 @@
       event.stopPropagation();
       toggleBaseMode();
     });
+  }
+
+  await loadCurrentUser();
+  if (editRouteLink) {
+    const canEdit = Boolean(currentUser?.isAdmin || currentUser?.role === "crew_leader");
+    editRouteLink.href = `/${cld}/edit`;
+    editRouteLink.hidden = !canEdit;
   }
 
   const summary = await loadRegionSummary();

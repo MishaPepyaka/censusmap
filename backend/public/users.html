@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>User Management - Census Map</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
-    <link rel="stylesheet" href="/styles.css?v=20260610a" />
+    <link rel="stylesheet" href="/styles.css?v=20260610b" />
   </head>
   <body class="landing-body">
-    <div class="app-version-badge">v20260610a</div>
+    <div class="app-version-badge">v20260610b</div>
+    <div id="user-widget-root"></div>
 
     <main class="admin-shell">
       <nav class="admin-nav">
@@ -18,102 +19,207 @@
         <span>User Management</span>
         <button id="add-user-btn" class="admin-btn admin-btn-add">Add New User</button>
       </div>
-      
+
       <table class="admin-table">
         <thead>
           <tr>
             <th>Username</th>
             <th>Password</th>
-            <th>Admin</th>
-            <th>CLDs (comma separated)</th>
+            <th>Role</th>
+            <th>Direct CLDs</th>
+            <th>Crew Leaders</th>
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody id="users-tbody">
-          <!-- Rows will be injected here -->
-        </tbody>
+        <tbody id="users-tbody"></tbody>
       </table>
     </main>
 
+    <script src="/app-auth.js?v=20260610b"></script>
     <script>
       (function() {
         const tbody = document.getElementById('users-tbody');
         const addUserBtn = document.getElementById('add-user-btn');
+        let currentUser = null;
+        let usersCache = [];
+
+        function parseList(value) {
+          return String(value || '')
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+        }
+
+        function escapeHtml(value) {
+          return String(value || '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+        }
+
+        async function getJson(url, options) {
+          const res = await fetch(url, options);
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || res.statusText);
+          return data;
+        }
+
+        async function loadCurrentUser() {
+          const data = await getJson('/api/me');
+          currentUser = data.user || null;
+        }
 
         async function loadUsers() {
-          const res = await fetch('/api/admin/users');
-          if (!res.ok) {
-            if (res.status === 401 || res.status === 403) window.location.assign('/');
-            return;
+          try {
+            if (!currentUser) {
+              await loadCurrentUser();
+            }
+            const data = await getJson('/api/admin/users');
+            usersCache = data.users || [];
+            renderUsers(usersCache);
+          } catch (err) {
+            if (String(err.message || '').includes('403') || String(err.message || '').includes('401')) {
+              window.location.assign('/');
+              return;
+            }
+            alert('Failed to load users: ' + err.message);
           }
-          const data = await res.json();
-          renderUsers(data.users);
+        }
+
+        function roleOptions(selectedRole) {
+          const roles = ['enumerator', 'crew_leader', 'admin'];
+          return roles.map((role) => `<option value="${role}" ${role === selectedRole ? 'selected' : ''}>${role}</option>`).join('');
+        }
+
+        function crewLeaderInputValue(user) {
+          return (user.crewLeaders || []).map((item) => item.username).join(', ');
         }
 
         function renderUsers(users) {
           tbody.innerHTML = '';
-          users.forEach(user => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-              <td><input type="text" class="admin-input-small" value="${user.username}" disabled /></td>
-              <td><input type="password" class="admin-input-small" placeholder="••••••" data-user-id="${user.id}" /></td>
-              <td><input type="checkbox" ${user.is_admin ? 'checked' : ''} /></td>
-              <td><input type="text" class="admin-input-small" value="${user.allowedClds.join(', ')}" ${user.is_admin ? 'disabled' : ''} /></td>
+          const canEditRoles = Boolean(currentUser?.isAdmin);
+          users.forEach((user) => {
+            const isSelf = currentUser && Number(currentUser.id) === Number(user.id);
+            const canEditThisUser = Boolean(currentUser?.isAdmin || (currentUser?.role === 'crew_leader' && (isSelf || (user.role === 'enumerator' && (user.crewLeaderIds || []).includes(Number(currentUser.id))))));
+            const role = user.isAdmin ? 'admin' : (user.role || 'enumerator');
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td><input type="text" class="admin-input-small" value="${escapeHtml(user.username)}" disabled /></td>
+              <td><input type="password" class="admin-input-small" placeholder="••••••" /></td>
+              <td>
+                <select class="admin-input-small admin-role-select" ${canEditRoles ? '' : 'disabled'}>
+                  ${roleOptions(role)}
+                </select>
+              </td>
+              <td><input type="text" class="admin-input-small admin-input-clds" value="${escapeHtml((user.allowedClds || []).join(', '))}" ${canEditRoles ? '' : 'disabled'} /></td>
+              <td><input type="text" class="admin-input-small admin-input-crews" value="${escapeHtml(crewLeaderInputValue(user))}" ${canEditRoles ? '' : 'disabled'} /></td>
               <td>
                 <button class="admin-btn admin-btn-save">Save</button>
                 <button class="admin-btn admin-btn-del">Del</button>
               </td>
             `;
-            
-            const saveBtn = tr.querySelector('.admin-btn-save');
-            const delBtn = tr.querySelector('.admin-btn-del');
-            const passInput = tr.querySelector('input[type="password"]');
-            const adminCheckbox = tr.querySelector('input[type="checkbox"]');
-            const cldsInput = tr.querySelector('input[type="text"]:not([disabled])') || { value: '' };
+
+            const passInput = row.querySelector('input[type="password"]');
+            const roleSelect = row.querySelector('.admin-role-select');
+            const cldsInput = row.querySelector('.admin-input-clds');
+            const crewsInput = row.querySelector('.admin-input-crews');
+            const saveBtn = row.querySelector('.admin-btn-save');
+            const delBtn = row.querySelector('.admin-btn-del');
+
+            if (!canEditThisUser) {
+              saveBtn.disabled = true;
+              delBtn.disabled = true;
+            }
+
+            if (isSelf) {
+              delBtn.disabled = true;
+            }
+
+            if (!canEditRoles) {
+              roleSelect.value = role;
+            }
 
             saveBtn.addEventListener('click', async () => {
-              const payload = {
-                password: passInput.value || undefined,
-                isAdmin: adminCheckbox.checked,
-                allowedClds: adminCheckbox.checked ? [] : cldsInput.value.split(',').map(s => s.trim()).filter(Boolean)
-              };
-              const res = await fetch(\`/api/admin/users/\${user.id}\`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-              });
-              if (res.ok) {
-                alert('User updated');
-                if (passInput.value) passInput.value = '';
-                loadUsers();
-              } else {
-                const err = await res.json();
-                alert(err.error || 'Update failed');
+              const payload = { password: passInput.value || undefined };
+              if (canEditRoles) {
+                payload.role = roleSelect.value;
+                payload.isAdmin = roleSelect.value === 'admin';
+                payload.allowedClds = payload.isAdmin ? [] : parseList(cldsInput.value);
+                payload.crewLeaderIds = parseList(crewsInput.value);
+              }
+
+              try {
+                const res = await fetch(`/api/admin/users/${user.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                passInput.value = '';
+                await loadUsers();
+              } catch (err) {
+                alert(err.message || 'Update failed');
               }
             });
 
             delBtn.addEventListener('click', async () => {
-              if (!confirm('Delete user?')) return;
-              const res = await fetch(\`/api/admin/users/\${user.id}\`, { method: 'DELETE' });
-              if (res.ok) loadUsers();
+              if (!confirm(`Delete user ${user.username}?`)) return;
+              try {
+                const res = await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || res.statusText);
+                await loadUsers();
+              } catch (err) {
+                alert(err.message || 'Delete failed');
+              }
             });
 
-            tbody.appendChild(tr);
+            tbody.appendChild(row);
           });
         }
 
         addUserBtn.addEventListener('click', async () => {
-          const username = prompt('Username:');
+          const username = prompt('Enter username:');
           if (!username) return;
-          const password = prompt('Password:');
+          const password = prompt('Enter password:');
           if (!password) return;
-          const res = await fetch('/api/admin/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, isAdmin: false, allowedClds: [] })
-          });
-          if (res.ok) loadUsers();
-          else alert((await res.json()).error);
+
+          let role = 'enumerator';
+          let allowedClds = [];
+          let crewLeaderIds = [];
+          if (currentUser?.isAdmin) {
+            role = prompt('Role (enumerator, crew_leader, admin):', 'enumerator') || 'enumerator';
+            if (role === 'admin') {
+              allowedClds = [];
+              crewLeaderIds = [];
+            } else {
+              allowedClds = parseList(prompt('Direct CLDs (comma separated):', '') || '');
+              crewLeaderIds = parseList(prompt('Crew leaders (usernames or ids, comma separated):', '') || '');
+            }
+          }
+
+          try {
+            const res = await fetch('/api/admin/users', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username,
+                password,
+                role,
+                isAdmin: role === 'admin',
+                allowedClds,
+                crewLeaderIds
+              })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || res.statusText);
+            await loadUsers();
+          } catch (err) {
+            alert(err.message || 'Failed to create user');
+          }
         });
 
         loadUsers();

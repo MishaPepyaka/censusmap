@@ -71,6 +71,7 @@ app.use("/vendor/esri-leaflet", express.static(path.join(__dirname, "..", "node_
 app.use("/media/cld", express.static(cldRootDir));
 
 const AUTH_COOKIE = "census_session";
+const USER_ROLES = new Set(["admin", "crew_leader", "enumerator"]);
 
 function hasText(value) {
   return value !== undefined && value !== null && String(value).trim().length > 0;
@@ -92,20 +93,67 @@ function normalizeDwellingNo(value) {
   return digits.padStart(4, "0").slice(-4);
 }
 
-function getUser(req) {
+function normalizeUserRole(value) {
+  const role = String(value || "").trim().toLowerCase();
+  if (USER_ROLES.has(role)) return role;
+  return "enumerator";
+}
+
+function isAdminUser(user) {
+  return Boolean(user?.isAdmin || user?.role === "admin");
+}
+
+async function loadUserById(userId) {
+  if (!Number.isFinite(Number(userId))) return null;
+  const { rows } = await pool.query(
+    `
+      SELECT id, username, password_hash, is_admin, role, created_at
+      FROM users
+      WHERE id = $1
+      LIMIT 1;
+    `,
+    [Number(userId)]
+  );
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  const allowedClds = await getDirectAllowedClds(row.id);
+  const crewLeaderIds = await getCrewLeaderIdsForUser(row.id);
+  return {
+    id: row.id,
+    username: row.username,
+    isAdmin: Boolean(row.is_admin || row.role === "admin"),
+    role: normalizeUserRole(row.role || (row.is_admin ? "admin" : "enumerator")),
+    createdAt: row.created_at,
+    allowedClds,
+    crewLeaderIds
+  };
+}
+
+function getSessionUser(req) {
   const token = req.cookies?.[AUTH_COOKIE];
   if (!token) return null;
   try {
-    return jwt.verify(token, jwtSecret);
-  } catch {
+    const user = jwt.verify(token, jwtSecret);
+    return user;
+  } catch (err) {
+    console.error("JWT verification failed:", err.message);
     return null;
   }
 }
 
+async function getUser(req) {
+  const session = getSessionUser(req);
+  if (!session?.id) return null;
+  const user = await loadUserById(session.id);
+  if (!user) return null;
+  return user;
+}
+
 async function requireAuth(req, res, next) {
-  const user = getUser(req);
+  const user = await getUser(req);
   if (!user) {
-    if (req.xhr || req.headers.accept?.includes("application/json")) {
+    console.log(`Auth required for ${req.path}`);
+    if (req.xhr || req.headers.accept?.includes("application/json") || req.path.startsWith("/api/")) {
       return res.status(401).json({ error: "Authentication required" });
     }
     return res.redirect("/login");
@@ -115,9 +163,10 @@ async function requireAuth(req, res, next) {
 }
 
 async function requireAdmin(req, res, next) {
-  const user = getUser(req);
-  if (!user || !user.isAdmin) {
-    if (req.xhr || req.headers.accept?.includes("application/json")) {
+  const user = await getUser(req);
+  if (!user || !isAdminUser(user)) {
+    console.log(`Admin access denied for ${user?.username || "anonymous"} at ${req.path}`);
+    if (req.xhr || req.headers.accept?.includes("application/json") || req.path.startsWith("/api/")) {
       return res.status(403).json({ error: "Admin access required" });
     }
     return res.redirect("/");
@@ -126,11 +175,121 @@ async function requireAdmin(req, res, next) {
   next();
 }
 
-async function hasClDAccess(user, cld) {
-  if (user.isAdmin) return true;
-  if (useFileStore) return true;
+async function requireUserManagementAccess(req, res, next) {
+  const user = await getUser(req);
+  if (!user || !(isAdminUser(user) || user.role === "crew_leader")) {
+    return res.status(403).json({ error: "User management access required" });
+  }
+  req.user = user;
+  next();
+}
+
+async function getDirectAllowedClds(userId) {
   const { rows } = await pool.query(
-    "SELECT 1 FROM user_clds WHERE user_id = $1 AND cld = $2 LIMIT 1;",
+    "SELECT cld FROM user_clds WHERE user_id = $1 ORDER BY cld;",
+    [Number(userId)]
+  );
+  return rows.map((row) => row.cld);
+}
+
+async function getCrewLeaderIdsForUser(userId) {
+  const { rows } = await pool.query(
+    "SELECT crew_leader_id FROM user_crew_leaders WHERE user_id = $1 ORDER BY crew_leader_id;",
+    [Number(userId)]
+  );
+  return rows.map((row) => row.crew_leader_id);
+}
+
+async function getCrewLeaderUsersForUser(userId) {
+  const { rows } = await pool.query(
+    `
+      SELECT u.id, u.username
+      FROM user_crew_leaders ucl
+      JOIN users u ON u.id = ucl.crew_leader_id
+      WHERE ucl.user_id = $1
+      ORDER BY u.username;
+    `,
+    [Number(userId)]
+  );
+  return rows;
+}
+
+async function resolveUserIdsFromRefs(values) {
+  const refs = Array.isArray(values)
+    ? values
+    : String(values || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+  const ids = new Set();
+  for (const ref of refs) {
+    const maybeId = Number(ref);
+    if (Number.isFinite(maybeId)) {
+      ids.add(maybeId);
+      continue;
+    }
+    const { rows } = await pool.query("SELECT id FROM users WHERE username = $1 LIMIT 1;", [ref]);
+    if (rows.length > 0) {
+      ids.add(rows[0].id);
+    }
+  }
+  return [...ids];
+}
+
+async function getManagedUsersForCrewLeader(userId) {
+  const { rows } = await pool.query(
+    `
+      SELECT DISTINCT u.id
+      FROM user_crew_leaders ucl
+      JOIN users u ON u.id = ucl.user_id
+      WHERE ucl.crew_leader_id = $1
+      ORDER BY u.id;
+    `,
+    [Number(userId)]
+  );
+  return rows.map((row) => row.id);
+}
+
+async function getManagedUserIds(user) {
+  if (!user) return [];
+  if (isAdminUser(user)) {
+    const { rows } = await pool.query("SELECT id FROM users ORDER BY id;");
+    return rows.map((row) => row.id);
+  }
+  if (user.role === "crew_leader") {
+    const { rows } = await pool.query(
+      `
+        SELECT DISTINCT user_id AS id
+        FROM user_crew_leaders
+        WHERE crew_leader_id = $1
+        UNION
+        SELECT $1::integer AS id
+        ORDER BY id;
+      `,
+      [Number(user.id)]
+    );
+    return rows.map((row) => row.id);
+  }
+  return [Number(user.id)];
+}
+
+async function hasClDAccess(user, cld) {
+  if (!user) return false;
+  if (isAdminUser(user)) return true;
+  const { rows } = await pool.query(
+    `
+      SELECT 1
+      FROM (
+        SELECT cld FROM user_clds WHERE user_id = $1
+        UNION
+        SELECT ucl.cld
+        FROM user_crew_leaders rel
+        JOIN user_clds ucl ON ucl.user_id = rel.crew_leader_id
+        WHERE rel.user_id = $1
+      ) allowed
+      WHERE cld = $2
+      LIMIT 1;
+    `,
     [user.id, cld]
   );
   return rows.length > 0;
@@ -156,8 +315,13 @@ async function initDb() {
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+        role TEXT NOT NULL DEFAULT 'enumerator',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+    await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'enumerator';
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS user_clds (
@@ -166,13 +330,25 @@ async function initDb() {
         PRIMARY KEY (user_id, cld)
       );
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_crew_leaders (
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        crew_leader_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, crew_leader_id)
+      );
+    `);
+    await client.query("CREATE INDEX IF NOT EXISTS idx_user_crew_leaders_crew_leader_id ON user_crew_leaders (crew_leader_id);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_user_crew_leaders_user_id ON user_crew_leaders (user_id);");
+    await client.query("UPDATE users SET role = 'admin' WHERE is_admin = TRUE;");
+    await client.query("UPDATE users SET role = 'enumerator' WHERE is_admin = FALSE AND (role IS NULL OR role = '');");
+    await client.query("UPDATE users SET role = CASE WHEN is_admin THEN 'admin' ELSE role END;");
     
     // Create admin user if it doesn't exist
     const { rows } = await client.query("SELECT 1 FROM users WHERE username = 'misha' LIMIT 1;");
     if (rows.length === 0) {
       const hash = await bcrypt.hash("pepka", 10);
       await client.query(
-        "INSERT INTO users (username, password_hash, is_admin) VALUES ('misha', $1, TRUE);",
+        "INSERT INTO users (username, password_hash, is_admin, role) VALUES ('misha', $1, TRUE, 'admin');",
         [hash]
       );
       console.log("Admin user 'misha' created.");
@@ -1031,9 +1207,18 @@ app.post("/api/login", async (req, res) => {
     if (!match) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-    const token = jwt.sign({ id: user.id, username: user.username, isAdmin: user.is_admin }, jwtSecret, { expiresIn: "30d" });
+    const token = jwt.sign({ id: user.id, username: user.username }, jwtSecret, { expiresIn: "30d" });
     res.cookie(AUTH_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 30 * 24 * 60 * 60 * 1000 });
-    res.json({ ok: true, user: { id: user.id, username: user.username, isAdmin: user.is_admin } });
+    const authUser = await loadUserById(user.id);
+    res.json({
+      ok: true,
+      user: authUser || {
+        id: user.id,
+        username: user.username,
+        isAdmin: Boolean(user.is_admin),
+        role: normalizeUserRole(user.role)
+      }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1044,39 +1229,77 @@ app.post("/api/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/me", (req, res) => {
-  const user = getUser(req);
+app.get("/api/me", async (req, res) => {
+  const user = await getUser(req);
   if (!user) return res.status(401).json({ error: "Not logged in" });
   res.json({ user });
 });
 
-app.get("/api/admin/users", requireAdmin, async (req, res) => {
+app.get("/api/admin/users", requireUserManagementAccess, async (req, res) => {
   try {
-    const { rows: users } = await pool.query(`
-      SELECT id, username, is_admin, created_at,
-      (SELECT array_agg(cld) FROM user_clds WHERE user_id = users.id) as allowed_clds
-      FROM users ORDER BY username;
+    const currentUser = req.user;
+    const managedIds = await getManagedUserIds(currentUser);
+    const { rows } = await pool.query(`
+      SELECT id, username, is_admin, role, created_at
+      FROM users
+      ORDER BY username;
     `);
-    res.json({ users: users.map(u => ({ ...u, allowedClds: u.allowed_clds || [] })) });
+    const visibleRows = isAdminUser(currentUser)
+      ? rows
+      : rows.filter((row) => managedIds.includes(row.id));
+    const users = [];
+    for (const row of visibleRows) {
+      users.push({
+        id: row.id,
+        username: row.username,
+        isAdmin: Boolean(row.is_admin || row.role === "admin"),
+        role: normalizeUserRole(row.role || (row.is_admin ? "admin" : "enumerator")),
+        createdAt: row.created_at,
+        allowedClds: await getDirectAllowedClds(row.id),
+        crewLeaderIds: await getCrewLeaderIdsForUser(row.id),
+        crewLeaders: await getCrewLeaderUsersForUser(row.id),
+        managedUserIds: row.role === "crew_leader" ? await getManagedUsersForCrewLeader(row.id) : []
+      });
+    }
+    res.json({ users });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post("/api/admin/users", requireAdmin, async (req, res) => {
-  const { username, password, isAdmin, allowedClds } = req.body;
+app.post("/api/admin/users", requireUserManagementAccess, async (req, res) => {
+  const { username, password, isAdmin, role, allowedClds, crewLeaderIds } = req.body;
   if (!username || !password) return res.status(400).json({ error: "Username and password required" });
   try {
+    const currentUser = req.user;
+    const resolvedRole = isAdmin ? "admin" : normalizeUserRole(role);
+    if (!isAdminUser(currentUser) && resolvedRole !== "enumerator") {
+      return res.status(403).json({ error: "Crew leaders can only create enumerators" });
+    }
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
-      "INSERT INTO users (username, password_hash, is_admin) VALUES ($1, $2, $3) RETURNING id;",
-      [username, hash, Boolean(isAdmin)]
+      "INSERT INTO users (username, password_hash, is_admin, role) VALUES ($1, $2, $3, $4) RETURNING id;",
+      [username, hash, Boolean(isAdmin), resolvedRole]
     );
     const userId = rows[0].id;
-    if (Array.isArray(allowedClds) && !isAdmin) {
+    if (isAdminUser(currentUser) && Array.isArray(allowedClds) && resolvedRole !== "admin") {
       for (const cld of allowedClds) {
         await pool.query("INSERT INTO user_clds (user_id, cld) VALUES ($1, $2);", [userId, cld]);
       }
+    }
+    const crewLeaderSet = new Set();
+    if (!isAdminUser(currentUser)) {
+      crewLeaderSet.add(Number(currentUser.id));
+    } else if (Array.isArray(crewLeaderIds)) {
+      for (const crewLeaderId of await resolveUserIdsFromRefs(crewLeaderIds)) {
+        crewLeaderSet.add(crewLeaderId);
+      }
+    }
+    for (const crewLeaderId of crewLeaderSet) {
+      await pool.query(
+        "INSERT INTO user_crew_leaders (user_id, crew_leader_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;",
+        [userId, crewLeaderId]
+      );
     }
     res.status(201).json({ ok: true, userId });
   } catch (error) {
@@ -1084,32 +1307,77 @@ app.post("/api/admin/users", requireAdmin, async (req, res) => {
   }
 });
 
-app.put("/api/admin/users/:id", requireAdmin, async (req, res) => {
+app.put("/api/admin/users/:id", requireUserManagementAccess, async (req, res) => {
   const userId = Number(req.params.id);
-  const { password, isAdmin, allowedClds } = req.body;
+  const { password, isAdmin, role, allowedClds, crewLeaderIds } = req.body;
   try {
+    const currentUser = req.user;
+    const { rows: targetRows } = await pool.query("SELECT id, username, is_admin, role FROM users WHERE id = $1 LIMIT 1;", [userId]);
+    if (targetRows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const target = targetRows[0];
+    const targetRole = normalizeUserRole(target.role || (target.is_admin ? "admin" : "enumerator"));
+    const managedIds = new Set(await getManagedUserIds(currentUser));
+    if (!isAdminUser(currentUser) && !managedIds.has(userId)) {
+      return res.status(403).json({ error: "You cannot manage this user" });
+    }
+    if (!isAdminUser(currentUser) && userId !== Number(currentUser.id) && targetRole !== "enumerator") {
+      return res.status(403).json({ error: "Crew leaders can only manage enumerators" });
+    }
+
+    const nextRole = isAdmin ? "admin" : normalizeUserRole(role || targetRole);
+    if (!isAdminUser(currentUser) && nextRole !== targetRole) {
+      return res.status(403).json({ error: "Crew leaders cannot change user roles" });
+    }
+
     if (password) {
       const hash = await bcrypt.hash(password, 10);
       await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2;", [hash, userId]);
     }
-    await pool.query("UPDATE users SET is_admin = $1 WHERE id = $2;", [Boolean(isAdmin), userId]);
-    
-    await pool.query("DELETE FROM user_clds WHERE user_id = $1;", [userId]);
-    if (Array.isArray(allowedClds) && !isAdmin) {
-      for (const cld of allowedClds) {
-        await pool.query("INSERT INTO user_clds (user_id, cld) VALUES ($1, $2);", [userId, cld]);
+
+    await pool.query("UPDATE users SET is_admin = $1, role = $2 WHERE id = $3;", [Boolean(nextRole === "admin"), nextRole, userId]);
+
+    if (isAdminUser(currentUser)) {
+      await pool.query("DELETE FROM user_clds WHERE user_id = $1;", [userId]);
+      if (Array.isArray(allowedClds) && nextRole !== "admin") {
+        for (const cld of allowedClds) {
+          await pool.query("INSERT INTO user_clds (user_id, cld) VALUES ($1, $2);", [userId, cld]);
+        }
       }
+
+      await pool.query("DELETE FROM user_crew_leaders WHERE user_id = $1;", [userId]);
+      if (Array.isArray(crewLeaderIds) && nextRole === "enumerator") {
+        for (const crewLeaderId of await resolveUserIdsFromRefs(crewLeaderIds)) {
+          await pool.query(
+            "INSERT INTO user_crew_leaders (user_id, crew_leader_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;",
+            [userId, crewLeaderId]
+          );
+        }
+      }
+    } else if (currentUser.role === "crew_leader" && userId !== Number(currentUser.id)) {
+      await pool.query(
+        "INSERT INTO user_crew_leaders (user_id, crew_leader_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;",
+        [userId, Number(currentUser.id)]
+      );
     }
+
     res.json({ ok: true });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
+app.delete("/api/admin/users/:id", requireUserManagementAccess, async (req, res) => {
   const userId = Number(req.params.id);
   if (req.user.id === userId) return res.status(400).json({ error: "Cannot delete yourself" });
   try {
+    if (!isAdminUser(req.user)) {
+      const managedIds = new Set(await getManagedUserIds(req.user));
+      if (!managedIds.has(userId)) {
+        return res.status(403).json({ error: "You cannot delete this user" });
+      }
+    }
     await pool.query("DELETE FROM users WHERE id = $1;", [userId]);
     res.json({ ok: true });
   } catch (error) {
@@ -1122,7 +1390,10 @@ app.get("/api/config", requireAuth, (req, res) => {
     ...mapConfig,
     auth: {
       editProtected: true,
-      isAdmin: req.user.isAdmin
+      isAdmin: req.user.isAdmin,
+      role: req.user.role,
+      canManageUsers: isAdminUser(req.user) || req.user.role === "crew_leader",
+      canEdit: isAdminUser(req.user) || req.user.role === "crew_leader"
     }
   });
 });
@@ -1513,12 +1784,12 @@ app.get("/login", (_req, res) => {
   res.sendFile(path.join(publicDir, "login.html"));
 });
 
-app.get("/users", requireAdmin, (_req, res) => {
+app.get("/users", requireUserManagementAccess, (_req, res) => {
   res.sendFile(path.join(publicDir, "users.html"));
 });
 
-app.get("/", (_req, res) => {
-  const user = getUser(_req);
+app.get("/", async (req, res) => {
+  const user = await getUser(req);
   if (!user) return res.redirect("/login");
   res.sendFile(path.join(publicDir, "landing.html"));
 });
