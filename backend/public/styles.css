@@ -764,3 +764,82 @@ body {
   background: #fde047;
   transform: translate(-7px, -7px);
 }
+
+/* Admin Panel */
+.admin-shell {
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 16px;
+  color: #f8fafc;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.admin-title {
+  font-size: 24px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th {
+  text-align: left;
+  color: #94a3b8;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 8px;
+  border-bottom: 2px solid #334155;
+}
+
+.admin-table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid #1e293b;
+  vertical-align: middle;
+}
+
+.admin-input-small {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s;
+}
+
+.admin-btn:hover { opacity: 0.8; }
+.admin-btn-save { background: #10b981; color: #fff; }
+.admin-btn-del { background: #ef4444; color: #fff; margin-left: 5px; }
+.admin-btn-add { background: #3b82f6; color: #fff; }
+
+.admin-nav {
+  margin-bottom: 20px;
+}
+
+.admin-nav a {
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.admin-nav a:hover { color: #f8fafc; }

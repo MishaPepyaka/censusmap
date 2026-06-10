@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>User Management - Census Map</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
+    <link rel="stylesheet" href="/styles.css?v=20260610a" />
+  </head>
+  <body class="landing-body">
+    <div class="app-version-badge">v20260610a</div>
+
+    <main class="admin-shell">
+      <nav class="admin-nav">
+        <a href="/">&larr; Back to Map</a>
+      </nav>
+      <div class="admin-title">
+        <span>User Management</span>
+        <button id="add-user-btn" class="admin-btn admin-btn-add">Add New User</button>
+      </div>
+      
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Password</th>
+            <th>Admin</th>
+            <th>CLDs (comma separated)</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <!-- Rows will be injected here -->
+        </tbody>
+      </table>
+    </main>
+
+    <script>
+      (function() {
+        const tbody = document.getElementById('users-tbody');
+        const addUserBtn = document.getElementById('add-user-btn');
+
+        async function loadUsers() {
+          const res = await fetch('/api/admin/users');
+          if (!res.ok) {
+            if (res.status === 401 || res.status === 403) window.location.assign('/');
+            return;
+          }
+          const data = await res.json();
+          renderUsers(data.users);
+        }
+
+        function renderUsers(users) {
+          tbody.innerHTML = '';
+          users.forEach(user => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td><input type="text" class="admin-input-small" value="${user.username}" disabled /></td>
+              <td><input type="password" class="admin-input-small" placeholder="••••••" data-user-id="${user.id}" /></td>
+              <td><input type="checkbox" ${user.is_admin ? 'checked' : ''} /></td>
+              <td><input type="text" class="admin-input-small" value="${user.allowedClds.join(', ')}" ${user.is_admin ? 'disabled' : ''} /></td>
+              <td>
+                <button class="admin-btn admin-btn-save">Save</button>
+                <button class="admin-btn admin-btn-del">Del</button>
+              </td>
+            `;
+            
+            const saveBtn = tr.querySelector('.admin-btn-save');
+            const delBtn = tr.querySelector('.admin-btn-del');
+            const passInput = tr.querySelector('input[type="password"]');
+            const adminCheckbox = tr.querySelector('input[type="checkbox"]');
+            const cldsInput = tr.querySelector('input[type="text"]:not([disabled])') || { value: '' };
+
+            saveBtn.addEventListener('click', async () => {
+              const payload = {
+                password: passInput.value || undefined,
+                isAdmin: adminCheckbox.checked,
+                allowedClds: adminCheckbox.checked ? [] : cldsInput.value.split(',').map(s => s.trim()).filter(Boolean)
+              };
+              const res = await fetch(\`/api/admin/users/\${user.id}\`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              if (res.ok) {
+                alert('User updated');
+                if (passInput.value) passInput.value = '';
+                loadUsers();
+              } else {
+                const err = await res.json();
+                alert(err.error || 'Update failed');
+              }
+            });
+
+            delBtn.addEventListener('click', async () => {
+              if (!confirm('Delete user?')) return;
+              const res = await fetch(\`/api/admin/users/\${user.id}\`, { method: 'DELETE' });
+              if (res.ok) loadUsers();
+            });
+
+            tbody.appendChild(tr);
+          });
+        }
+
+        addUserBtn.addEventListener('click', async () => {
+          const username = prompt('Username:');
+          if (!username) return;
+          const password = prompt('Password:');
+          if (!password) return;
+          const res = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, isAdmin: false, allowedClds: [] })
+          });
+          if (res.ok) loadUsers();
+          else alert((await res.json()).error);
+        });
+
+        loadUsers();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login - Census Map</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
+    <link rel="stylesheet" href="/styles.css?v=20260610a" />
+  </head>
+  <body class="landing-body">
+    <div class="app-version-badge">v20260610a</div>
+
+    <main class="landing-shell">
+      <section class="landing-card">
+        <p class="landing-eyebrow">Authentication</p>
+        <h1 class="landing-title">Login</h1>
+        <form id="login-form" class="lookup-form">
+          <label class="landing-label" for="username">Username</label>
+          <input id="username" class="landing-input" type="text" autocomplete="username" required />
+          
+          <label class="landing-label" for="password">Password</label>
+          <input id="password" class="landing-input" type="password" autocomplete="current-password" required />
+          
+          <button id="login-submit" class="landing-submit" type="submit">Sign In</button>
+          <div id="login-status" class="landing-status" aria-live="polite"></div>
+        </form>
+      </section>
+    </main>
+    <script>
+      (function() {
+        const form = document.getElementById('login-form');
+        const status = document.getElementById('login-status');
+        
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          status.textContent = 'Authenticating...';
+          status.classList.remove('landing-status-error');
+          
+          const username = document.getElementById('username').value;
+          const password = document.getElementById('password').value;
+          
+          try {
+            const res = await fetch('/api/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
+            if (res.ok) {
+              window.location.assign('/');
+            } else {
+              status.textContent = data.error || 'Login failed';
+              status.classList.add('landing-status-error');
+            }
+          } catch (err) {
+            status.textContent = 'Connection error';
+            status.classList.add('landing-status-error');
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

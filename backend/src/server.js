@@ -7,6 +7,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import cookieParser from "cookie-parser";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,8 +24,7 @@ const app = express();
 const port = Number(process.env.PORT || 8080);
 const useFileStore = String(process.env.USE_FILE_STORE || "false").toLowerCase() === "true";
 const fileStorePath = process.env.FILE_STORE_PATH || path.join(dataDir, "file-store.json");
-const editUsername = String(process.env.EDIT_USERNAME || "admin").trim();
-const editPassword = String(process.env.EDIT_PASSWORD || "").trim();
+const jwtSecret = process.env.JWT_SECRET || "census-map-secret-key-2026";
 
 const pool = useFileStore
   ? null
@@ -62,10 +64,13 @@ const mapConfig = {
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(morgan("combined"));
 app.use(express.json({ limit: "25mb" }));
+app.use(cookieParser());
 app.use("/vendor/leaflet", express.static(path.join(__dirname, "..", "node_modules", "leaflet", "dist")));
 app.use("/vendor/leaflet-draw", express.static(path.join(__dirname, "..", "node_modules", "leaflet-draw", "dist")));
 app.use("/vendor/esri-leaflet", express.static(path.join(__dirname, "..", "node_modules", "esri-leaflet", "dist")));
 app.use("/media/cld", express.static(cldRootDir));
+
+const AUTH_COOKIE = "census_session";
 
 function hasText(value) {
   return value !== undefined && value !== null && String(value).trim().length > 0;
@@ -87,160 +92,92 @@ function normalizeDwellingNo(value) {
   return digits.padStart(4, "0").slice(-4);
 }
 
-function readBasicAuthCredentials(headerValue) {
-  if (!hasText(headerValue) || !String(headerValue).startsWith("Basic ")) return "";
+function getUser(req) {
+  const token = req.cookies?.[AUTH_COOKIE];
+  if (!token) return null;
   try {
-    const decoded = Buffer.from(String(headerValue).slice(6), "base64").toString("utf8");
-    const separatorIndex = decoded.indexOf(":");
-    if (separatorIndex === -1) {
-      return { username: decoded, password: "" };
+    return jwt.verify(token, jwtSecret);
+  } catch {
+    return null;
+  }
+}
+
+async function requireAuth(req, res, next) {
+  const user = getUser(req);
+  if (!user) {
+    if (req.xhr || req.headers.accept?.includes("application/json")) {
+      return res.status(401).json({ error: "Authentication required" });
     }
-    return {
-      username: decoded.slice(0, separatorIndex),
-      password: decoded.slice(separatorIndex + 1)
-    };
-  } catch {
-    return { username: "", password: "" };
+    return res.redirect("/login");
   }
+  req.user = user;
+  next();
 }
 
-function requireEditAuth(req, res, next) {
-  if (!editPassword) return next();
-  const provided = readBasicAuthCredentials(req.headers.authorization);
-  if (provided.username === editUsername && provided.password === editPassword) return next();
-  res.setHeader("WWW-Authenticate", 'Basic realm="CLD Editor"');
-  return res.status(401).json({ error: "Editor authentication required" });
-}
-
-function buildFeatureCollection(features) {
-  return {
-    type: "FeatureCollection",
-    features: Array.isArray(features) ? features : []
-  };
-}
-
-function normalizeFeatures(payload) {
-  if (!payload) return [];
-  if (payload.type === "FeatureCollection" && Array.isArray(payload.features)) {
-    return payload.features;
+async function requireAdmin(req, res, next) {
+  const user = getUser(req);
+  if (!user || !user.isAdmin) {
+    if (req.xhr || req.headers.accept?.includes("application/json")) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    return res.redirect("/");
   }
-  if (payload.type === "Feature") {
-    return [payload];
+  req.user = user;
+  next();
+}
+
+async function hasClDAccess(user, cld) {
+  if (user.isAdmin) return true;
+  if (useFileStore) return true;
+  const { rows } = await pool.query(
+    "SELECT 1 FROM user_clds WHERE user_id = $1 AND cld = $2 LIMIT 1;",
+    [user.id, cld]
+  );
+  return rows.length > 0;
+}
+
+async function requireClDAccess(req, res, next) {
+  const cld = normalizeClD(req.params.cld || req.query.cld || "");
+  if (!cld) return next();
+  const allowed = await hasClDAccess(req.user, cld);
+  if (!allowed) {
+    return res.status(403).json({ error: `Access to CLD ${cld} denied` });
   }
-  if (Array.isArray(payload)) {
-    return payload.filter((item) => item?.type === "Feature");
-  }
-  return [];
-}
-
-function extractCuCode(properties) {
-  if (!properties || typeof properties !== "object") return "";
-  if (hasText(properties.CUID)) return String(properties.CUID).trim();
-  if (hasText(properties.cu)) return String(properties.cu).trim();
-  if (hasText(properties.name)) return String(properties.name).split("/")[0].trim();
-  if (hasText(properties.label)) return String(properties.label).split("/")[0].trim();
-  return "";
-}
-
-function extractClDFromProperties(properties) {
-  if (!properties || typeof properties !== "object") return "";
-  const raw = properties.CLD ?? properties.cld ?? properties.CFOP_CLD_ID ?? properties.cfopCldId;
-  return normalizeClD(raw);
-}
-
-function isPolygonGeometry(geometry) {
-  return geometry?.type === "Polygon" || geometry?.type === "MultiPolygon";
-}
-
-function isPointGeometry(geometry) {
-  return geometry?.type === "Point";
-}
-
-function isCuFeature(properties, geometry = null) {
-  if (!properties || typeof properties !== "object") return false;
-  if (!isPolygonGeometry(geometry)) return false;
-  const group = String(properties._group || "").trim().toLowerCase();
-  if (group === "cu" || group === "cus") return true;
-  return hasText(properties.CU_TYPE) && !hasText(properties.COLB_UID) && !hasText(properties.CB_COLCODE);
-}
-
-function isBlockFeature(properties, geometry = null) {
-  if (!properties || typeof properties !== "object") return false;
-  if (!isPolygonGeometry(geometry)) return false;
-  const group = String(properties._group || "").trim().toLowerCase();
-  if (group === "blocks" || group === "block") return true;
-  return hasText(properties.COLB_UID) || hasText(properties.CB_COLCODE);
-}
-
-function isDwellingFeature(properties, geometry = null) {
-  if (!properties || typeof properties !== "object") return false;
-  if (!isPointGeometry(geometry)) return false;
-  const group = String(properties._group || "").trim().toLowerCase();
-  if (group === "dwellings" || group === "dwelling") return true;
-  const rawDwellingNo = properties.dwellingNo ?? properties.DWELLING_NO ?? properties.vrNumber ?? properties.VR_NUMBER;
-  return hasText(rawDwellingNo);
-}
-
-function classifyFeature(feature) {
-  const properties = feature?.properties || {};
-  const geometry = feature?.geometry || {};
-  if (isDwellingFeature(properties, geometry)) return "dwellings";
-  if (isBlockFeature(properties, geometry)) return "blocks";
-  if (isCuFeature(properties, geometry)) return "cu";
-  return "other";
-}
-
-function normalizeRegionFeature(feature) {
-  const properties = feature?.properties && typeof feature.properties === "object"
-    ? { ...feature.properties }
-    : {};
-  return {
-    type: "Feature",
-    ...(feature?.id !== undefined ? { id: feature.id } : {}),
-    properties,
-    geometry: feature?.geometry || null
-  };
-}
-
-function featureFileNames() {
-  return {
-    cu: "cu.geojson",
-    blocks: "blocks.geojson",
-    dwellings: "dwellings.geojson"
-  };
-}
-
-async function exists(targetPath) {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function ensureDir(targetPath) {
-  await fs.mkdir(targetPath, { recursive: true });
-}
-
-async function readJsonFile(filePath, fallback = null) {
-  try {
-    const raw = await fs.readFile(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
-async function writeJsonFile(filePath, value) {
-  await ensureDir(path.dirname(filePath));
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
+  next();
 }
 
 async function initDb() {
   const client = await pool.connect();
   try {
     await client.query("CREATE EXTENSION IF NOT EXISTS postgis;");
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_clds (
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        cld TEXT NOT NULL,
+        PRIMARY KEY (user_id, cld)
+      );
+    `);
+    
+    // Create admin user if it doesn't exist
+    const { rows } = await client.query("SELECT 1 FROM users WHERE username = 'misha' LIMIT 1;");
+    if (rows.length === 0) {
+      const hash = await bcrypt.hash("pepka", 10);
+      await client.query(
+        "INSERT INTO users (username, password_hash, is_admin) VALUES ('misha', $1, TRUE);",
+        [hash]
+      );
+      console.log("Admin user 'misha' created.");
+    }
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS cld_regions (
         cld TEXT PRIMARY KEY,
@@ -1079,11 +1016,113 @@ app.get("/health", async (_req, res) => {
   }
 });
 
-app.get("/api/config", (_req, res) => {
+app.post("/api/login", async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password required" });
+  }
+  try {
+    const { rows } = await pool.query("SELECT * FROM users WHERE username = $1 LIMIT 1;", [username]);
+    if (rows.length === 0) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    const user = rows[0];
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    const token = jwt.sign({ id: user.id, username: user.username, isAdmin: user.is_admin }, jwtSecret, { expiresIn: "30d" });
+    res.cookie(AUTH_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 30 * 24 * 60 * 60 * 1000 });
+    res.json({ ok: true, user: { id: user.id, username: user.username, isAdmin: user.is_admin } });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/logout", (req, res) => {
+  res.clearCookie(AUTH_COOKIE);
+  res.json({ ok: true });
+});
+
+app.get("/api/me", (req, res) => {
+  const user = getUser(req);
+  if (!user) return res.status(401).json({ error: "Not logged in" });
+  res.json({ user });
+});
+
+app.get("/api/admin/users", requireAdmin, async (req, res) => {
+  try {
+    const { rows: users } = await pool.query(`
+      SELECT id, username, is_admin, created_at,
+      (SELECT array_agg(cld) FROM user_clds WHERE user_id = users.id) as allowed_clds
+      FROM users ORDER BY username;
+    `);
+    res.json({ users: users.map(u => ({ ...u, allowedClds: u.allowed_clds || [] })) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/api/admin/users", requireAdmin, async (req, res) => {
+  const { username, password, isAdmin, allowedClds } = req.body;
+  if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const { rows } = await pool.query(
+      "INSERT INTO users (username, password_hash, is_admin) VALUES ($1, $2, $3) RETURNING id;",
+      [username, hash, Boolean(isAdmin)]
+    );
+    const userId = rows[0].id;
+    if (Array.isArray(allowedClds) && !isAdmin) {
+      for (const cld of allowedClds) {
+        await pool.query("INSERT INTO user_clds (user_id, cld) VALUES ($1, $2);", [userId, cld]);
+      }
+    }
+    res.status(201).json({ ok: true, userId });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.put("/api/admin/users/:id", requireAdmin, async (req, res) => {
+  const userId = Number(req.params.id);
+  const { password, isAdmin, allowedClds } = req.body;
+  try {
+    if (password) {
+      const hash = await bcrypt.hash(password, 10);
+      await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2;", [hash, userId]);
+    }
+    await pool.query("UPDATE users SET is_admin = $1 WHERE id = $2;", [Boolean(isAdmin), userId]);
+    
+    await pool.query("DELETE FROM user_clds WHERE user_id = $1;", [userId]);
+    if (Array.isArray(allowedClds) && !isAdmin) {
+      for (const cld of allowedClds) {
+        await pool.query("INSERT INTO user_clds (user_id, cld) VALUES ($1, $2);", [userId, cld]);
+      }
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete("/api/admin/users/:id", requireAdmin, async (req, res) => {
+  const userId = Number(req.params.id);
+  if (req.user.id === userId) return res.status(400).json({ error: "Cannot delete yourself" });
+  try {
+    await pool.query("DELETE FROM users WHERE id = $1;", [userId]);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/config", requireAuth, (req, res) => {
   res.json({
     ...mapConfig,
     auth: {
-      editProtected: Boolean(editPassword)
+      editProtected: true,
+      isAdmin: req.user.isAdmin
     }
   });
 });
@@ -1105,7 +1144,7 @@ app.get("/api/regions", async (_req, res) => {
   res.json({ regions: records });
 });
 
-app.get("/api/cld/:cld", async (req, res) => {
+app.get("/api/cld/:cld", requireAuth, requireClDAccess, async (req, res) => {
   const cld = normalizeClD(req.params.cld);
   if (!cld) {
     return res.status(400).json({ error: "Invalid CLD" });
@@ -1118,7 +1157,7 @@ app.get("/api/cld/:cld", async (req, res) => {
   }
 });
 
-app.get("/api/cld/:cld/features", async (req, res) => {
+app.get("/api/cld/:cld/features", requireAuth, requireClDAccess, async (req, res) => {
   const cld = normalizeClD(req.params.cld);
   if (!cld) {
     return res.status(400).json({ error: "Invalid CLD" });
@@ -1135,7 +1174,7 @@ app.get("/api/cld/:cld/features", async (req, res) => {
   }
 });
 
-app.post("/api/cld/:cld/features", requireEditAuth, async (req, res) => {
+app.post("/api/cld/:cld/features", requireAuth, requireClDAccess, async (req, res) => {
   const cld = normalizeClD(req.params.cld);
   if (!cld) {
     return res.status(400).json({ error: "Invalid CLD" });
@@ -1153,7 +1192,7 @@ app.post("/api/cld/:cld/features", requireEditAuth, async (req, res) => {
   }
 });
 
-app.put("/api/cld/:cld/features/:id", requireEditAuth, async (req, res) => {
+app.put("/api/cld/:cld/features/:id", requireAuth, requireClDAccess, async (req, res) => {
   const cld = normalizeClD(req.params.cld);
   const id = Number(req.params.id);
   if (!cld) {
@@ -1177,7 +1216,7 @@ app.put("/api/cld/:cld/features/:id", requireEditAuth, async (req, res) => {
   }
 });
 
-app.delete("/api/cld/:cld/features/:id", requireEditAuth, async (req, res) => {
+app.delete("/api/cld/:cld/features/:id", requireAuth, requireClDAccess, async (req, res) => {
   const cld = normalizeClD(req.params.cld);
   const id = Number(req.params.id);
   if (!cld) {
@@ -1197,7 +1236,7 @@ app.delete("/api/cld/:cld/features/:id", requireEditAuth, async (req, res) => {
   }
 });
 
-app.post("/api/cld/:cld/uploads", requireEditAuth, async (req, res) => {
+app.post("/api/cld/:cld/uploads", requireAuth, requireClDAccess, async (req, res) => {
   const cld = normalizeClD(req.params.cld);
   if (!cld) {
     return res.status(400).json({ error: "Invalid CLD" });
@@ -1470,11 +1509,21 @@ app.get("/statcan", (_req, res) => {
   res.sendFile(path.join(publicDir, "statcan.html"));
 });
 
+app.get("/login", (_req, res) => {
+  res.sendFile(path.join(publicDir, "login.html"));
+});
+
+app.get("/users", requireAdmin, (_req, res) => {
+  res.sendFile(path.join(publicDir, "users.html"));
+});
+
 app.get("/", (_req, res) => {
+  const user = getUser(_req);
+  if (!user) return res.redirect("/login");
   res.sendFile(path.join(publicDir, "landing.html"));
 });
 
-app.get("/:cld/edit", requireEditAuth, async (req, res, next) => {
+app.get("/:cld/edit", requireAuth, requireClDAccess, async (req, res, next) => {
   const cld = normalizeClD(req.params.cld);
   if (!cld) return next();
   if (!(await regionExists(cld))) {
@@ -1485,7 +1534,7 @@ app.get("/:cld/edit", requireEditAuth, async (req, res, next) => {
 
 app.use(express.static(publicDir));
 
-app.get("/:cld", async (req, res, next) => {
+app.get("/:cld", requireAuth, requireClDAccess, async (req, res, next) => {
   const cld = normalizeClD(req.params.cld);
   if (!cld) return next();
   if (!(await regionExists(cld))) {
