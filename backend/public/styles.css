@@ -775,6 +775,7 @@ body {
   border-radius: 16px;
   color: #f8fafc;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  overflow-x: auto;
 }
 
 .admin-title {
@@ -788,6 +789,7 @@ body {
 .admin-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 980px;
 }
 
 .admin-table th {
@@ -817,6 +819,14 @@ body {
   box-sizing: border-box;
 }
 
+.admin-role-select {
+  min-width: 120px;
+}
+
+.admin-input-crews {
+  min-width: 180px;
+}
+
 .admin-btn {
   padding: 6px 12px;
   border-radius: 6px;
@@ -843,3 +853,135 @@ body {
 }
 
 .admin-nav a:hover { color: #f8fafc; }
+
+/* User Profile Widget */
+.user-profile-widget {
+  position: fixed;
+  right: 12px;
+  top: 12px;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background 0.2s;
+  max-width: min(260px, calc(100vw - 24px));
+}
+
+.user-profile-btn:hover {
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.user-profile-avatar {
+  width: 24px;
+  height: 24px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.user-profile-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-dropdown-header {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  color: #f8fafc;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  margin-bottom: 4px;
+}
+
+.user-dropdown-username {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-role-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 200px;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 8px;
+  display: none;
+  flex-direction: column;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+}
+
+.user-dropdown.show {
+  display: flex;
+}
+
+.user-dropdown-item {
+  padding: 10px 12px;
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 13px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.user-dropdown-item:hover {
+  background: rgba(148, 163, 184, 0.1);
+  color: #f8fafc;
+}
+
+.user-dropdown-divider {
+  height: 1px;
+  background: rgba(148, 163, 184, 0.15);
+  margin: 6px 0;
+}
+
+@media (max-width: 640px) {
+  .user-profile-name {
+    display: none;
+  }
+
+  .admin-shell {
+    margin: 16px;
+    padding: 16px;
+  }
+}

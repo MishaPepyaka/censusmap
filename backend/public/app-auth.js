@@ -24,8 +24,9 @@
           <div class="user-profile-avatar">${initials}</div>
         </button>
         <div class="user-dropdown" id="user-profile-dropdown">
-          <div class="user-dropdown-item" style="font-weight: 700; color: #f8fafc; border-bottom: 1px solid rgba(148,163,184,0.1); border-radius: 0; padding-bottom: 12px; margin-bottom: 4px;">
-            ${user.username} <span style="font-size: 10px; background: #3b82f6; padding: 2px 5px; border-radius: 4px; margin-left: 5px;">${roleLabel}</span>
+          <div class="user-dropdown-header">
+            <span class="user-dropdown-username">${user.username}</span>
+            <span class="user-role-pill">${roleLabel}</span>
           </div>
           ${canManageUsers ? '<a href="/users" class="user-dropdown-item">Manage Users</a>' : ''}
           <a href="/" class="user-dropdown-item">Main Page</a>

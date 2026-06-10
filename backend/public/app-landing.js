@@ -32,32 +32,9 @@
       setStatus(error.message, true);
     }
   }
-async function checkAdmin() {
-  try {
-    const data = await getJson('/api/config');
-    document.getElementById('admin-link-container').style.display = 'flex';
-    document.getElementById('admin-link-container').style.justifyContent = 'center';
-    if (!data.auth?.isAdmin) {
-      // Hide manage users if not admin, but keep container for logout
-      document.querySelector('a[href="/users"]').style.display = 'none';
-      document.querySelector('span[style*="color: #334155"]').style.display = 'none';
-    }
-  } catch {
-    // Ignore config load error.
-  }
-}
 
-document.getElementById('logout-link')?.addEventListener('click', async (e) => {
-  e.preventDefault();
-  await fetch('/api/logout', { method: 'POST' });
-  window.location.assign('/login');
-});
-
-form?.addEventListener("submit", async (event) => {
-...
+  form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     await submitLookup(input?.value || "");
   });
-
-  await checkAdmin();
 })();
