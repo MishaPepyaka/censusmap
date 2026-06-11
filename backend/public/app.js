@@ -238,7 +238,7 @@
 
   const mapContainer = map.getContainer();
   function syncZoomUiMode() {
-    const cuOnly = map.getZoom() <= 12;
+    const cuOnly = map.getZoom() <= 10;
     mapContainer.classList.toggle("zoom-cu-only", cuOnly);
     if (badgesReady) rebuildBadges();
   }
@@ -540,13 +540,25 @@
     return marker;
   }
 
-  const DWELLINGS_MIN_VISIBLE_ZOOM = 13;
+  const DWELLINGS_MIN_VISIBLE_ZOOM = 10;
 
   function renderVisibleDwellingMarkers() {
+    const selectedKey = selectedDwellingMarker?.__dwellingInfo?.key || null;
     dwellingsLayer.clearLayers();
     dwellingMarkerByKey.clear();
     selectedDwellingMarker = null;
-    return;
+
+    if (map.getZoom() < DWELLINGS_MIN_VISIBLE_ZOOM) {
+      return;
+    }
+
+    for (const record of dwellingRecords) {
+      const marker = createDwellingMarker(record);
+      if (!marker) continue;
+      if (record.key === selectedKey) {
+        setSelectedDwelling(marker);
+      }
+    }
   }
 
   for (let index = 0; index < dwellings.length; index += 1) {

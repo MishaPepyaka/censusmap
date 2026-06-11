@@ -302,7 +302,7 @@
   const vectorRenderer = L.svg({ padding: 0.5 });
   const mapContainer = map.getContainer();
   function syncZoomUiMode() {
-    const cuOnly = map.getZoom() <= 12;
+    const cuOnly = map.getZoom() <= 10;
     mapContainer.classList.toggle("zoom-cu-only", cuOnly);
     if (badgesReady) rebuildBadges();
   }
