@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CLD Map Viewer</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
-    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260618a" />
-    <link rel="stylesheet" href="/styles.css?v=20260618a" />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260618b" />
+    <link rel="stylesheet" href="/styles.css?v=20260618b" />
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260618a</div>
+    <div class="app-version-badge">v20260618b</div>
 
     <div id="user-widget-root"></div>
 
@@ -34,23 +34,24 @@
         <input
           id="dwelling-search-input"
           type="text"
-          inputmode="numeric"
+          inputmode="text"
           autocomplete="off"
-          placeholder="462211020079"
-          maxlength="16"
+          placeholder="SSID"
+          maxlength="64"
         />
-        <button id="dwelling-search-btn" type="button">Find</button>
+        <button id="dwelling-search-btn" type="button">Find SSID</button>
         <div id="dwelling-search-status" aria-live="polite"></div>
       </div>
       <div class="viewer-search-block viewer-search-block-secondary">
         <input
           id="ssid-search-input"
           type="text"
+          inputmode="numeric"
           autocomplete="off"
-          placeholder="SSID"
-          maxlength="64"
+          placeholder="3036"
+          maxlength="16"
         />
-        <button id="ssid-search-btn" type="button">Find SSID</button>
+        <button id="ssid-search-btn" type="button">CLD</button>
         <div id="ssid-search-status" aria-live="polite"></div>
       </div>
     </section>
@@ -60,8 +61,8 @@
       <button id="basemap-btn" class="map-action-btn map-action-btn-leaf" type="button" aria-label="Switch base map (current: Satellite)" title="Switch base map (current: Satellite)"></button>
     </div>
 
-    <script src="/vendor/leaflet/leaflet.js?v=20260618a"></script>
-    <script src="/app-auth.js?v=20260618a"></script>
-    <script src="/app.js?v=20260618a"></script>
+    <script src="/vendor/leaflet/leaflet.js?v=20260618b"></script>
+    <script src="/app-auth.js?v=20260618b"></script>
+    <script src="/app.js?v=20260618b"></script>
   </body>
 </html>
