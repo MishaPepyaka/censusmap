@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CLD Region Editor</title>
-    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260604i" />
-    <link rel="stylesheet" href="/vendor/leaflet-draw/leaflet.draw.css?v=20260604i" />
-    <link rel="stylesheet" href="/styles.css?v=20260604i" />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260618a" />
+    <link rel="stylesheet" href="/vendor/leaflet-draw/leaflet.draw.css?v=20260618a" />
+    <link rel="stylesheet" href="/styles.css?v=20260618a" />
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260604i</div>
+    <div class="app-version-badge">v20260618a</div>
 
     <div id="map-ui">
       <button id="locate-btn" class="map-action-btn" type="button" aria-label="Focus on my location" title="Focus on my location"></button>
@@ -98,23 +98,8 @@
         <details class="editor-group" open>
           <summary class="editor-group-title">Bulk Actions</summary>
           <div class="editor-group-body">
-            <div class="editor-help">Selection source: active alignment box, or selected `CU`/`Block` polygon.</div>
+            <div class="editor-help">Save all pending dwelling changes at once.</div>
             <button id="dwelling-save-all-btn" type="button" class="editor-save-btn" disabled>Save All Dwellings</button>
-            <button id="dwelling-delete-selection-btn" type="button" class="editor-danger-btn">Delete Dwellings In Selection</button>
-          </div>
-        </details>
-
-        <details class="editor-group" open>
-          <summary class="editor-group-title">Sketch Alignment</summary>
-          <div class="editor-group-body">
-            <label class="editor-label">Source tag
-              <input id="align-source" class="editor-input" type="text" value="manual_sketch_2026-05-17" />
-            </label>
-            <div class="editor-row-actions">
-              <button id="align-start-btn" type="button" class="editor-save-btn">Box</button>
-              <button id="align-apply-btn" type="button" class="editor-save-btn">Save+Close</button>
-              <button id="align-cancel-btn" type="button" class="editor-danger-btn">Cancel</button>
-            </div>
           </div>
         </details>
 
@@ -129,8 +114,8 @@
       </div>
     </section>
 
-    <script src="/vendor/leaflet/leaflet.js?v=20260604i"></script>
-    <script src="/vendor/leaflet-draw/leaflet.draw.js?v=20260604i"></script>
-    <script src="/app-edit.js?v=20260604i"></script>
+    <script src="/vendor/leaflet/leaflet.js?v=20260618a"></script>
+    <script src="/vendor/leaflet-draw/leaflet.draw.js?v=20260618a"></script>
+    <script src="/app-edit.js?v=20260618a"></script>
   </body>
 </html>
