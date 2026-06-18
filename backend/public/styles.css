@@ -60,18 +60,27 @@ body {
 
 #search-ui {
   position: fixed;
-  left: 12px;
+  left: 72px;
   top: 96px;
   z-index: 1400;
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px;
+  gap: 10px;
   width: min(380px, calc(100vw - 96px));
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.45);
   border-radius: 12px;
   padding: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.32);
+}
+
+.viewer-search-block {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+
+.viewer-search-block-secondary button {
+  min-width: 92px;
 }
 
 #dwelling-search-input {
@@ -98,11 +107,36 @@ body {
   cursor: pointer;
 }
 
-#dwelling-search-status {
+#dwelling-search-status,
+#ssid-search-status {
   grid-column: 1 / -1;
   min-height: 16px;
   color: #d1fae5;
   font-size: 12px;
+}
+
+#ssid-search-input {
+  min-width: 0;
+  height: 38px;
+  border: 1px solid #334155;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.75);
+  color: #f8fafc;
+  font-size: 14px;
+  padding: 0 10px;
+  box-sizing: border-box;
+}
+
+#ssid-search-btn {
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 12px;
+  color: #f8fafc;
+  background: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .search-status-error {
@@ -121,7 +155,7 @@ body {
 
 #editor-panel {
   position: fixed;
-  left: 12px;
+  left: 72px;
   top: 12px;
   z-index: 1400;
   width: min(300px, calc(100vw - 24px));
@@ -138,7 +172,7 @@ body {
 
 #route-ui {
   position: fixed;
-  left: 12px;
+  left: 72px;
   top: 12px;
   z-index: 1400;
   width: min(420px, calc(100vw - 96px));
@@ -709,10 +743,12 @@ body {
   }
 
   #route-ui {
+    left: 12px;
     width: calc(100vw - 84px);
   }
 
   #editor-panel {
+    left: 12px;
     width: min(340px, calc(100vw - 24px));
   }
 
@@ -731,38 +767,6 @@ body {
   .landing-submit {
     min-height: 50px;
   }
-}
-
-.align-handle-wrap {
-  background: transparent;
-  border: 0;
-}
-
-.align-handle {
-  width: 14px;
-  height: 14px;
-  display: inline-block;
-  border-radius: 3px;
-  border: 2px solid #0f172a;
-  background: #f97316;
-  transform: translate(-7px, -7px);
-}
-
-.align-handle-rotate {
-  border-radius: 999px;
-  border-color: #0c4a6e;
-  background: #38bdf8;
-  box-shadow: 0 0 0 2px rgba(14, 116, 144, 0.25);
-}
-
-.align-center {
-  width: 14px;
-  height: 14px;
-  display: inline-block;
-  border-radius: 999px;
-  border: 2px solid #0f172a;
-  background: #fde047;
-  transform: translate(-7px, -7px);
 }
 
 /* Admin Panel */
@@ -858,7 +862,7 @@ body {
 .user-profile-widget {
   position: fixed;
   right: 12px;
-  top: 12px;
+  top: 110px;
   z-index: 1500;
   display: flex;
   align-items: center;
@@ -977,7 +981,7 @@ body {
 
 @media (max-width: 640px) {
   .user-profile-widget {
-    top: 64px;
+    top: 110px;
     right: 12px;
     align-items: flex-end;
   }

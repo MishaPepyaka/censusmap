@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CLD Map Viewer</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
-    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260610e" />
-    <link rel="stylesheet" href="/styles.css?v=20260610e" />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260618a" />
+    <link rel="stylesheet" href="/styles.css?v=20260618a" />
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260610e</div>
+    <div class="app-version-badge">v20260618a</div>
 
     <div id="user-widget-root"></div>
 
@@ -29,13 +29,39 @@
       </div>
     </section>
 
+    <section id="search-ui" aria-label="Viewer search">
+      <div class="viewer-search-block">
+        <input
+          id="dwelling-search-input"
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          placeholder="462211020079"
+          maxlength="16"
+        />
+        <button id="dwelling-search-btn" type="button">Find</button>
+        <div id="dwelling-search-status" aria-live="polite"></div>
+      </div>
+      <div class="viewer-search-block viewer-search-block-secondary">
+        <input
+          id="ssid-search-input"
+          type="text"
+          autocomplete="off"
+          placeholder="SSID"
+          maxlength="64"
+        />
+        <button id="ssid-search-btn" type="button">Find SSID</button>
+        <div id="ssid-search-status" aria-live="polite"></div>
+      </div>
+    </section>
+
     <div id="map-ui">
       <button id="locate-btn" class="map-action-btn" type="button" aria-label="Focus on my location" title="Focus on my location"></button>
       <button id="basemap-btn" class="map-action-btn map-action-btn-leaf" type="button" aria-label="Switch base map (current: Satellite)" title="Switch base map (current: Satellite)"></button>
     </div>
 
-    <script src="/vendor/leaflet/leaflet.js?v=20260610e"></script>
-    <script src="/app-auth.js?v=20260610e"></script>
-    <script src="/app.js?v=20260610e"></script>
+    <script src="/vendor/leaflet/leaflet.js?v=20260618a"></script>
+    <script src="/app-auth.js?v=20260618a"></script>
+    <script src="/app.js?v=20260618a"></script>
   </body>
 </html>

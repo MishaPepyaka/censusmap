@@ -44,15 +44,9 @@
   const dwellingSaveBtn = document.getElementById("dwelling-save-btn");
   const dwellingSaveAllBtn = document.getElementById("dwelling-save-all-btn");
   const dwellingDeleteBtn = document.getElementById("dwelling-delete-btn");
-  const dwellingDeleteSelectionBtn = document.getElementById("dwelling-delete-selection-btn");
   const photoUploadBtn = document.getElementById("photo-upload-btn");
   const dwellingPhotoCaptureInput = document.getElementById("dwelling-photo-capture-input");
   const editorPhotoUploadInput = document.getElementById("editor-photo-upload-input");
-  const alignSourceInput = document.getElementById("align-source");
-  const alignStartBtn = document.getElementById("align-start-btn");
-  const alignApplyBtn = document.getElementById("align-apply-btn");
-  const alignCancelBtn = document.getElementById("align-cancel-btn");
-  let alignSession = null;
   const dirtyDwellingMarkers = new Set();
   let pendingUploadCreatesDwelling = false;
 
@@ -465,27 +459,6 @@
     return foundBlock || foundCu;
   }
 
-  function getDwellingMarkersInZone(zoneLayer) {
-    if (!zoneLayer?.feature) return [];
-    const out = [];
-    dwellingsLayer.eachLayer((marker) => {
-      if (featureContainsLatLng(zoneLayer.feature, marker.getLatLng())) {
-        out.push(marker);
-      }
-    });
-    return out;
-  }
-
-  function getSelectionDwellingMarkers() {
-    if (alignSession?.targets?.length) {
-      return alignSession.targets.map((target) => target.marker);
-    }
-    if (selectedPolygonLayer) {
-      return getDwellingMarkersInZone(selectedPolygonLayer);
-    }
-    return [];
-  }
-
   function resolveZoneForDwellingAdd(latlng) {
     for (const layer of blockLayers) {
       if (featureContainsLatLng(layer.feature, latlng)) return layer;
@@ -645,14 +618,6 @@
     dwellingsLayer.removeLayer(marker);
     if (id !== null) dwellingMarkersById.delete(id);
 
-    if (alignSession) {
-      alignSession.targets = alignSession.targets.filter((target) => target.marker !== marker);
-      if (alignSession.targets.length === 0) {
-        teardownAlignSession();
-      } else {
-        updateAlignmentLive(alignSession);
-      }
-    }
   }
 
   function fillFormFromFeature(feature) {
@@ -779,141 +744,6 @@
       };
     });
     return duplicate;
-  }
-
-  function getSourceTag() {
-    return String(alignSourceInput?.value || "").trim();
-  }
-
-  function getDwellingMarkersBySource(sourceTag) {
-    const out = [];
-    dwellingsLayer.eachLayer((marker) => {
-      const props = marker.feature?.properties || {};
-      if (String(props.source || "").trim() !== sourceTag) return;
-      out.push(marker);
-    });
-    return out;
-  }
-
-  function getBoundsFromMarkers(markers) {
-    if (!markers || markers.length === 0) return null;
-    const points = markers.map((marker) => marker.getLatLng());
-    return L.latLngBounds(points);
-  }
-
-  function alignHandleIcon(kind, mode = "resize") {
-    let className = "align-handle";
-    if (kind === "center") className = "align-center";
-    if (kind === "corner" && mode === "rotate") className = "align-handle align-handle-rotate";
-    return L.divIcon({
-      className: "align-handle-wrap",
-      html: `<span class="${className}"></span>`,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7]
-    });
-  }
-
-  function teardownAlignSession() {
-    if (!alignSession) return;
-    map.removeLayer(alignSession.rectLayer);
-    map.removeLayer(alignSession.cornerMarker);
-    map.removeLayer(alignSession.centerMarker);
-    alignSession = null;
-  }
-
-  function metersScalesForLat(lat) {
-    return {
-      mPerDegLat: 111320,
-      mPerDegLng: 111320 * Math.cos((Math.PI / 180) * lat)
-    };
-  }
-
-  function latLngToLocalMeters(target, center) {
-    const { mPerDegLat, mPerDegLng } = metersScalesForLat(center.lat);
-    return {
-      x: (target.lng - center.lng) * mPerDegLng,
-      y: (target.lat - center.lat) * mPerDegLat
-    };
-  }
-
-  function localMetersToLatLng(local, center) {
-    const { mPerDegLat, mPerDegLng } = metersScalesForLat(center.lat);
-    const lng = center.lng + local.x / mPerDegLng;
-    const lat = center.lat + local.y / mPerDegLat;
-    return L.latLng(lat, lng);
-  }
-
-  function rotateLocal(vec, angleRad) {
-    const c = Math.cos(angleRad);
-    const s = Math.sin(angleRad);
-    return {
-      x: vec.x * c - vec.y * s,
-      y: vec.x * s + vec.y * c
-    };
-  }
-
-  function alignmentSquareCorners(session) {
-    const h = Math.max(5, session.halfSideM);
-    const base = [
-      { x: -h, y: -h },
-      { x: h, y: -h },
-      { x: h, y: h },
-      { x: -h, y: h }
-    ];
-    return base.map((pt) => {
-      const rot = rotateLocal(pt, session.angleRad);
-      return localMetersToLatLng(rot, session.center);
-    });
-  }
-
-  function alignmentCornerLatLng(session) {
-    const h = Math.max(5, session.halfSideM);
-    const rot = rotateLocal({ x: h, y: h }, session.angleRad);
-    return localMetersToLatLng(rot, session.center);
-  }
-
-  function updateAlignmentLive(session) {
-    const corners = alignmentSquareCorners(session);
-    session.rectLayer.setLatLngs(corners);
-    session.centerMarker.setLatLng(session.center);
-    session.cornerMarker.setLatLng(alignmentCornerLatLng(session));
-
-    for (const target of session.targets) {
-      const local = rotateLocal(
-        {
-          x: target.nx * session.halfSideM,
-          y: target.ny * session.halfSideM
-        },
-        session.angleRad
-      );
-      const ll = localMetersToLatLng(local, session.center);
-      target.marker.setLatLng(ll);
-      target.marker.feature.geometry = {
-        type: "Point",
-        coordinates: [Number(ll.lng), Number(ll.lat)]
-      };
-    }
-  }
-
-  async function saveAlignmentMarkers(session) {
-    let okCount = 0;
-    let failCount = 0;
-    for (const target of session.targets) {
-      const saved = await persistDwellingMarker(target.marker, {
-        selectAfterSave: false,
-        useMarkerProperties: true
-      });
-      if (saved) okCount += 1;
-      else failCount += 1;
-    }
-    return { okCount, failCount };
-  }
-
-  function toggleAlignMode() {
-    if (!alignSession) return;
-    alignSession.mode = alignSession.mode === "resize" ? "rotate" : "resize";
-    alignSession.cornerMarker.setIcon(alignHandleIcon("corner", alignSession.mode));
-    setStatus(`Alignment corner mode: ${alignSession.mode.toUpperCase()}`, false);
   }
 
   function createDwellingMarker(feature, { temporary = false } = {}) {
@@ -1479,160 +1309,6 @@
     void addDwellingAt(event.latlng, null);
   });
 
-  function startAlignmentBox() {
-    const sourceTag = getSourceTag();
-    let markers = [];
-    if (isNonEmpty(sourceTag)) {
-      markers = getDwellingMarkersBySource(sourceTag);
-    }
-    let usedAllMarkers = false;
-    if (markers.length === 0) {
-      usedAllMarkers = true;
-      dwellingsLayer.eachLayer((marker) => markers.push(marker));
-    }
-    if (markers.length === 0) {
-      setStatus("No dwellings found for alignment.", true);
-      return;
-    }
-
-    teardownAlignSession();
-
-    const bounds = getBoundsFromMarkers(markers);
-    if (!bounds) {
-      setStatus("Cannot build alignment box for empty source.", true);
-      return;
-    }
-    const center = bounds.getCenter();
-    const locals = markers.map((marker) => latLngToLocalMeters(marker.getLatLng(), center));
-    let maxAbs = 0;
-    for (const loc of locals) {
-      maxAbs = Math.max(maxAbs, Math.abs(loc.x), Math.abs(loc.y));
-    }
-    const halfSideM = Math.max(5, maxAbs * 1.15);
-
-    const targets = markers.map((marker, idx) => {
-      const loc = locals[idx];
-      return {
-        marker,
-        nx: loc.x / halfSideM,
-        ny: loc.y / halfSideM
-      };
-    });
-
-    const rectLayer = L.polygon([], {
-      color: "#f97316",
-      weight: 2,
-      dashArray: "6 4",
-      fillOpacity: 0.06
-    }).addTo(map);
-    const cornerMarker = L.marker(center, {
-      icon: alignHandleIcon("corner", "resize"),
-      draggable: true,
-      keyboard: false
-    }).addTo(map);
-    const centerMarker = L.marker(center, {
-      icon: alignHandleIcon("center"),
-      draggable: true,
-      keyboard: false
-    }).addTo(map);
-
-    alignSession = {
-      sourceTag,
-      targets,
-      center,
-      halfSideM,
-      angleRad: 0,
-      mode: "resize",
-      rectLayer,
-      cornerMarker,
-      centerMarker
-    };
-
-    updateAlignmentLive(alignSession);
-
-    centerMarker.on("drag", () => {
-      if (!alignSession) return;
-      alignSession.center = centerMarker.getLatLng();
-      updateAlignmentLive(alignSession);
-    });
-
-    cornerMarker.on("click", (event) => {
-      L.DomEvent.stopPropagation(event);
-      toggleAlignMode();
-    });
-
-    cornerMarker.on("drag", () => {
-      if (!alignSession) return;
-      const centerNow = alignSession.center;
-      const cornerNow = cornerMarker.getLatLng();
-      const vec = latLngToLocalMeters(cornerNow, centerNow);
-      if (alignSession.mode === "resize") {
-        const dist = Math.hypot(vec.x, vec.y);
-        alignSession.halfSideM = Math.max(5, dist / Math.SQRT2);
-      } else {
-        alignSession.angleRad = Math.atan2(vec.y, vec.x) - Math.PI / 4;
-      }
-      updateAlignmentLive(alignSession);
-    });
-
-    centerMarker.on("dragend", async () => {
-      if (!alignSession) return;
-      const { okCount, failCount } = await saveAlignmentMarkers(alignSession);
-      setStatus(`Alignment moved: ${okCount} saved, ${failCount} failed.`, failCount > 0);
-    });
-
-    cornerMarker.on("dragend", async () => {
-      if (!alignSession) return;
-      const { okCount, failCount } = await saveAlignmentMarkers(alignSession);
-      setStatus(`Alignment ${alignSession.mode}: ${okCount} saved, ${failCount} failed.`, failCount > 0);
-    });
-
-    setStatus(
-      `Alignment box active for ${targets.length} dwellings${usedAllMarkers ? " (all markers)" : ""}. Drag center to move; click corner to toggle resize/rotate.`,
-      false
-    );
-  }
-
-  async function applyAlignmentBox() {
-    if (!alignSession) {
-      setStatus("Alignment box is not active.", true);
-      return;
-    }
-    if (!canPersistEdits) {
-      setStatus("Cannot apply alignment: API source unavailable.", true);
-      return;
-    }
-
-    const { okCount, failCount } = await saveAlignmentMarkers(alignSession);
-
-    if (selectedDwellingMarker) {
-      fillFormFromFeature(selectedDwellingMarker.feature);
-      applyMarkerIcon(selectedDwellingMarker, true);
-    }
-
-    teardownAlignSession();
-    if (failCount > 0) {
-      setStatus(`Alignment applied with errors: ${okCount} saved, ${failCount} failed.`, true);
-      return;
-    }
-    setStatus(`Alignment applied and saved: ${okCount} dwellings.`, false);
-  }
-
-  function cancelAlignmentBox() {
-    if (!alignSession) {
-      setStatus("Alignment box is not active.", false);
-      return;
-    }
-    teardownAlignSession();
-    setStatus("Alignment box canceled.", false);
-  }
-
-  alignStartBtn?.addEventListener("click", () => startAlignmentBox());
-  alignApplyBtn?.addEventListener("click", async () => {
-    await applyAlignmentBox();
-  });
-  alignCancelBtn?.addEventListener("click", () => cancelAlignmentBox());
-
   dwellingDeleteBtn?.addEventListener("click", async () => {
     if (!selectedDwellingMarker) {
       setStatus("Select dwelling to delete.", true);
@@ -1658,46 +1334,6 @@
     } catch (error) {
       setStatus(`Delete failed: ${error.message}`, true);
     }
-  });
-
-  dwellingDeleteSelectionBtn?.addEventListener("click", async () => {
-    const markers = getSelectionDwellingMarkers();
-    if (markers.length === 0) {
-      setStatus("No dwellings in current selection.", true);
-      return;
-    }
-
-    const confirmed = window.confirm(`Delete ${markers.length} dwellings in current selection?`);
-    if (!confirmed) return;
-
-    let deleted = 0;
-    let failed = 0;
-    for (const marker of [...markers]) {
-      const id = getFeatureId(marker.feature);
-      if (id === null) {
-        removeDwellingMarkerLocally(marker);
-        deleted += 1;
-        continue;
-      }
-      if (!canPersistEdits) {
-        failed += 1;
-        continue;
-      }
-
-      try {
-        await getJson(`/api/cld/${cld}/features/${id}`, { method: "DELETE" });
-        removeDwellingMarkerLocally(marker);
-        deleted += 1;
-      } catch {
-        failed += 1;
-      }
-    }
-
-    if (failed > 0) {
-      setStatus(`Delete in selection: ${deleted} deleted, ${failed} failed.`, true);
-      return;
-    }
-    setStatus(`Delete in selection: ${deleted} deleted.`, false);
   });
 
   collapseBtn?.addEventListener("click", () => {
