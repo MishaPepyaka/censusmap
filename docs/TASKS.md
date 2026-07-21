@@ -2,6 +2,20 @@
 
 ## Current Priority Backlog
 
+- [x] T018 Simplify dwelling details and add status colours
+  - Keep only CU, Block, Dwelling No, Status, and Notes in the dwelling form.
+  - Make Status a dropdown: 429, 400, 402, 701, 500, 312, 324; default to 429.
+  - Colour dwelling map squares by status: white (429), lime (400/402/701), red (500), grey (312/324).
+
+- [ ] T019 Add block sharing and Google Maps actions
+  - Show Share Link and Open Google Maps actions when a Block is selected.
+
+- [ ] T020 Use a person emoji for map location
+  - Replace the location control icon with a person emoji.
+
+- [ ] T021 Remove zone geometry editing
+  - Remove CU/Block geometry editing and its Save Geometry control.
+
 - [x] T003 Add CLD-based routing
   - Serve `/` as the lookup page.
   - Serve `/:cld` as the viewer route.

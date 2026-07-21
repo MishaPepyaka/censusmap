@@ -656,9 +656,34 @@ body {
 }
 
 .dwelling-marker.selected {
-  background: rgba(255, 255, 255, 1);
   border-color: #111111;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.95);
+}
+
+.dwelling-marker.dwelling-status-429,
+.dwelling-square-dot.dwelling-status-429 {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.dwelling-marker.dwelling-status-400,
+.dwelling-marker.dwelling-status-402,
+.dwelling-marker.dwelling-status-701,
+.dwelling-square-dot.dwelling-status-400,
+.dwelling-square-dot.dwelling-status-402,
+.dwelling-square-dot.dwelling-status-701 {
+  background: #bef264;
+}
+
+.dwelling-marker.dwelling-status-500,
+.dwelling-square-dot.dwelling-status-500 {
+  background: #ef4444;
+}
+
+.dwelling-marker.dwelling-status-312,
+.dwelling-marker.dwelling-status-324,
+.dwelling-square-dot.dwelling-status-312,
+.dwelling-square-dot.dwelling-status-324 {
+  background: #9ca3af;
 }
 
 .dwelling-square-dot-wrap {

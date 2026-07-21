@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CLD Region Editor</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
-    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260618a" />
-    <link rel="stylesheet" href="/vendor/leaflet-draw/leaflet.draw.css?v=20260618a" />
-    <link rel="stylesheet" href="/styles.css?v=20260618a" />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260720a" />
+    <link rel="stylesheet" href="/vendor/leaflet-draw/leaflet.draw.css?v=20260720a" />
+    <link rel="stylesheet" href="/styles.css?v=20260720a" />
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260618a</div>
+    <div class="app-version-badge">v20260720a</div>
 
     <footer class="app-attribution">
       <a href="https://geoprod.statcan.gc.ca/camv1/index.html" target="_blank" rel="noreferrer">Publicly Available Map Source</a>.
@@ -63,34 +63,19 @@
             <label class="editor-label">Dwelling No
               <input id="dwelling-no" class="editor-input" type="text" placeholder="0001" />
             </label>
-            <label class="editor-label">Type
-              <input id="dwelling-type" class="editor-input" type="text" placeholder="1" />
-            </label>
-            <label class="editor-label">Civic
-              <input id="dwelling-civic" class="editor-input" type="text" placeholder="Optional" />
-            </label>
             <label class="editor-label">Status
-              <input id="dwelling-status" class="editor-input" type="text" placeholder="Optional" />
-            </label>
-            <label class="editor-label">Contact
-              <input id="dwelling-contact" class="editor-input" type="text" placeholder="Optional" />
-            </label>
-            <label class="editor-label">External Link
-              <input id="dwelling-link" class="editor-input" type="url" placeholder="https://..." />
-            </label>
-            <label class="editor-label">Photo URL
-              <input id="dwelling-photo" class="editor-input" type="url" placeholder="/media/cld/..." />
-            </label>
-            <label class="editor-label">Description
-              <textarea id="dwelling-description" class="editor-input editor-textarea" rows="3" placeholder="Description"></textarea>
+              <select id="dwelling-status" class="editor-input">
+                <option value="429">429</option>
+                <option value="400">400</option>
+                <option value="402">402</option>
+                <option value="701">701</option>
+                <option value="500">500</option>
+                <option value="312">312</option>
+                <option value="324">324</option>
+              </select>
             </label>
             <label class="editor-label">Notes
               <textarea id="dwelling-notes" class="editor-input editor-textarea" rows="2" placeholder="Notes"></textarea>
-            </label>
-
-            <label class="editor-checkbox-row">
-              <input id="dwelling-occupied" type="checkbox" checked />
-              <span>Occupied</span>
             </label>
 
             <div class="editor-row-actions">
@@ -120,8 +105,8 @@
       </div>
     </section>
 
-    <script src="/vendor/leaflet/leaflet.js?v=20260618a"></script>
-    <script src="/vendor/leaflet-draw/leaflet.draw.js?v=20260618a"></script>
-    <script src="/app-edit.js?v=20260618a"></script>
+    <script src="/vendor/leaflet/leaflet.js?v=20260720a"></script>
+    <script src="/vendor/leaflet-draw/leaflet.draw.js?v=20260720a"></script>
+    <script src="/app-edit.js?v=20260720a"></script>
   </body>
 </html>

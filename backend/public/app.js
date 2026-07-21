@@ -121,6 +121,11 @@
     return Number.isFinite(numeric) ? String(numeric) : normalized;
   }
 
+  function normalizeDwellingStatus(value) {
+    const status = String(value ?? "").trim();
+    return ["429", "400", "402", "701", "500", "312", "324"].includes(status) ? status : "429";
+  }
+
   function hashText(value) {
     const text = String(value || "");
     let hash = 0;
@@ -412,8 +417,8 @@
   map.on("moveend", redrawPolygonLayers);
   map.on("viewreset", redrawPolygonLayers);
 
-  function dwellingSquareIcon(no, selected = false) {
-    const cls = selected ? "dwelling-marker selected" : "dwelling-marker";
+  function dwellingSquareIcon(no, status, selected = false) {
+    const cls = `dwelling-marker dwelling-status-${normalizeDwellingStatus(status)} ${selected ? "selected" : ""}`;
     return L.divIcon({
       className: "dwelling-marker-wrap",
       html: `<span class="${cls}">${escapeHtml(no)}</span>`,
@@ -422,8 +427,8 @@
     });
   }
 
-  function dwellingDotIcon(selected = false) {
-    const cls = selected ? "dwelling-square-dot selected" : "dwelling-square-dot";
+  function dwellingDotIcon(status, selected = false) {
+    const cls = `dwelling-square-dot dwelling-status-${normalizeDwellingStatus(status)} ${selected ? "selected" : ""}`;
     return L.divIcon({
       className: "dwelling-square-dot-wrap",
       html: `<span class="${cls}"></span>`,
@@ -432,30 +437,28 @@
     });
   }
 
-  function getDwellingIconForZoom(no, selected = false) {
+  function getDwellingIconForZoom(no, status, selected = false) {
     if (map.getZoom() >= 15) {
-      return dwellingSquareIcon(no, selected);
+      return dwellingSquareIcon(no, status, selected);
     }
-    return dwellingDotIcon(selected);
+    return dwellingDotIcon(status, selected);
   }
 
   function setSelectedDwelling(marker) {
     if (selectedDwellingMarker && selectedDwellingMarker !== marker) {
       const prevNo = selectedDwellingMarker?.__dwellingInfo?.displayNo || "0";
-      selectedDwellingMarker.setIcon(getDwellingIconForZoom(prevNo, false));
+      selectedDwellingMarker.setIcon(getDwellingIconForZoom(prevNo, selectedDwellingMarker.__dwellingInfo?.status, false));
     }
     selectedDwellingMarker = marker;
     if (selectedDwellingMarker) {
       const no = selectedDwellingMarker?.__dwellingInfo?.displayNo || "0";
-      selectedDwellingMarker.setIcon(getDwellingIconForZoom(no, true));
+      selectedDwellingMarker.setIcon(getDwellingIconForZoom(no, selectedDwellingMarker.__dwellingInfo?.status, true));
     }
   }
 
   function buildDwellingPopupHtml(info) {
     const extraInfo = [];
-    if (info.civicNo) extraInfo.push(`Civic: ${escapeHtml(info.civicNo)}`);
     if (info.status) extraInfo.push(`Status: ${escapeHtml(info.status)}`);
-    if (info.description) extraInfo.push(escapeHtml(info.description));
     return [
       `<div class="dw-popup">`,
       `<div class="dw-popup-code">${escapeHtml(info.code)}</div>`,
@@ -503,15 +506,13 @@
       gmapsUrl,
       lat,
       lng,
-      civicNo: props.civicNo || props.civic || "",
-      status: props.status || "",
-      description: props.description || ""
+      status: normalizeDwellingStatus(props.status)
     };
   }
 
   function createDwellingMarker(record) {
     const marker = L.marker([record.lat, record.lng], {
-      icon: getDwellingIconForZoom(record.displayNo, false),
+      icon: getDwellingIconForZoom(record.displayNo, record.status, false),
       keyboard: true
     }).addTo(dwellingsLayer);
     marker.__dwellingInfo = record;

@@ -29,15 +29,8 @@
     cu: document.getElementById("dwelling-cu"),
     block: document.getElementById("dwelling-block"),
     no: document.getElementById("dwelling-no"),
-    type: document.getElementById("dwelling-type"),
-    civic: document.getElementById("dwelling-civic"),
     status: document.getElementById("dwelling-status"),
-    contact: document.getElementById("dwelling-contact"),
-    link: document.getElementById("dwelling-link"),
-    photo: document.getElementById("dwelling-photo"),
-    description: document.getElementById("dwelling-description"),
-    notes: document.getElementById("dwelling-notes"),
-    occupied: document.getElementById("dwelling-occupied")
+    notes: document.getElementById("dwelling-notes")
   };
   const dwellingNewBtn = document.getElementById("dwelling-new-btn");
   const dwellingAddBtn = document.getElementById("dwelling-add-btn");
@@ -238,6 +231,13 @@
 
   function formatDwellingNo(raw) {
     return String(raw || "").trim().replace(/\D/g, "").padStart(4, "0").slice(-4);
+  }
+
+  const DWELLING_STATUSES = new Set(["429", "400", "402", "701", "500", "312", "324"]);
+
+  function normalizeDwellingStatus(value) {
+    const status = String(value ?? "").trim();
+    return DWELLING_STATUSES.has(status) ? status : "429";
   }
 
   function ringContainsLngLat(ring, lng, lat) {
@@ -529,10 +529,10 @@
     });
   }
 
-  function dwellingMarkerIcon(no, selected) {
+  function dwellingMarkerIcon(no, status, selected) {
     return L.divIcon({
       className: "dwelling-marker-wrap",
-      html: `<span class="dwelling-marker ${selected ? "selected" : ""}">${String(no)}</span>`,
+      html: `<span class="dwelling-marker dwelling-status-${normalizeDwellingStatus(status)} ${selected ? "selected" : ""}">${String(no)}</span>`,
       iconSize: [24, 24],
       iconAnchor: [12, 12]
     });
@@ -549,9 +549,7 @@
     const code = `${cu}${extractDwellingNo(props)}`;
     const gmapsUrl = Number.isFinite(lat) && Number.isFinite(lng) ? getGoogleMapsLink(lat, lng) : "";
     const meta = [];
-    if (props.civicNo || props.civic) meta.push(`Civic: ${escapeHtml(props.civicNo || props.civic)}`);
     if (props.status) meta.push(`Status: ${escapeHtml(props.status)}`);
-    if (props.description) meta.push(escapeHtml(props.description));
     return [
       `<div class="dw-popup">`,
       `<div class="dw-popup-code">${escapeHtml(code)}</div>`,
@@ -604,7 +602,7 @@
     const feature = markerFeature(marker);
     if (!feature) return;
     const no = displayDwellingNo(feature.properties || {});
-    marker.setIcon(dwellingMarkerIcon(no, selected));
+    marker.setIcon(dwellingMarkerIcon(no, feature.properties?.status, selected));
   }
 
   function removeDwellingMarkerLocally(marker) {
@@ -625,15 +623,8 @@
     dwellingFields.cu.value = extractCuCode(props);
     dwellingFields.block.value = extractBlockCode(props);
     dwellingFields.no.value = extractDwellingNo(props);
-    dwellingFields.type.value = props.dwellingType || props.type || "";
-    dwellingFields.civic.value = props.civicNo || props.civic || "";
-    dwellingFields.status.value = props.status || "";
-    dwellingFields.contact.value = props.contact || "";
-    dwellingFields.link.value = props.externalLink || "";
-    dwellingFields.photo.value = props.photo || "";
-    dwellingFields.description.value = props.description || "";
+    dwellingFields.status.value = normalizeDwellingStatus(props.status);
     dwellingFields.notes.value = props.notes || "";
-    dwellingFields.occupied.checked = !(props.occupied === false || String(props.occupied).toLowerCase() === "false");
   }
 
   function featureFromForm(existingId, latlng) {
@@ -644,24 +635,16 @@
     if (!/^[0-9]{2}$/.test(block)) throw new Error("Block must be 2 digits");
     if (!/^[0-9]{4}$/.test(dwellingNo)) throw new Error("Dwelling No must be 4 digits");
 
-    const occupied = Boolean(dwellingFields.occupied.checked);
     const properties = {
       _group: "dwellings",
       CUID: cu,
       CB_COLCODE: block,
       dwellingNo,
-      dwellingType: String(dwellingFields.type.value || "").trim(),
-      description: String(dwellingFields.description.value || "").trim(),
-      occupied,
       notes: String(dwellingFields.notes.value || "").trim(),
-      contact: String(dwellingFields.contact.value || "").trim(),
-      status: String(dwellingFields.status.value || "").trim(),
-      externalLink: String(dwellingFields.link.value || "").trim(),
-      photo: String(dwellingFields.photo.value || "").trim(),
+      status: normalizeDwellingStatus(dwellingFields.status.value),
       photos: Array.isArray(selectedDwellingMarker?.feature?.properties?.photos)
         ? [...selectedDwellingMarker.feature.properties.photos]
         : [],
-      civicNo: String(dwellingFields.civic.value || "").trim(),
       name: `${cu} / ${block} / ${dwellingNo}`,
       label: `${dwellingNo}`
     };
@@ -679,6 +662,10 @@
 
   function featureFromMarkerProperties(existingId, latlng, baseProperties) {
     const original = baseProperties && typeof baseProperties === "object" ? baseProperties : {};
+    const {
+      dwellingType, type, civicNo, civic, contact, externalLink, photo, description, occupied,
+      ...supportedProperties
+    } = original;
     const cu = String(original.CUID ?? original.cu ?? "").trim();
     const block = String(original.CB_COLCODE ?? original.block ?? "").trim().padStart(2, "0");
     const dwellingNo = formatDwellingNo(original.dwellingNo ?? original.DWELLING_NO ?? original.vrNumber ?? original.VR_NUMBER ?? "");
@@ -686,24 +673,14 @@
     if (!/^[0-9]{2}$/.test(block)) throw new Error("Block must be 2 digits");
     if (!/^[0-9]{4}$/.test(dwellingNo)) throw new Error("Dwelling No must be 4 digits");
 
-    const occupied =
-      original.occupied === true ||
-      (typeof original.occupied === "string" && original.occupied.toLowerCase() === "true");
     const properties = {
-      ...original,
+      ...supportedProperties,
       _group: "dwellings",
       CUID: cu,
       CB_COLCODE: block,
       dwellingNo,
-      dwellingType: String(original.dwellingType ?? original.type ?? "").trim(),
-      description: String(original.description ?? "").trim(),
-      occupied,
       notes: String(original.notes ?? "").trim(),
-      contact: String(original.contact ?? "").trim(),
-      status: String(original.status ?? "").trim(),
-      externalLink: String(original.externalLink ?? "").trim(),
-      photo: String(original.photo ?? "").trim(),
-      civicNo: String(original.civicNo ?? original.civic ?? "").trim(),
+      status: normalizeDwellingStatus(original.status),
       name: String(original.name ?? `${cu} / ${block} / ${dwellingNo}`).trim(),
       label: String(original.label ?? dwellingNo).trim()
     };
@@ -754,7 +731,7 @@
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
 
     const marker = L.marker([lat, lng], {
-      icon: dwellingMarkerIcon(displayDwellingNo(feature.properties || {}), false),
+      icon: dwellingMarkerIcon(displayDwellingNo(feature.properties || {}), feature.properties?.status, false),
       draggable: canPersistEdits,
       bubblingMouseEvents: true
     }).addTo(dwellingsLayer);
@@ -927,15 +904,8 @@
     dwellingFields.cu.value = "";
     dwellingFields.block.value = "";
     dwellingFields.no.value = "";
-    dwellingFields.type.value = "";
-    dwellingFields.civic.value = "";
-    dwellingFields.status.value = "";
-    dwellingFields.contact.value = "";
-    dwellingFields.link.value = "";
-    dwellingFields.photo.value = "";
-    dwellingFields.description.value = "";
+    dwellingFields.status.value = "429";
     dwellingFields.notes.value = "";
-    dwellingFields.occupied.checked = true;
   }
 
   function buildNewDwellingFeature(extraProperties = {}, preferredLatLng = null) {
@@ -957,16 +927,9 @@
         CUID: ctxCu,
         CB_COLCODE: ctxBlock,
         dwellingNo: nextDwellingNoForCu(ctxCu),
-        dwellingType: "",
-        description: "",
-        occupied: true,
         notes: "",
-        contact: "",
-        status: "",
-        externalLink: "",
-        photo: "",
+        status: "429",
         photos: [],
-        civicNo: "",
         label: "",
         ...extraProperties
       },
@@ -1024,8 +987,6 @@
     const photos = Array.isArray(properties.photos) ? [...properties.photos] : [];
     photos.push(upload.compressedUrl);
     properties.photos = photos;
-    properties.photo = upload.compressedUrl;
-    dwellingFields.photo.value = upload.compressedUrl;
     markDwellingDirty(marker);
   }
 
@@ -1044,11 +1005,9 @@
       if (createDwellingFromFirst) {
         const firstUpload = uploads[0];
         const marker = createNewDwellingDraft({
-          photo: firstUpload.compressedUrl,
           photos: uploads.map((upload) => upload.compressedUrl)
         });
         if (marker) {
-          marker.feature.properties.photo = firstUpload.compressedUrl;
           marker.feature.properties.photos = uploads.map((upload) => upload.compressedUrl);
           fillFormFromFeature(marker.feature);
           setStatus("Photo uploaded. Position the dwelling and press Save.", false);
@@ -1059,9 +1018,7 @@
         }
         setStatus(`Attached ${uploads.length} photo(s) to dwelling. Press Save.`, false);
       } else {
-        const firstUpload = uploads[0];
-        dwellingFields.photo.value = firstUpload.compressedUrl;
-        setStatus(`Uploaded ${uploads.length} photo(s). Select or create a dwelling to save them.`, false);
+        setStatus(`Uploaded ${uploads.length} photo(s). Select a dwelling before uploading to attach them.`, false);
       }
 
       setUploadStatus(`Uploaded ${uploads.length} image(s).`, false);
@@ -1172,6 +1129,10 @@
     const eventName = field.type === "checkbox" ? "change" : "input";
     field.addEventListener(eventName, () => {
       if (!selectedDwellingMarker) return;
+      if (field === dwellingFields.status) {
+        const no = displayDwellingNo(selectedDwellingMarker.feature?.properties || {});
+        selectedDwellingMarker.setIcon(dwellingMarkerIcon(no, field.value, true));
+      }
       markDwellingDirty(selectedDwellingMarker);
       setStatus("Dwelling fields changed. Press Save or Save All.", false);
     });
@@ -1257,15 +1218,9 @@
           CUID: ctxCu,
           CB_COLCODE: ctxBlock,
           dwellingNo: nextDwellingNoForCu(ctxCu),
-          dwellingType: "",
-          description: "",
-          occupied: true,
           notes: "",
-          contact: "",
-          status: "",
-          externalLink: "",
-          photo: "",
-          civicNo: "",
+          status: "429",
+          photos: [],
           label: ""
         },
         geometry: { type: "Point", coordinates: [latlng.lng, latlng.lat] }
