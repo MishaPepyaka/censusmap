@@ -60,12 +60,12 @@ body {
 
 #search-ui {
   position: fixed;
-  left: 72px;
-  top: 96px;
+  left: 10px;
+  top: 124px;
   z-index: 1400;
   display: grid;
   gap: 10px;
-  width: min(380px, calc(100vw - 96px));
+  width: min(300px, calc(100vw - 96px));
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.45);
   border-radius: 12px;
@@ -146,7 +146,7 @@ body {
 #map-ui {
   position: fixed;
   right: 12px;
-  top: 12px;
+  top: 53px;
   z-index: 1400;
   display: flex;
   flex-direction: column;
@@ -172,10 +172,10 @@ body {
 
 #route-ui {
   position: fixed;
-  left: 72px;
-  top: 12px;
+  left: 10px;
+  top: 10px;
   z-index: 1400;
-  width: min(420px, calc(100vw - 96px));
+  width: min(300px, calc(100vw - 96px));
   display: grid;
   gap: 10px;
   background: rgba(15, 23, 42, 0.92);
@@ -747,9 +747,9 @@ body {
   #search-ui {
     width: calc(100vw - 24px);
     top: auto;
-    bottom: 12px;
-    left: 12px;
-    right: 12px;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
   }
 
   .zoom-cu-only .dwelling-marker-wrap,
@@ -768,7 +768,7 @@ body {
   }
 
   #route-ui {
-    left: 12px;
+    left: 10px;
     width: calc(100vw - 84px);
   }
 
@@ -887,7 +887,7 @@ body {
 .user-profile-widget {
   position: fixed;
   right: 12px;
-  top: 110px;
+  top: 10px;
   z-index: 1500;
   display: flex;
   align-items: center;
