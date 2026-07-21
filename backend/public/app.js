@@ -366,7 +366,7 @@
   const dwellingsLayer = L.layerGroup().addTo(map);
   polygonLayer.addData(buildFeatureCollection(zones));
 
-  function selectZone(layer) {
+  function selectZone(layer, popupLatLng = null) {
     if (selectedPolygonLayer && selectedPolygonLayer !== layer) {
       selectedPolygonLayer.setStyle(styleForFeature(selectedPolygonLayer.feature, false));
     }
@@ -377,7 +377,21 @@
     const block = extractBlockCode(props);
     const zoneKind = getZoneKind(props) === "cu" ? "CU" : "Block";
     const details = block ? `${zoneKind}: ${escapeHtml(block)}` : zoneKind;
-    layer.bindPopup(`CU: ${escapeHtml(cu)}<br>${details}`, { autoPan: false }).openPopup();
+    const point = popupLatLng || getZoneCenter(layer);
+    const gmapsUrl = getGoogleMapsLink(point.lat, point.lng);
+    const shareTitle = block ? `Block ${cu}/${block}` : `CU ${cu}`;
+    layer.bindPopup([
+      `<div class="dw-popup">`,
+      `<div class="dw-popup-code">${escapeHtml(shareTitle)}</div>`,
+      `<div class="dw-popup-meta">CU: ${escapeHtml(cu)}<br>${details}</div>`,
+      `<div class="dw-popup-actions">`,
+      `<button type="button" class="dw-action-btn dw-action-share" data-code="${escapeHtml(shareTitle)}" data-url="${escapeHtml(gmapsUrl)}">Share Link</button>`,
+      `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>`,
+      `</div>`,
+      `</div>`
+    ].join(""), { autoPan: false });
+    if (popupLatLng) layer.openPopup(popupLatLng);
+    else layer.openPopup();
   }
 
   function rebuildBadges() {
@@ -401,8 +415,34 @@
   }
 
   polygonLayer.eachLayer((layer) => {
-    layer.on("click", () => selectZone(layer));
-    layer.on("tap", () => selectZone(layer));
+    layer.on("click", (event) => selectZone(layer, event?.latlng || null));
+    layer.on("tap", (event) => selectZone(layer, event?.latlng || null));
+    layer.on("popupopen", (event) => {
+      const root = event?.popup?.getElement?.();
+      const shareBtn = root?.querySelector(".dw-action-share");
+      if (!shareBtn) return;
+      shareBtn.addEventListener("click", async (shareEvent) => {
+        shareEvent.preventDefault();
+        const url = shareBtn.getAttribute("data-url") || "";
+        const code = shareBtn.getAttribute("data-code") || "Map location";
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: code, text: code, url });
+          } else if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(url);
+            const old = shareBtn.textContent;
+            shareBtn.textContent = "Copied";
+            window.setTimeout(() => {
+              shareBtn.textContent = old;
+            }, 1200);
+          } else {
+            window.prompt("Copy link:", url);
+          }
+        } catch {
+          // Ignore share cancellation.
+        }
+      }, { once: true });
+    });
   });
   badgesReady = true;
   rebuildBadges();
@@ -466,7 +506,7 @@
       extraInfo.length > 0 ? `<div class="dw-popup-meta">${extraInfo.join(" · ")}</div>` : "",
       `<div class="dw-popup-actions">`,
       `<button type="button" class="dw-action-btn dw-action-share" data-code="${escapeHtml(info.code)}" data-url="${escapeHtml(info.gmapsUrl)}">Share Link</button>`,
-      `<a class="dw-action-btn dw-action-open" href="${escapeHtml(info.gmapsUrl)}" target="_blank" rel="noreferrer">Open Google Maps</a>`,
+      `<a class="dw-action-btn dw-action-open" href="${escapeHtml(info.gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>`,
       `</div>`,
       `</div>`
     ].join("");

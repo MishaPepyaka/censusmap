@@ -7,8 +7,8 @@
   - Make Status a dropdown: 429, 400, 402, 701, 500, 312, 324; default to 429.
   - Colour dwelling map squares by status: white (429), lime (400/402/701), red (500), grey (312/324).
 
-- [ ] T019 Add block sharing and Google Maps actions
-  - Show Share Link and Open Google Maps actions when a Block is selected.
+- [x] T019 Add zone sharing and Google Maps actions
+  - Show Share Link and Google Maps actions when a CU or Block is selected.
 
 - [ ] T020 Use a person emoji for map location
   - Replace the location control icon with a person emoji.
