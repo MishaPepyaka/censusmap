@@ -13,8 +13,13 @@
 - [ ] T020 Use a person emoji for map location
   - Replace the location control icon with a person emoji.
 
-- [ ] T021 Remove zone geometry editing
+- [x] T021 Remove zone geometry editing
   - Remove CU/Block geometry editing and its Save Geometry control.
+
+- [x] T022 Streamline the editor panel
+  - Auto-save a dwelling when its Status changes.
+  - Remove Quick Actions for photo upload and adding a dwelling.
+  - Move the editor panel closer to the left edge.
 
 - [x] T003 Add CLD-based routing
   - Serve `/` as the lookup page.
@@ -92,9 +97,8 @@
   - Add a restore script for archives created by `scripts/backup-cld-data.sh`.
   - Document rollback steps for a bad edit session.
 
-- [ ] T017 Improve mobile geometry controls
-  - Add larger vertex handles for iPhone.
-  - Add explicit touch hints for polygon edit mode.
+- [x] T017 Retire mobile geometry controls
+  - Superseded by T021: CU and Block geometry editing was removed from the editor.
 
 ## Done
 

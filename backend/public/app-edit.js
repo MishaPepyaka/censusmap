@@ -14,12 +14,9 @@
   let lastKnownLatLng = null;
   let currentBaseMode = "satellite";
   let badgesReady = false;
-  const dirtyIds = new Set();
   const dwellingMarkersById = new Map();
 
-  const saveBtn = document.getElementById("save-edits-btn");
   const statusEl = document.getElementById("editor-status");
-  const uploadStatusEl = document.getElementById("upload-status");
   const editorRouteLabel = document.getElementById("editor-route-label");
   const editorViewLink = document.getElementById("editor-view-link");
 
@@ -33,15 +30,10 @@
     notes: document.getElementById("dwelling-notes")
   };
   const dwellingNewBtn = document.getElementById("dwelling-new-btn");
-  const dwellingAddBtn = document.getElementById("dwelling-add-btn");
   const dwellingSaveBtn = document.getElementById("dwelling-save-btn");
   const dwellingSaveAllBtn = document.getElementById("dwelling-save-all-btn");
   const dwellingDeleteBtn = document.getElementById("dwelling-delete-btn");
-  const photoUploadBtn = document.getElementById("photo-upload-btn");
-  const dwellingPhotoCaptureInput = document.getElementById("dwelling-photo-capture-input");
-  const editorPhotoUploadInput = document.getElementById("editor-photo-upload-input");
   const dirtyDwellingMarkers = new Set();
-  let pendingUploadCreatesDwelling = false;
 
   if (editorRouteLabel) {
     editorRouteLabel.textContent = `CLD ${cld} editor`;
@@ -67,17 +59,6 @@
     if (!statusEl) return;
     statusEl.textContent = message;
     statusEl.classList.toggle("editor-status-error", Boolean(isError));
-  }
-
-  function setUploadStatus(message, isError = false) {
-    if (!uploadStatusEl) return;
-    uploadStatusEl.textContent = message || "";
-    uploadStatusEl.classList.toggle("editor-status-error", Boolean(isError));
-  }
-
-  function updateSaveState() {
-    if (!saveBtn) return;
-    saveBtn.disabled = dirtyIds.size === 0;
   }
 
   function isPolygonGeometry(geometry) {
@@ -813,93 +794,6 @@
     );
   }
 
-  if (canPersistEdits) {
-    if (!L.Control || !L.Control.Draw) {
-      setStatus("leaflet.draw is missing; geometry editing disabled.", true);
-    } else {
-    const drawControl = new L.Control.Draw({
-      draw: false,
-      edit: {
-        featureGroup: editableLayer,
-        edit: true,
-        remove: false
-      }
-    });
-    map.addControl(drawControl);
-
-    map.on(L.Draw.Event.EDITED, (event) => {
-      event.layers.eachLayer((layer) => {
-        const id = getFeatureId(layer.feature);
-        if (id !== null) dirtyIds.add(id);
-        layer.feature.geometry = layer.toGeoJSON().geometry;
-      });
-      rebuildBadges();
-      updateSaveState();
-      setStatus(`${dirtyIds.size} zone(s) changed. Press Save Geometry.`, false);
-    });
-    }
-  } else {
-    if (!data.loadError) {
-      setStatus("Editing disabled: loaded local blocks.geojson (no API IDs).", true);
-    }
-  }
-
-  async function saveGeometryChanges() {
-    if (!canPersistEdits) {
-      setStatus("Cannot save: API source is unavailable.", true);
-      return;
-    }
-    if (dirtyIds.size === 0) {
-      setStatus("No pending changes", false);
-      return;
-    }
-
-    const layersById = new Map();
-    editableLayer.eachLayer((layer) => {
-      const id = getFeatureId(layer.feature);
-      if (id !== null) layersById.set(id, layer);
-    });
-
-    const ids = [...dirtyIds];
-    saveBtn.disabled = true;
-    setStatus(`Saving ${ids.length} zone(s)...`, false);
-
-    try {
-      for (const id of ids) {
-        const layer = layersById.get(id);
-        if (!layer) continue;
-        const geometry = layer.toGeoJSON().geometry;
-        const payload = {
-          type: "Feature",
-          id,
-          properties: { ...(layer.feature?.properties || {}) },
-          geometry
-        };
-
-        await getJson(`/api/cld/${cld}/features/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        layer.feature.geometry = geometry;
-        layer.setStyle(styleForFeature(layer.feature, false));
-        dirtyIds.delete(id);
-      }
-
-      selectedPolygonLayer = null;
-      updateSaveState();
-      setStatus("Geometry saved", false);
-    } catch (error) {
-      updateSaveState();
-      setStatus(`Save failed: ${error.message}`, true);
-    }
-  }
-
-  saveBtn?.addEventListener("click", async () => {
-    await saveGeometryChanges();
-  });
-
   function clearDwellingForm() {
     dwellingFields.cu.value = "";
     dwellingFields.block.value = "";
@@ -956,97 +850,6 @@
     if (marker) {
       setStatus("New dwelling created. Fill fields and press Save.", false);
     }
-  });
-
-  async function fileToDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("Failed to read image"));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  async function uploadImageFile(file) {
-    const dataUrl = await fileToDataUrl(file);
-    const response = await getJson(`/api/cld/${cld}/uploads`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: file.name,
-        mimeType: file.type || "image/jpeg",
-        dataUrl
-      })
-    });
-    return response.upload;
-  }
-
-  function appendUploadedPhotoToMarker(marker, upload) {
-    if (!marker?.feature?.properties || !upload?.compressedUrl) return;
-    const properties = marker.feature.properties;
-    const photos = Array.isArray(properties.photos) ? [...properties.photos] : [];
-    photos.push(upload.compressedUrl);
-    properties.photos = photos;
-    markDwellingDirty(marker);
-  }
-
-  async function handleUploadedFiles(files, createDwellingFromFirst) {
-    const pickedFiles = Array.from(files || []);
-    if (pickedFiles.length === 0) return;
-
-    setUploadStatus(`Uploading ${pickedFiles.length} image(s)...`);
-
-    try {
-      const uploads = [];
-      for (const file of pickedFiles) {
-        uploads.push(await uploadImageFile(file));
-      }
-
-      if (createDwellingFromFirst) {
-        const firstUpload = uploads[0];
-        const marker = createNewDwellingDraft({
-          photos: uploads.map((upload) => upload.compressedUrl)
-        });
-        if (marker) {
-          marker.feature.properties.photos = uploads.map((upload) => upload.compressedUrl);
-          fillFormFromFeature(marker.feature);
-          setStatus("Photo uploaded. Position the dwelling and press Save.", false);
-        }
-      } else if (selectedDwellingMarker) {
-        for (const upload of uploads) {
-          appendUploadedPhotoToMarker(selectedDwellingMarker, upload);
-        }
-        setStatus(`Attached ${uploads.length} photo(s) to dwelling. Press Save.`, false);
-      } else {
-        setStatus(`Uploaded ${uploads.length} photo(s). Select a dwelling before uploading to attach them.`, false);
-      }
-
-      setUploadStatus(`Uploaded ${uploads.length} image(s).`, false);
-    } catch (error) {
-      setUploadStatus(`Upload failed: ${error.message}`, true);
-      setStatus(`Upload failed: ${error.message}`, true);
-    }
-  }
-
-  dwellingAddBtn?.addEventListener("click", () => {
-    pendingUploadCreatesDwelling = true;
-    dwellingPhotoCaptureInput?.click();
-  });
-
-  photoUploadBtn?.addEventListener("click", () => {
-    pendingUploadCreatesDwelling = false;
-    editorPhotoUploadInput?.click();
-  });
-
-  dwellingPhotoCaptureInput?.addEventListener("change", async (event) => {
-    await handleUploadedFiles(event.target.files, pendingUploadCreatesDwelling);
-    event.target.value = "";
-    pendingUploadCreatesDwelling = false;
-  });
-
-  editorPhotoUploadInput?.addEventListener("change", async (event) => {
-    await handleUploadedFiles(event.target.files, false);
-    event.target.value = "";
   });
 
   async function persistDwellingMarker(marker, { selectAfterSave = true, useMarkerProperties = false } = {}) {
@@ -1132,6 +935,10 @@
       if (field === dwellingFields.status) {
         const no = displayDwellingNo(selectedDwellingMarker.feature?.properties || {});
         selectedDwellingMarker.setIcon(dwellingMarkerIcon(no, field.value, true));
+        setStatus("Saving status...", false);
+        markDwellingDirty(selectedDwellingMarker);
+        void persistDwellingMarker(selectedDwellingMarker, { selectAfterSave: true });
+        return;
       }
       markDwellingDirty(selectedDwellingMarker);
       setStatus("Dwelling fields changed. Press Save or Save All.", false);

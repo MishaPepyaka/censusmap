@@ -6,12 +6,11 @@
     <title>CLD Region Editor</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
     <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260720a" />
-    <link rel="stylesheet" href="/vendor/leaflet-draw/leaflet.draw.css?v=20260720a" />
-    <link rel="stylesheet" href="/styles.css?v=20260720a" />
+    <link rel="stylesheet" href="/styles.css?v=20260721a" />
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260720a</div>
+    <div class="app-version-badge">v20260721a</div>
 
     <footer class="app-attribution">
       <a href="https://geoprod.statcan.gc.ca/camv1/index.html" target="_blank" rel="noreferrer">Publicly Available Map Source</a>.
@@ -35,21 +34,8 @@
       <button id="dwellings-collapse-btn" type="button" class="editor-collapse-btn" aria-expanded="true">Region Editor</button>
       <div id="dwellings-form-wrap">
         <div class="editor-help">
-          Tap a `CU` or `Block` to select it. Use `Add a dwelling` for the iPhone camera flow, or `Upload photos` to attach media without creating a new dwelling.
+          Tap a `CU` or `Block` to select it.
         </div>
-
-        <details class="editor-group" open>
-          <summary class="editor-group-title">Quick Actions</summary>
-          <div class="editor-group-body">
-            <div class="editor-row-actions editor-row-actions-two">
-              <button id="dwelling-add-btn" type="button" class="editor-save-btn">Add a dwelling</button>
-              <button id="photo-upload-btn" type="button" class="editor-save-btn">Upload photos</button>
-            </div>
-            <input id="dwelling-photo-capture-input" type="file" accept="image/*" capture="environment" hidden />
-            <input id="editor-photo-upload-input" type="file" accept="image/*" multiple hidden />
-            <div id="upload-status" class="editor-inline-status"></div>
-          </div>
-        </details>
 
         <details class="editor-group" open>
           <summary class="editor-group-title">Dwelling Details</summary>
@@ -94,19 +80,10 @@
           </div>
         </details>
 
-        <details class="editor-group" open>
-          <summary class="editor-group-title">Zone Geometry</summary>
-          <div class="editor-group-body">
-            <div class="editor-help">Boundary editing is enabled for both `CU` and `Block` polygons.</div>
-            <button id="save-edits-btn" type="button" class="editor-save-btn" disabled>Save Geometry</button>
-            <div id="editor-status">No pending changes</div>
-          </div>
-        </details>
       </div>
     </section>
 
-    <script src="/vendor/leaflet/leaflet.js?v=20260720a"></script>
-    <script src="/vendor/leaflet-draw/leaflet.draw.js?v=20260720a"></script>
-    <script src="/app-edit.js?v=20260720a"></script>
+    <script src="/vendor/leaflet/leaflet.js?v=20260721a"></script>
+    <script src="/app-edit.js?v=20260721a"></script>
   </body>
 </html>
