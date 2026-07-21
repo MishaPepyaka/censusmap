@@ -21,6 +21,11 @@
   - Remove Quick Actions for photo upload and adding a dwelling.
   - Move the editor panel closer to the left edge.
 
+- [x] T023 Cycle through duplicate dwelling search matches
+  - Show the first SSID match on the first search.
+  - Advance to the next matching dwelling on each repeated search.
+  - Reset to the first match when the search text changes.
+
 - [x] T003 Add CLD-based routing
   - Serve `/` as the lookup page.
   - Serve `/:cld` as the viewer route.

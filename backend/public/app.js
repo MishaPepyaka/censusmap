@@ -20,6 +20,8 @@
   const dwellingByNo = new Map();
   const dwellingRecords = [];
   const dwellingMarkerByKey = new Map();
+  let lastDwellingSearchValue = null;
+  let dwellingSearchMatchIndex = 0;
 
   const routeLabel = document.getElementById("route-label");
   const routeSubtitle = document.getElementById("route-subtitle");
@@ -639,7 +641,7 @@
 
   function findDwellingByInput(value) {
     const digits = normalizeSearchCode(value);
-    if (!digits) return { record: null, message: "Enter code like 462211020079", error: true };
+    if (!digits) return { record: null, records: [], message: "Enter code like 462211020079", error: true };
 
     if (digits.length >= 12) {
       const cu = digits.slice(0, 8);
@@ -647,35 +649,47 @@
       const code = `${cu}${no}`;
       const list = dwellingByCode.get(code) || [];
       return list.length > 0
-        ? { record: list[0], message: "", error: false }
-        : { record: null, message: `Not found: ${code}`, error: true };
+        ? { record: list[0], records: list, message: "", error: false }
+        : { record: null, records: [], message: `Not found: ${code}`, error: true };
     }
 
     if (digits.length === 8) {
       const list = dwellingByCu.get(digits) || [];
-      if (list.length === 0) return { record: null, message: `No dwellings in CU ${digits}`, error: true };
-      return { record: list[0], message: `CU ${digits}: showing first dwelling`, error: false };
+      if (list.length === 0) return { record: null, records: [], message: `No dwellings in CU ${digits}`, error: true };
+      return { record: list[0], records: list, message: `CU ${digits}: showing first dwelling`, error: false };
     }
 
     if (digits.length <= 4) {
       const no = digits.padStart(4, "0");
       const list = dwellingByNo.get(no) || [];
-      if (list.length === 0) return { record: null, message: `No dwelling ${no}`, error: true };
-      if (list.length > 1) return { record: list[0], message: `Multiple ${no}, showing first match`, error: false };
-      return { record: list[0], message: "", error: false };
+      if (list.length === 0) return { record: null, records: [], message: `No dwelling ${no}`, error: true };
+      if (list.length > 1) return { record: list[0], records: list, message: `Multiple ${no}, showing first match`, error: false };
+      return { record: list[0], records: list, message: "", error: false };
     }
 
-    return { record: null, message: "Use 4, 8, or 12+ digits", error: true };
+    return { record: null, records: [], message: "Use 4, 8, or 12+ digits", error: true };
   }
 
   function handleSearch() {
-    const result = findDwellingByInput(searchInput?.value || "");
+    const value = String(searchInput?.value || "");
+    if (value !== lastDwellingSearchValue) {
+      lastDwellingSearchValue = value;
+      dwellingSearchMatchIndex = 0;
+    }
+    const result = findDwellingByInput(value);
     if (!result.record) {
       setSearchStatus(result.message, true);
       return;
     }
-    focusDwelling(result.record, false);
-    setSearchStatus(result.message || "Found", false);
+    const matches = result.records || [result.record];
+    const matchIndex = dwellingSearchMatchIndex % matches.length;
+    const record = matches[matchIndex];
+    dwellingSearchMatchIndex = (matchIndex + 1) % matches.length;
+    focusDwelling(record, false);
+    setSearchStatus(
+      matches.length > 1 ? `Found ${matchIndex + 1} of ${matches.length}: ${record.code}` : (result.message || "Found"),
+      false
+    );
   }
 
   searchBtn?.addEventListener("click", handleSearch);
@@ -684,6 +698,10 @@
       event.preventDefault();
       handleSearch();
     }
+  });
+  searchInput?.addEventListener("input", () => {
+    lastDwellingSearchValue = null;
+    dwellingSearchMatchIndex = 0;
   });
 
   async function handleSsidSearch() {
