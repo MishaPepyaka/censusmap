@@ -747,11 +747,10 @@
   function upsertUserLocation(latlng, accuracyMeters) {
     lastKnownLatLng = latlng;
     if (!userMarker) {
-      const icon = L.divIcon({
-        className: "user-person-wrap",
-        html: '<span class="user-person-marker"><span class="user-person-head"></span><span class="user-person-body"></span></span>',
-        iconSize: [24, 32],
-        iconAnchor: [12, 24]
+      const icon = L.icon({
+        iconUrl: "/person-marker.svg?v=20260721e",
+        iconSize: [36, 36],
+        iconAnchor: [18, 30]
       });
       userMarker = L.marker(latlng, { icon, interactive: false }).addTo(map);
     } else {

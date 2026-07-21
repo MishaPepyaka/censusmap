@@ -10,8 +10,8 @@
 - [x] T019 Add zone sharing and Google Maps actions
   - Show Share Link and Google Maps actions when a CU or Block is selected.
 
-- [ ] T020 Use a person emoji for map location
-  - Replace the location control icon with a person emoji.
+- [x] T020 Use a custom person marker for map location
+  - Replace the temporary CSS person with the supplied SVG marker.
 
 - [x] T021 Remove zone geometry editing
   - Remove CU/Block geometry editing and its Save Geometry control.

@@ -358,42 +358,6 @@ body {
   color: #fb923c;
 }
 
-.user-person-wrap {
-  background: transparent;
-  border: 0;
-}
-
-.user-person-marker {
-  width: 20px;
-  height: 26px;
-  display: inline-block;
-  position: relative;
-  transform: translate(-10px, -22px);
-}
-
-.user-person-head {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  position: absolute;
-  left: 6px;
-  top: 0;
-}
-
-.user-person-body {
-  width: 14px;
-  height: 16px;
-  border-radius: 9px 9px 7px 7px;
-  background: #2563eb;
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  position: absolute;
-  left: 3px;
-  top: 8px;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.25);
-}
-
 .editor-collapse-btn {
   width: 100%;
   height: 32px;
