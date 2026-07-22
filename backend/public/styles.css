@@ -58,30 +58,10 @@ body {
   height: 100%;
 }
 
-#search-ui {
-  position: fixed;
-  left: 10px;
-  top: 124px;
-  z-index: 1400;
-  display: grid;
-  gap: 10px;
-  width: min(300px, calc(100vw - 40px));
-  max-width: calc(100vw - 106px);
-  background: rgba(15, 23, 42, 0.9);
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  border-radius: 12px;
-  padding: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.32);
-}
-
 .viewer-search-block {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 6px;
-}
-
-.viewer-search-block-secondary button {
-  min-width: 92px;
 }
 
 #dwelling-search-input {
@@ -108,36 +88,11 @@ body {
   cursor: pointer;
 }
 
-#dwelling-search-status,
-#ssid-search-status {
+#dwelling-search-status {
   grid-column: 1 / -1;
   min-height: 16px;
   color: #d1fae5;
   font-size: 12px;
-}
-
-#ssid-search-input {
-  min-width: 0;
-  height: 38px;
-  border: 1px solid #334155;
-  border-radius: 9px;
-  background: rgba(15, 23, 42, 0.75);
-  color: #f8fafc;
-  font-size: 14px;
-  padding: 0 10px;
-  box-sizing: border-box;
-}
-
-#ssid-search-btn {
-  height: 38px;
-  border: 0;
-  border-radius: 9px;
-  padding: 0 12px;
-  color: #f8fafc;
-  background: #2563eb;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .search-status-error {
@@ -719,15 +674,6 @@ body {
 }
 
 @media (max-width: 768px) {
-  #search-ui {
-    width: calc(100vw - 24px);
-    max-width: calc(100vw - 106px);
-    top: auto;
-    bottom: 10px;
-    left: 10px;
-    right: 10px;
-  }
-
   .zoom-cu-only .dwelling-marker-wrap,
   .zoom-cu-only .dwelling-square-dot-wrap {
     display: block !important;
