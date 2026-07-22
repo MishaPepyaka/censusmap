@@ -273,6 +273,9 @@
     fadeAnimation: true,
     inertia: false
   }).setView([56.0, -96.0], 4);
+  const userLocationPane = map.createPane("user-location-pane");
+  userLocationPane.style.zIndex = "650";
+  userLocationPane.style.pointerEvents = "none";
   L.control.zoom({ position: "bottomright" }).addTo(map);
   const vectorRenderer = L.svg({ padding: 0.5 });
   const mapContainer = map.getContainer();
@@ -1114,7 +1117,12 @@
         iconSize: [36, 36],
         iconAnchor: [18, 30]
       });
-      userMarker = L.marker(latlng, { icon, interactive: false }).addTo(map);
+      userMarker = L.marker(latlng, {
+        icon,
+        pane: "user-location-pane",
+        interactive: false,
+        zIndexOffset: 1000
+      }).addTo(map);
     } else {
       userMarker.setLatLng(latlng);
     }
