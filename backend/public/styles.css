@@ -58,10 +58,30 @@ body {
   height: 100%;
 }
 
+#search-ui {
+  position: fixed;
+  left: 10px;
+  top: 124px;
+  z-index: 1400;
+  display: grid;
+  gap: 10px;
+  width: min(300px, calc(100vw - 40px));
+  max-width: calc(100vw - 106px);
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.32);
+}
+
 .viewer-search-block {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 6px;
+}
+
+.viewer-search-block-secondary button {
+  min-width: 92px;
 }
 
 #dwelling-search-input {
@@ -88,11 +108,36 @@ body {
   cursor: pointer;
 }
 
-#dwelling-search-status {
+#dwelling-search-status,
+#ssid-search-status {
   grid-column: 1 / -1;
   min-height: 16px;
   color: #d1fae5;
   font-size: 12px;
+}
+
+#ssid-search-input {
+  min-width: 0;
+  height: 38px;
+  border: 1px solid #334155;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.75);
+  color: #f8fafc;
+  font-size: 14px;
+  padding: 0 10px;
+  box-sizing: border-box;
+}
+
+#ssid-search-btn {
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 12px;
+  color: #f8fafc;
+  background: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .search-status-error {
@@ -102,15 +147,11 @@ body {
 #map-ui {
   position: fixed;
   right: 12px;
-  top: 12px;
+  top: 53px;
   z-index: 1400;
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-#user-widget-root:empty {
-  display: none;
 }
 
 #editor-panel {
@@ -295,8 +336,8 @@ body {
 }
 
 .map-action-btn {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   border: 0;
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.84);
@@ -674,6 +715,15 @@ body {
 }
 
 @media (max-width: 768px) {
+  #search-ui {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 106px);
+    top: auto;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+  }
+
   .zoom-cu-only .dwelling-marker-wrap,
   .zoom-cu-only .dwelling-square-dot-wrap {
     display: block !important;
@@ -808,7 +858,10 @@ body {
 
 /* User Profile Widget */
 .user-profile-widget {
-  position: relative;
+  position: fixed;
+  right: 12px;
+  top: 10px;
+  z-index: 1500;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -818,10 +871,10 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 12px;
+  padding: 10px;
   background: rgba(15, 23, 42, 0.85);
   border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 12px;
+  border-radius: 999px;
   color: #f8fafc;
   font-size: 14px;
   font-weight: 500;
@@ -927,6 +980,8 @@ body {
 
 @media (max-width: 640px) {
   .user-profile-widget {
+    top: 110px;
+    right: 12px;
     align-items: flex-end;
   }
 
