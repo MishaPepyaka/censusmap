@@ -6,11 +6,11 @@
     <title>CLD Region Editor</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
     <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260720a" />
-    <link rel="stylesheet" href="/styles.css?v=20260721m" />
+    <link rel="stylesheet" href="/styles.css?v=20260721n" />
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260721m</div>
+    <div class="app-version-badge">v20260721n</div>
 
     <footer class="app-attribution">
       <a href="https://geoprod.statcan.gc.ca/camv1/index.html" target="_blank" rel="noreferrer">Publicly Available Map Source</a>.
@@ -18,6 +18,7 @@
     </footer>
 
     <div id="map-ui">
+      <div id="user-widget-root"></div>
       <button id="locate-btn" class="map-action-btn" type="button" aria-label="Focus on my location" title="Focus on my location"></button>
       <button id="basemap-btn" class="map-action-btn map-action-btn-leaf" type="button" aria-label="Switch base map (current: Satellite)" title="Switch base map (current: Satellite)"></button>
     </div>
@@ -84,6 +85,7 @@
     </section>
 
     <script src="/vendor/leaflet/leaflet.js?v=20260721a"></script>
-    <script src="/app-edit.js?v=20260721l"></script>
+    <script src="/app-auth.js?v=20260721n"></script>
+    <script src="/app-edit.js?v=20260721n"></script>
   </body>
 </html>
