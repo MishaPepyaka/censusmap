@@ -66,6 +66,7 @@ body {
   display: grid;
   gap: 10px;
   width: min(300px, calc(100vw - 96px));
+  max-width: calc(100vw - 106px);
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.45);
   border-radius: 12px;
@@ -171,6 +172,7 @@ body {
 }
 
 #route-ui {
+  max-width: calc(100vw - 106px);
   position: fixed;
   left: 10px;
   top: 10px;
@@ -359,6 +361,7 @@ body {
 }
 
 .editor-collapse-btn {
+  margin: 10px 0 0 0;
   width: 100%;
   height: 32px;
   border: 1px solid #334155;
@@ -416,6 +419,10 @@ body {
   content: "▾";
   float: right;
   color: #cbd5e1;
+}
+
+.editor-collapse-btn::after {
+  content: "▸";
 }
 
 .editor-group:not([open]) .editor-group-title::after {
@@ -710,6 +717,7 @@ body {
 @media (max-width: 768px) {
   #search-ui {
     width: calc(100vw - 24px);
+    max-width: calc(100vw - 106px);
     top: auto;
     bottom: 10px;
     left: 10px;
@@ -739,6 +747,7 @@ body {
   #editor-panel {
     left: 12px;
     width: min(340px, calc(100vw - 24px));
+    max-width: calc(100vw - 106px);
   }
 
   .map-action-btn {
