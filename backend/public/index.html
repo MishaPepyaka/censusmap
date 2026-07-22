@@ -6,11 +6,11 @@
     <title>CLD Map Viewer</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
     <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260720a" />
-    <link rel="stylesheet" href="/styles.css?v=20260721b" />
+    <link rel="stylesheet" href="/styles.css?v=20260721h" />
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260721e</div>
+    <div class="app-version-badge">v20260721h</div>
 
     <div id="user-widget-root"></div>
 
@@ -25,6 +25,7 @@
         <div id="route-subtitle"></div>
       </div>
       <div class="route-ui-actions">
+        <a class="route-link-btn" href="/">Back</a>
         <a id="edit-route-link" class="route-link-btn route-link-btn-accent" href="#" hidden>Edit Region</a>
       </div>
     </section>
@@ -42,18 +43,6 @@
         <button id="dwelling-search-btn" type="button">Find SSID</button>
         <div id="dwelling-search-status" aria-live="polite"></div>
       </div>
-      <div class="viewer-search-block viewer-search-block-secondary">
-        <input
-          id="ssid-search-input"
-          type="text"
-          inputmode="numeric"
-          autocomplete="off"
-          placeholder="3036"
-          maxlength="16"
-        />
-        <button id="ssid-search-btn" type="button">CLD</button>
-        <div id="ssid-search-status" aria-live="polite"></div>
-      </div>
     </section>
 
     <div id="map-ui">
@@ -63,6 +52,6 @@
 
     <script src="/vendor/leaflet/leaflet.js?v=20260720a"></script>
     <script src="/app-auth.js?v=20260720a"></script>
-    <script src="/app.js?v=20260721e"></script>
+    <script src="/app.js?v=20260721h"></script>
   </body>
 </html>

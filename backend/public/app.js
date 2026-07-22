@@ -31,9 +31,6 @@
   const searchInput = document.getElementById("dwelling-search-input");
   const searchBtn = document.getElementById("dwelling-search-btn");
   const searchStatus = document.getElementById("dwelling-search-status");
-  const ssidSearchInput = document.getElementById("ssid-search-input");
-  const ssidSearchBtn = document.getElementById("ssid-search-btn");
-  const ssidSearchStatus = document.getElementById("ssid-search-status");
   let currentUser = null;
 
   async function loadCurrentUser() {
@@ -233,12 +230,6 @@
     if (!searchStatus) return;
     searchStatus.textContent = message || "";
     searchStatus.classList.toggle("search-status-error", Boolean(isError));
-  }
-
-  function setSsidSearchStatus(message, isError = false) {
-    if (!ssidSearchStatus) return;
-    ssidSearchStatus.textContent = message || "";
-    ssidSearchStatus.classList.toggle("search-status-error", Boolean(isError));
   }
 
   const map = L.map("map", {
@@ -702,35 +693,6 @@
   searchInput?.addEventListener("input", () => {
     lastDwellingSearchValue = null;
     dwellingSearchMatchIndex = 0;
-  });
-
-  async function handleSsidSearch() {
-    const value = String(ssidSearchInput?.value || "").trim();
-    if (!value) {
-      setSsidSearchStatus("Enter an SSID.", true);
-      return;
-    }
-    setSsidSearchStatus("Resolving...");
-    try {
-      const result = await getJson(`/api/lookup?q=${encodeURIComponent(value)}`);
-      if (String(result?.cld || "") === cld) {
-        setSsidSearchStatus(`SSID belongs to CLD ${cld}.`, false);
-        return;
-      }
-      window.location.assign(`/${result.cld}`);
-    } catch (error) {
-      setSsidSearchStatus(error.message, true);
-    }
-  }
-
-  ssidSearchBtn?.addEventListener("click", () => {
-    void handleSsidSearch();
-  });
-  ssidSearchInput?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      void handleSsidSearch();
-    }
   });
 
   if (polygonLayer.getLayers().length > 0) {

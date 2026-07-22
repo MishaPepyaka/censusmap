@@ -26,6 +26,10 @@
   - Advance to the next matching dwelling on each repeated search.
   - Reset to the first match when the search text changes.
 
+- [x] T024 Simplify viewer navigation
+  - Remove the CLD search from the map viewer.
+  - Add a Back link next to Edit Region.
+
 - [x] T003 Add CLD-based routing
   - Serve `/` as the lookup page.
   - Serve `/:cld` as the viewer route.
