@@ -980,7 +980,7 @@ body {
 
 @media (max-width: 640px) {
   .user-profile-widget {
-    top: 110px;
+    top: 128px;
     right: 12px;
     align-items: flex-end;
   }
