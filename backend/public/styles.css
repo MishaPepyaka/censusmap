@@ -422,6 +422,7 @@ body {
 }
 
 .editor-collapse-btn::after {
+  float: right;
   content: "▸";
 }
 
