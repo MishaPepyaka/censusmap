@@ -17,7 +17,7 @@ body {
   z-index: 1400;
   padding: 5px 8px;
   border: 1px solid rgba(148, 163, 184, 0.4);
-  border-radius: 999px;
+  border-radius: 12px;
   background: rgba(15, 23, 42, 0.84);
   color: #cbd5e1;
   font-size: 11px;
@@ -147,15 +147,11 @@ body {
 #map-ui {
   position: fixed;
   right: 12px;
-  top: 12px;
+  top: 53px;
   z-index: 1400;
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-#user-widget-root:empty {
-  display: none;
 }
 
 #editor-panel {
@@ -314,7 +310,7 @@ body {
   background: rgba(15, 23, 42, 0.6);
   color: #e8fff2;
   border: 1px solid rgba(226, 232, 240, 0.35);
-  border-radius: 999px;
+  border-radius: 12px;
   padding: 2px 7px;
   font-size: 11px;
   font-weight: 700;
@@ -863,7 +859,10 @@ body {
 
 /* User Profile Widget */
 .user-profile-widget {
-  position: relative;
+  position: fixed;
+  right: 12px;
+  top: 10px;
+  z-index: 1500;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -872,11 +871,10 @@ body {
 .user-profile-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
   padding: 10px;
   background: rgba(15, 23, 42, 0.85);
   border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 999px;
+  border-radius: 12px;
   color: #f8fafc;
   font-size: 14px;
   font-weight: 500;
@@ -982,6 +980,8 @@ body {
 
 @media (max-width: 640px) {
   .user-profile-widget {
+    top: 110px;
+    right: 12px;
     align-items: flex-end;
   }
 
