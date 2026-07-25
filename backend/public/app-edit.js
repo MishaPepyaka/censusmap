@@ -464,7 +464,8 @@
       if (element) element.style.pointerEvents = clusterMode ? "none" : "";
       if (!clusterMode) continue;
       const point = map.project(marker.getLatLng(), map.getZoom());
-      const key = `${Math.floor(point.x / 72)}:${Math.floor(point.y / 72)}`;
+      const cu = extractCuCode(marker.feature?.properties || {});
+      const key = `${cu}:${Math.floor(point.x / 72)}:${Math.floor(point.y / 72)}`;
       const bucket = buckets.get(key) || [];
       bucket.push(marker);
       buckets.set(key, bucket);

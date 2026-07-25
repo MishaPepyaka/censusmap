@@ -597,7 +597,7 @@
     const buckets = new Map();
     for (const record of dwellingRecords) {
       const point = map.project([record.lat, record.lng], map.getZoom());
-      const key = `${Math.floor(point.x / 72)}:${Math.floor(point.y / 72)}`;
+      const key = `${record.cu}:${Math.floor(point.x / 72)}:${Math.floor(point.y / 72)}`;
       const bucket = buckets.get(key) || [];
       bucket.push(record);
       buckets.set(key, bucket);
