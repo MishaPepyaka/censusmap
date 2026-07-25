@@ -20,6 +20,7 @@
   const dwellingByNo = new Map();
   const dwellingRecords = [];
   const dwellingMarkerByKey = new Map();
+  const OPENED_CASE_STATUSES = new Set(["400", "402", "701", "500", "312", "324"]);
   let lastDwellingSearchValue = null;
   let dwellingSearchMatchIndex = 0;
 
@@ -327,10 +328,19 @@
   const summary = await loadRegionSummary();
   const mapData = await getMapData();
   routeLabel.textContent = summary.label || `CLD ${cld}`;
-  routeSubtitle.textContent = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks`;
 
   const zones = mapData.zones;
   const dwellings = mapData.dwellings;
+  function updateRouteSubtitle() {
+    const records = dwellingRecords.length ? dwellingRecords : dwellings;
+    const openedCases = records.filter((item) => {
+      const status = "status" in item ? item.status : item?.properties?.status;
+      return OPENED_CASE_STATUSES.has(normalizeDwellingStatus(status));
+    }).length;
+    const openedPercent = records.length ? ((openedCases / records.length) * 100).toFixed(1) : "0.0";
+    routeSubtitle.textContent = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${openedCases} opened (${openedPercent}%)`;
+  }
+  updateRouteSubtitle();
   const cuCodes = zones.map((feature) => extractCuCode(feature.properties || {}));
   const colorMap = buildColorMap(cuCodes);
 
@@ -498,11 +508,17 @@
   function buildDwellingPopupHtml(info) {
     const extraInfo = [];
     if (info.status) extraInfo.push(`Status: ${escapeHtml(info.status)}`);
+    const notes = String(info.notes || "").trim();
+    const statusOptions = ["429", "400", "402", "701", "500", "312", "324"]
+      .map((status) => `<option value="${status}"${status === info.status ? " selected" : ""}>${status}</option>`)
+      .join("");
     return [
       `<div class="dw-popup">`,
       `<div class="dw-popup-code">${escapeHtml(info.code)}</div>`,
       `<div class="dw-popup-meta">CU ${escapeHtml(info.cu)} · Block ${escapeHtml(info.block)} · Dwelling ${escapeHtml(info.displayNo)}</div>`,
       extraInfo.length > 0 ? `<div class="dw-popup-meta">${extraInfo.join(" · ")}</div>` : "",
+      notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
+      `<label class="dw-popup-status">Status <select class="dw-status-select" data-key="${escapeHtml(info.key)}">${statusOptions}</select></label>`,
       `<div class="dw-popup-actions">`,
       `<button type="button" class="dw-action-btn dw-action-share" data-code="${escapeHtml(info.code)}" data-url="${escapeHtml(info.gmapsUrl)}">Share Link</button>`,
       `<a class="dw-action-btn dw-action-open" href="${escapeHtml(info.gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>`,
@@ -545,7 +561,11 @@
       gmapsUrl,
       lat,
       lng,
-      status: normalizeDwellingStatus(props.status)
+      status: normalizeDwellingStatus(props.status),
+      notes: props.notes || "",
+      featureId: Number.isFinite(Number(feature?.id)) ? Number(feature.id) : null,
+      properties: { ...props },
+      geometry: { type: "Point", coordinates: [lng, lat] }
     };
   }
 
@@ -563,8 +583,7 @@
     marker.on("popupopen", (event) => {
       const root = event?.popup?.getElement?.();
       const shareBtn = root?.querySelector(".dw-action-share");
-      if (!shareBtn) return;
-      shareBtn.addEventListener("click", async (shareEvent) => {
+      shareBtn?.addEventListener("click", async (shareEvent) => {
         shareEvent.preventDefault();
         const url = shareBtn.getAttribute("data-url") || "";
         const codeValue = shareBtn.getAttribute("data-code") || "";
@@ -586,6 +605,44 @@
           // Ignore share cancellation.
         }
       }, { once: true });
+
+      const statusSelect = root?.querySelector(".dw-status-select");
+      statusSelect?.addEventListener("change", async () => {
+        const previousStatus = record.status;
+        const nextStatus = normalizeDwellingStatus(statusSelect.value);
+        if (nextStatus === previousStatus) return;
+        if (!Number.isFinite(record.featureId)) {
+          statusSelect.value = previousStatus;
+          setSearchStatus("This dwelling cannot be updated because it has no feature id.", true);
+          return;
+        }
+        statusSelect.disabled = true;
+        record.status = nextStatus;
+        marker.setIcon(iconForDwellingMarker(marker, marker === selectedDwellingMarker));
+        try {
+          await getJson(`/api/cld/${cld}/features/${record.featureId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "Feature",
+              id: record.featureId,
+              properties: { ...record.properties, status: nextStatus },
+              geometry: record.geometry
+            })
+          });
+          record.properties.status = nextStatus;
+          marker.setPopupContent(buildDwellingPopupHtml(record));
+          updateRouteSubtitle();
+          setSearchStatus(`Status for ${record.code} saved.`, false);
+        } catch (error) {
+          record.status = previousStatus;
+          statusSelect.value = previousStatus;
+          marker.setIcon(iconForDwellingMarker(marker, marker === selectedDwellingMarker));
+          setSearchStatus(`Status save failed: ${error.message}`, true);
+        } finally {
+          statusSelect.disabled = false;
+        }
+      });
     });
 
     dwellingMarkerByKey.set(record.key, marker);

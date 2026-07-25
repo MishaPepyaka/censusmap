@@ -651,7 +651,7 @@
       meta.length > 0 ? `<div class="dw-popup-meta">${meta.join(" · ")}</div>` : "",
       gmapsUrl ? `<div class="dw-popup-actions">` : "",
       gmapsUrl ? `<button type="button" class="dw-action-btn dw-action-share" data-code="${escapeHtml(code)}" data-url="${escapeHtml(gmapsUrl)}">Share Link</button>` : "",
-      gmapsUrl ? `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Open Google Maps</a>` : "",
+      gmapsUrl ? `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>` : "",
       gmapsUrl ? `</div>` : "",
       `</div>`
     ].join("");

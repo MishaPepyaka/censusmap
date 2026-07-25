@@ -735,6 +735,37 @@ body {
   color: #334155;
 }
 
+.dw-popup-notes {
+  margin-top: 7px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.dw-popup-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dw-popup-status select {
+  min-height: 30px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+}
+
 .dw-popup-actions {
   margin-top: 8px;
   display: grid;
@@ -754,6 +785,11 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.dw-action-share,
+.dw-action-open {
+  color: #0f172a;
 }
 
 @media (max-width: 768px) {

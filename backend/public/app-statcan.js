@@ -287,7 +287,7 @@
         `<div class="dw-popup-code">${escapeHtml(code)}</div>`,
         `<div class="dw-popup-meta">CU ${escapeHtml(cu)} · Block ${escapeHtml(block)} · Dwelling ${escapeHtml(no)}</div>`,
         `<div class="dw-popup-actions">`,
-        `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Open Google Maps</a>`,
+        `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>`,
         `</div>`,
         `</div>`
       ].join(""),
