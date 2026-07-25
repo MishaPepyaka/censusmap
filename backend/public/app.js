@@ -333,12 +333,12 @@
   const dwellings = mapData.dwellings;
   function updateRouteSubtitle() {
     const records = dwellingRecords.length ? dwellingRecords : dwellings;
-    const openedCases = records.filter((item) => {
+    const closedCases = records.filter((item) => {
       const status = "status" in item ? item.status : item?.properties?.status;
-      return normalizeDwellingStatus(status) === OPENED_CASE_STATUS;
+      return normalizeDwellingStatus(status) !== OPENED_CASE_STATUS;
     }).length;
-    const openedPercent = records.length ? ((openedCases / records.length) * 100).toFixed(1) : "0.0";
-    routeSubtitle.textContent = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${openedCases} opened (${openedPercent}%)`;
+    const closedPercent = records.length ? ((closedCases / records.length) * 100).toFixed(1) : "0.0";
+    routeSubtitle.textContent = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${closedCases} closed (${closedPercent}%)`;
   }
   updateRouteSubtitle();
   const cuCodes = zones.map((feature) => extractCuCode(feature.properties || {}));
