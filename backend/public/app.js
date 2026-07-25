@@ -737,8 +737,8 @@
 
   function focusDwelling(record, setStatusText = true) {
     if (!record) return;
-    if (map.getZoom() < DWELLINGS_MIN_VISIBLE_ZOOM) {
-      map.setZoom(DWELLINGS_MIN_VISIBLE_ZOOM);
+    if (map.getZoom() < DWELLINGS_INDIVIDUAL_ZOOM) {
+      map.setZoom(DWELLINGS_INDIVIDUAL_ZOOM);
     }
     renderVisibleDwellingMarkers();
     const marker = dwellingMarkerByKey.get(record.key) || null;
