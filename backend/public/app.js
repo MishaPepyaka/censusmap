@@ -506,8 +506,6 @@
   }
 
   function buildDwellingPopupHtml(info) {
-    const extraInfo = [];
-    if (info.status) extraInfo.push(`Status: ${escapeHtml(info.status)}`);
     const notes = String(info.notes || "").trim();
     const statusOptions = ["429", "400", "402", "701", "500", "312", "324"]
       .map((status) => `<option value="${status}"${status === info.status ? " selected" : ""}>${status}</option>`)
@@ -516,7 +514,6 @@
       `<div class="dw-popup">`,
       `<div class="dw-popup-code">${escapeHtml(info.code)}</div>`,
       `<div class="dw-popup-meta">CU ${escapeHtml(info.cu)} · Block ${escapeHtml(info.block)} · Dwelling ${escapeHtml(info.displayNo)}</div>`,
-      extraInfo.length > 0 ? `<div class="dw-popup-meta">${extraInfo.join(" · ")}</div>` : "",
       notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
       `<label class="dw-popup-status">Status <select class="dw-status-select" data-key="${escapeHtml(info.key)}">${statusOptions}</select></label>`,
       `<div class="dw-popup-actions">`,
