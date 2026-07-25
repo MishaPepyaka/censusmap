@@ -6,6 +6,12 @@
     return;
   }
 
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // The editor remains fully functional when a browser disallows service workers.
+    });
+  }
+
   let selectedPolygonLayer = null;
   let selectedDwellingMarker = null;
   let userMarker = null;
@@ -14,11 +20,15 @@
   let lastKnownLatLng = null;
   let currentBaseMode = "satellite";
   let badgesReady = false;
+  let dwellingMovementEnabled = false;
   const dwellingMarkersById = new Map();
+  const allDwellingMarkers = new Set();
 
   const statusEl = document.getElementById("editor-status");
   const editorRouteLabel = document.getElementById("editor-route-label");
   const editorViewLink = document.getElementById("editor-view-link");
+  const geometryEditorLink = document.getElementById("geometry-editor-link");
+  const syncStatusEl = document.getElementById("editor-sync-status");
 
   const collapseBtn = document.getElementById("dwellings-collapse-btn");
   const formWrap = document.getElementById("dwellings-form-wrap");
@@ -33,6 +43,7 @@
   const dwellingSaveBtn = document.getElementById("dwelling-save-btn");
   const dwellingSaveAllBtn = document.getElementById("dwelling-save-all-btn");
   const dwellingDeleteBtn = document.getElementById("dwelling-delete-btn");
+  const dwellingMoveToggle = document.getElementById("dwelling-move-toggle");
   const dirtyDwellingMarkers = new Set();
 
   if (editorRouteLabel) {
@@ -40,6 +51,17 @@
   }
   if (editorViewLink) {
     editorViewLink.href = `/${cld}`;
+  }
+
+  if (geometryEditorLink) {
+    geometryEditorLink.href = `/${cld}/edit_geometry`;
+  }
+
+  function setSyncStatus(message, state = "saved") {
+    if (!syncStatusEl) return;
+    syncStatusEl.textContent = message;
+    syncStatusEl.classList.toggle("pending", state === "pending");
+    syncStatusEl.classList.toggle("error", state === "error");
   }
 
   function isNonEmpty(value) {
@@ -166,7 +188,7 @@
 
   async function getJson(url, options) {
     const response = await fetch(url, options);
-    const payload = await response.json();
+    const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(payload.error || payload.message || "Request failed");
     }
@@ -177,6 +199,7 @@
     try {
       const data = await getJson(`/api/cld/${cld}/features`);
       const features = (data.features || []).filter((f) => !isExcludedCuFeature(f));
+      localStorage.setItem(`cld-map-cache:${cld}`, JSON.stringify({ savedAt: Date.now(), features }));
       return {
         source: "api",
         loadError: "",
@@ -184,6 +207,19 @@
         dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {}))
       };
     } catch (apiError) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(`cld-map-cache:${cld}`) || "null");
+        if (Array.isArray(cached?.features)) {
+          return {
+            source: "cache",
+            loadError: "Offline: showing the last map saved on this device.",
+            blocks: cached.features.filter((f) => isZoneFeature(f)),
+            dwellings: cached.features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {}))
+          };
+        }
+      } catch {
+        // A corrupt cache must not prevent the normal error state.
+      }
       return {
         source: "none",
         loadError: `Data load failed: API (${apiError.message})`,
@@ -355,7 +391,7 @@
   const data = await getMapData();
   const blocks = data.blocks;
   const dwellings = data.dwellings;
-  const canPersistEdits = data.source === "api";
+  const canPersistEdits = data.source === "api" || data.source === "cache";
 
   if (data.loadError) {
     setStatus(data.loadError, true);
@@ -382,7 +418,80 @@
   const editableLayer = L.featureGroup().addTo(map);
   const badgeLayer = L.layerGroup().addTo(map);
   const dwellingsLayer = L.layerGroup().addTo(map);
+  const dwellingClusterLayer = L.layerGroup().addTo(map);
   const blockLayers = [];
+
+  async function showGeometryLinkForAdmin() {
+    try {
+      const me = await getJson("/api/me");
+      if (geometryEditorLink && me?.user?.isAdmin) geometryEditorLink.hidden = false;
+    } catch {
+      // The server protects this route even if the UI check cannot be completed.
+    }
+  }
+  void showGeometryLinkForAdmin();
+
+  function setDwellingMovementEnabled(enabled) {
+    dwellingMovementEnabled = Boolean(enabled);
+    for (const marker of allDwellingMarkers) {
+      marker.dragging?.[dwellingMovementEnabled ? "enable" : "disable"]();
+    }
+    dwellingMoveToggle?.classList.toggle("is-enabled", dwellingMovementEnabled);
+    dwellingMoveToggle?.setAttribute("aria-pressed", String(dwellingMovementEnabled));
+    if (dwellingMoveToggle) {
+      dwellingMoveToggle.textContent = dwellingMovementEnabled ? "Lock movement" : "Unlock movement";
+    }
+    syncDwellingDisplay();
+  }
+
+  function dwellingClusterLabel(markers) {
+    const numbers = markers
+      .map((marker) => Number(extractDwellingNo(marker.feature?.properties || {})))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+    if (numbers.length === 0) return `VR ${markers.length}`;
+    return `VR ${numbers[0]}–${numbers[numbers.length - 1]}`;
+  }
+
+  function syncDwellingDisplay() {
+    if (!map || !dwellingClusterLayer) return;
+    dwellingClusterLayer.clearLayers();
+    const clusterMode = !dwellingMovementEnabled && map.getZoom() < 15;
+    const buckets = new Map();
+    for (const marker of allDwellingMarkers) {
+      marker.setOpacity(clusterMode ? 0 : 1);
+      const element = marker.getElement?.();
+      if (element) element.style.pointerEvents = clusterMode ? "none" : "";
+      if (!clusterMode) continue;
+      const point = map.project(marker.getLatLng(), map.getZoom());
+      const key = `${Math.floor(point.x / 72)}:${Math.floor(point.y / 72)}`;
+      const bucket = buckets.get(key) || [];
+      bucket.push(marker);
+      buckets.set(key, bucket);
+    }
+    if (!clusterMode) return;
+    for (const markers of buckets.values()) {
+      if (markers.length < 2) {
+        markers[0].setOpacity(1);
+        const element = markers[0].getElement?.();
+        if (element) element.style.pointerEvents = "";
+        continue;
+      }
+      const bounds = L.latLngBounds(markers.map((marker) => marker.getLatLng()));
+      L.marker(bounds.getCenter(), {
+        icon: L.divIcon({
+          className: "dwelling-cluster-wrap",
+          html: `<span class="dwelling-cluster">${escapeHtml(dwellingClusterLabel(markers))}</span>`,
+          iconAnchor: [35, 15]
+        })
+      }).on("click", () => map.fitBounds(bounds, { padding: [36, 36], maxZoom: 17 })).addTo(dwellingClusterLayer);
+    }
+  }
+
+  dwellingMoveToggle?.addEventListener("click", () => {
+    setDwellingMovementEnabled(!dwellingMovementEnabled);
+    setStatus(dwellingMovementEnabled ? "House movement unlocked. Dragging saves automatically." : "House movement locked.", false);
+  });
 
   function updateDwellingSaveAllState() {
     if (!dwellingSaveAllBtn) return;
@@ -598,6 +707,7 @@
     }
     clearDwellingDirty(marker);
     dwellingsLayer.removeLayer(marker);
+    allDwellingMarkers.delete(marker);
     if (id !== null) dwellingMarkersById.delete(id);
 
   }
@@ -716,7 +826,7 @@
 
     const marker = L.marker([lat, lng], {
       icon: dwellingMarkerIcon(displayDwellingNo(feature.properties || {}), feature.properties?.status, false),
-      draggable: canPersistEdits,
+      draggable: false,
       bubblingMouseEvents: true
     }).addTo(dwellingsLayer);
     marker.feature = {
@@ -729,6 +839,7 @@
       }
     };
     marker._temporary = temporary;
+    allDwellingMarkers.add(marker);
     if (temporary) {
       markDwellingDirty(marker);
     }
@@ -749,9 +860,9 @@
       marker.feature.geometry = { type: "Point", coordinates: [Number(ll.lng), Number(ll.lat)] };
       markDwellingDirty(marker);
       attachDwellingPopupHandlers(marker);
-      if (selectedDwellingMarker === marker) {
-        setStatus("Dwelling position changed. Press Save or Save All.", false);
-      }
+      setSyncStatus("Sending…", "pending");
+      setStatus("House position changed; saving automatically.", false);
+      void persistDwellingMarker(marker, { selectAfterSave: selectedDwellingMarker === marker, useMarkerProperties: true });
     });
 
     const markerId = getFeatureId(marker.feature);
@@ -777,10 +888,12 @@
   map.on("zoomend", redrawEditableZones);
   map.on("moveend", redrawEditableZones);
   map.on("viewreset", redrawEditableZones);
+  map.on("zoomend moveend", syncDwellingDisplay);
 
   for (const feature of dwellings) {
     createDwellingMarker(feature);
   }
+  setDwellingMovementEnabled(false);
   updateDwellingSaveAllState();
 
   if (editableLayer.getLayers().length > 0) {
@@ -804,6 +917,80 @@
     dwellingFields.status.value = "429";
     dwellingFields.notes.value = "";
   }
+
+  const offlineQueueKey = `cld-map-pending:${cld}`;
+
+  function readOfflineQueue() {
+    try {
+      const queue = JSON.parse(localStorage.getItem(offlineQueueKey) || "[]");
+      return Array.isArray(queue) ? queue : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function queueMutation(method, url, payload) {
+    const queue = readOfflineQueue();
+    const existing = queue.findIndex((item) => item.method === method && item.url === url);
+    const item = { method, url, payload, queuedAt: Date.now() };
+    if (existing >= 0 && method === "PUT") queue.splice(existing, 1, item);
+    else queue.push(item);
+    localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
+    setSyncStatus("Waiting to send", "pending");
+  }
+
+  async function flushOfflineQueue() {
+    if (!navigator.onLine) return;
+    const queue = readOfflineQueue();
+    if (queue.length === 0) return;
+    setSyncStatus(`Sending ${queue.length} change${queue.length === 1 ? "" : "s"}…`, "pending");
+    const remaining = [];
+    for (const item of queue) {
+      try {
+        await getJson(item.url, {
+          method: item.method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item.payload)
+        });
+      } catch {
+        remaining.push(item);
+      }
+    }
+    localStorage.setItem(offlineQueueKey, JSON.stringify(remaining));
+    setSyncStatus(remaining.length ? "Waiting to send" : "Saved", remaining.length ? "pending" : "saved");
+  }
+
+  async function refreshMapChanges() {
+    if (!navigator.onLine) return;
+    try {
+      const data = await getJson(`/api/cld/${cld}/features`);
+      const features = (data.features || []).filter((feature) => !isExcludedCuFeature(feature));
+      localStorage.setItem(`cld-map-cache:${cld}`, JSON.stringify({ savedAt: Date.now(), features }));
+      let added = 0;
+      for (const feature of features) {
+        if (!isDwellingFeature(feature.properties || {}, feature.geometry || {})) continue;
+        const id = getFeatureId(feature);
+        if (id !== null && dwellingMarkersById.has(id)) continue;
+        if (createDwellingMarker(feature)) added += 1;
+      }
+      if (added > 0) {
+        syncDwellingDisplay();
+        setStatus(`${added} new house${added === 1 ? "" : "s"} added from the map.`, false);
+      }
+    } catch {
+      // Keep the current map and retry at the next interval.
+    }
+  }
+
+  window.addEventListener("online", () => {
+    void flushOfflineQueue();
+    void refreshMapChanges();
+  });
+  void flushOfflineQueue();
+  window.setInterval(() => {
+    void flushOfflineQueue();
+    void refreshMapChanges();
+  }, 120000);
 
   function buildNewDwellingFeature(extraProperties = {}, preferredLatLng = null) {
     if (selectedDwellingMarker) {
@@ -890,6 +1077,7 @@
     }
 
     try {
+      setSyncStatus("Sending…", "pending");
       if (id === null) {
         const createRes = await getJson(`/api/cld/${cld}/features`, {
           method: "POST",
@@ -918,9 +1106,17 @@
         applyMarkerIcon(marker, false);
       }
       clearDwellingDirty(marker);
+      setSyncStatus("Saved", "saved");
       setStatus(`Dwelling ${extractDwellingNo(payload.properties || {})} saved`, false);
       return true;
     } catch (error) {
+      if (!navigator.onLine || error instanceof TypeError) {
+        const url = id === null ? `/api/cld/${cld}/features` : `/api/cld/${cld}/features/${id}`;
+        queueMutation(id === null ? "POST" : "PUT", url, payload);
+        setStatus("Saved on this device; it will be sent when the connection returns.", false);
+        return true;
+      }
+      setSyncStatus("Save failed", "error");
       setStatus(`Dwelling save failed: ${error.message}`, true);
       return false;
     }

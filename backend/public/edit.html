@@ -6,11 +6,11 @@
     <title>CLD Region Editor</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
     <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260720a" />
-    <link rel="stylesheet" href="/styles.css?v=20260721o" />
+    <link rel="stylesheet" href="/styles.css?v=20260725a" />
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260721o</div>
+    <div class="app-version-badge">v20260725a</div>
 
     <footer class="app-attribution">
       <a href="https://geoprod.statcan.gc.ca/camv1/index.html" target="_blank" rel="noreferrer">Publicly Available Map Source</a>.
@@ -25,9 +25,14 @@
 
     <section id="editor-panel">
       <div class="editor-route-head">
-        <div id="editor-route-label">Loading editor...</div>
+        <div>
+          <div id="editor-route-label">Loading editor...</div>
+          <div id="editor-sync-status" class="editor-sync-status" aria-live="polite">Saved</div>
+        </div>
         <div class="editor-route-links">
           <a id="editor-view-link" class="route-link-btn" href="#">Viewer</a>
+          <button id="dwelling-move-toggle" type="button" class="route-link-btn dwelling-move-toggle" aria-pressed="false">Unlock movement</button>
+          <a id="geometry-editor-link" class="route-link-btn" href="#" hidden>Edit geometry</a>
           <a class="route-link-btn" href="/">Find CLD</a>
         </div>
       </div>
@@ -35,7 +40,7 @@
       <button id="dwellings-collapse-btn" type="button" class="editor-collapse-btn" aria-expanded="false">Dwellings Editor</button>
       <div id="dwellings-form-wrap" class="collapsed">
         <div class="editor-help">
-          Tap a `CU` or `Block` to select it.
+          House movement is locked by default. When unlocked, drag a house and its position saves automatically.
         </div>
 
         <details class="editor-group" open>

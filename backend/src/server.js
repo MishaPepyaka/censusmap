@@ -1903,6 +1903,15 @@ app.get("/:cld/edit", requireAuth, requireClDAccess, async (req, res, next) => {
   return res.sendFile(path.join(publicDir, "edit.html"));
 });
 
+app.get("/:cld/edit_geometry", requireAdmin, async (req, res, next) => {
+  const cld = normalizeClD(req.params.cld);
+  if (!cld) return next();
+  if (!(await regionExists(cld))) {
+    return res.status(404).sendFile(path.join(publicDir, "landing.html"));
+  }
+  return res.sendFile(path.join(publicDir, "edit-geometry.html"));
+});
+
 app.use(express.static(publicDir));
 
 app.get("/:cld", requireAuth, requireClDAccess, async (req, res, next) => {

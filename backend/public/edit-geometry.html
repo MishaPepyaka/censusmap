@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CLD Geometry Editor</title>
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260725a" />
+    <link rel="stylesheet" href="/styles.css?v=20260725a" />
+  </head>
+  <body>
+    <main id="map"></main>
+    <section id="editor-panel">
+      <div class="editor-route-head">
+        <div>
+          <div id="geometry-route-label">Geometry editor</div>
+          <div id="geometry-status" class="editor-sync-status" aria-live="polite">Select a CU or block</div>
+        </div>
+        <div class="editor-route-links">
+          <a id="geometry-back-link" class="route-link-btn" href="#">Editor</a>
+          <a id="geometry-view-link" class="route-link-btn" href="#">Viewer</a>
+        </div>
+      </div>
+      <div class="editor-help">Drag the white points to correct a boundary. Saving writes only changed CU and Block polygons.</div>
+      <button id="geometry-save-btn" type="button" class="editor-save-btn" disabled>Save geometry</button>
+    </section>
+    <div id="user-widget-root"></div>
+    <script src="/vendor/leaflet/leaflet.js?v=20260725a"></script>
+    <script src="/app-auth.js?v=20260725a"></script>
+    <script src="/app-edit-geometry.js?v=20260725a"></script>
+  </body>
+</html>
