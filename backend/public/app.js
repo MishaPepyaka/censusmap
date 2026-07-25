@@ -20,7 +20,7 @@
   const dwellingByNo = new Map();
   const dwellingRecords = [];
   const dwellingMarkerByKey = new Map();
-  const OPENED_CASE_STATUSES = new Set(["400", "402", "701", "500", "312", "324"]);
+  const OPENED_CASE_STATUS = "429";
   let lastDwellingSearchValue = null;
   let dwellingSearchMatchIndex = 0;
 
@@ -335,7 +335,7 @@
     const records = dwellingRecords.length ? dwellingRecords : dwellings;
     const openedCases = records.filter((item) => {
       const status = "status" in item ? item.status : item?.properties?.status;
-      return OPENED_CASE_STATUSES.has(normalizeDwellingStatus(status));
+      return normalizeDwellingStatus(status) === OPENED_CASE_STATUS;
     }).length;
     const openedPercent = records.length ? ((openedCases / records.length) * 100).toFixed(1) : "0.0";
     routeSubtitle.textContent = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${openedCases} opened (${openedPercent}%)`;
@@ -653,8 +653,22 @@
 
   function dwellingClusterLabel(records) {
     const numbers = records.map((record) => Number(record.no)).filter(Number.isFinite).sort((a, b) => a - b);
-    if (numbers.length === 0) return `VR ${records.length}`;
-    return `VR ${numbers[0]}–${numbers[numbers.length - 1]}`;
+    if (numbers.length === 0) return String(records.length);
+    return numbers[0] === numbers[numbers.length - 1] ? String(numbers[0]) : `${numbers[0]}–${numbers[numbers.length - 1]}`;
+  }
+
+  function splitConsecutiveDwellingRecords(records) {
+    const ordered = [...records].sort((a, b) => Number(a.no) - Number(b.no));
+    return ordered.reduce((groups, record) => {
+      const lastGroup = groups[groups.length - 1];
+      const previous = lastGroup?.[lastGroup.length - 1];
+      if (previous && Number(record.no) === Number(previous.no) + 1) {
+        lastGroup.push(record);
+      } else {
+        groups.push([record]);
+      }
+      return groups;
+    }, []);
   }
 
   function renderDwellingClusters() {
@@ -666,19 +680,21 @@
       bucket.push(record);
       buckets.set(key, bucket);
     }
-    for (const records of buckets.values()) {
-      if (records.length === 1) {
-        createDwellingMarker(records[0], true);
-        continue;
+    for (const bucket of buckets.values()) {
+      for (const records of splitConsecutiveDwellingRecords(bucket)) {
+        if (records.length === 1) {
+          createDwellingMarker(records[0], true);
+          continue;
+        }
+        const bounds = L.latLngBounds(records.map((record) => [record.lat, record.lng]));
+        L.marker(bounds.getCenter(), {
+          icon: L.divIcon({
+            className: "dwelling-cluster-wrap",
+            html: `<span class="dwelling-cluster">${escapeHtml(dwellingClusterLabel(records))}</span>`,
+            iconAnchor: [35, 15]
+          })
+        }).on("click", () => map.fitBounds(bounds, { padding: [36, 36], maxZoom: 17 })).addTo(dwellingClusterLayer);
       }
-      const bounds = L.latLngBounds(records.map((record) => [record.lat, record.lng]));
-      L.marker(bounds.getCenter(), {
-        icon: L.divIcon({
-          className: "dwelling-cluster-wrap",
-          html: `<span class="dwelling-cluster">${escapeHtml(dwellingClusterLabel(records))}</span>`,
-          iconAnchor: [35, 15]
-        })
-      }).on("click", () => map.fitBounds(bounds, { padding: [36, 36], maxZoom: 17 })).addTo(dwellingClusterLayer);
     }
   }
 

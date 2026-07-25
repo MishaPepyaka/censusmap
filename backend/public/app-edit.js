@@ -449,8 +449,28 @@
       .map((marker) => Number(extractDwellingNo(marker.feature?.properties || {})))
       .filter(Number.isFinite)
       .sort((a, b) => a - b);
-    if (numbers.length === 0) return `VR ${markers.length}`;
-    return `VR ${numbers[0]}–${numbers[numbers.length - 1]}`;
+    if (numbers.length === 0) return String(markers.length);
+    return numbers[0] === numbers[numbers.length - 1] ? String(numbers[0]) : `${numbers[0]}–${numbers[numbers.length - 1]}`;
+  }
+
+  function splitConsecutiveDwellingMarkers(markers) {
+    const ordered = [...markers].sort((a, b) => {
+      const aNo = Number(extractDwellingNo(a.feature?.properties || {}));
+      const bNo = Number(extractDwellingNo(b.feature?.properties || {}));
+      return aNo - bNo;
+    });
+    return ordered.reduce((groups, marker) => {
+      const lastGroup = groups[groups.length - 1];
+      const previous = lastGroup?.[lastGroup.length - 1];
+      const previousNo = Number(extractDwellingNo(previous?.feature?.properties || {}));
+      const currentNo = Number(extractDwellingNo(marker.feature?.properties || {}));
+      if (previous && currentNo === previousNo + 1) {
+        lastGroup.push(marker);
+      } else {
+        groups.push([marker]);
+      }
+      return groups;
+    }, []);
   }
 
   function syncDwellingDisplay() {
@@ -471,21 +491,23 @@
       buckets.set(key, bucket);
     }
     if (!clusterMode) return;
-    for (const markers of buckets.values()) {
-      if (markers.length < 2) {
-        markers[0].setOpacity(1);
-        const element = markers[0].getElement?.();
-        if (element) element.style.pointerEvents = "";
-        continue;
+    for (const bucket of buckets.values()) {
+      for (const markers of splitConsecutiveDwellingMarkers(bucket)) {
+        if (markers.length < 2) {
+          markers[0].setOpacity(1);
+          const element = markers[0].getElement?.();
+          if (element) element.style.pointerEvents = "";
+          continue;
+        }
+        const bounds = L.latLngBounds(markers.map((marker) => marker.getLatLng()));
+        L.marker(bounds.getCenter(), {
+          icon: L.divIcon({
+            className: "dwelling-cluster-wrap",
+            html: `<span class="dwelling-cluster">${escapeHtml(dwellingClusterLabel(markers))}</span>`,
+            iconAnchor: [35, 15]
+          })
+        }).on("click", () => map.fitBounds(bounds, { padding: [36, 36], maxZoom: 17 })).addTo(dwellingClusterLayer);
       }
-      const bounds = L.latLngBounds(markers.map((marker) => marker.getLatLng()));
-      L.marker(bounds.getCenter(), {
-        icon: L.divIcon({
-          className: "dwelling-cluster-wrap",
-          html: `<span class="dwelling-cluster">${escapeHtml(dwellingClusterLabel(markers))}</span>`,
-          iconAnchor: [35, 15]
-        })
-      }).on("click", () => map.fitBounds(bounds, { padding: [36, 36], maxZoom: 17 })).addTo(dwellingClusterLayer);
     }
   }
 
