@@ -631,7 +631,6 @@
             })
           });
           record.properties.status = nextStatus;
-          marker.setPopupContent(buildDwellingPopupHtml(record));
           updateRouteSubtitle();
           setSearchStatus(`Status for ${record.code} saved.`, false);
         } catch (error) {
