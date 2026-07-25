@@ -357,6 +357,7 @@
 
   const badgeLayer = L.layerGroup().addTo(map);
   const dwellingsLayer = L.layerGroup().addTo(map);
+  const dwellingClusterLayer = L.layerGroup().addTo(map);
   polygonLayer.addData(buildFeatureCollection(zones));
 
   function selectZone(layer, popupLatLng = null) {
@@ -584,14 +585,52 @@
   }
 
   const DWELLINGS_MIN_VISIBLE_ZOOM = 10;
+  const DWELLINGS_INDIVIDUAL_ZOOM = 15;
+
+  function dwellingClusterLabel(records) {
+    const numbers = records.map((record) => Number(record.no)).filter(Number.isFinite).sort((a, b) => a - b);
+    if (numbers.length === 0) return `VR ${records.length}`;
+    return `VR ${numbers[0]}–${numbers[numbers.length - 1]}`;
+  }
+
+  function renderDwellingClusters() {
+    const buckets = new Map();
+    for (const record of dwellingRecords) {
+      const point = map.project([record.lat, record.lng], map.getZoom());
+      const key = `${Math.floor(point.x / 72)}:${Math.floor(point.y / 72)}`;
+      const bucket = buckets.get(key) || [];
+      bucket.push(record);
+      buckets.set(key, bucket);
+    }
+    for (const records of buckets.values()) {
+      if (records.length === 1) {
+        createDwellingMarker(records[0]);
+        continue;
+      }
+      const bounds = L.latLngBounds(records.map((record) => [record.lat, record.lng]));
+      L.marker(bounds.getCenter(), {
+        icon: L.divIcon({
+          className: "dwelling-cluster-wrap",
+          html: `<span class="dwelling-cluster">${escapeHtml(dwellingClusterLabel(records))}</span>`,
+          iconAnchor: [35, 15]
+        })
+      }).on("click", () => map.fitBounds(bounds, { padding: [36, 36], maxZoom: 17 })).addTo(dwellingClusterLayer);
+    }
+  }
 
   function renderVisibleDwellingMarkers() {
     const selectedKey = selectedDwellingMarker?.__dwellingInfo?.key || null;
     dwellingsLayer.clearLayers();
+    dwellingClusterLayer.clearLayers();
     dwellingMarkerByKey.clear();
     selectedDwellingMarker = null;
 
     if (map.getZoom() < DWELLINGS_MIN_VISIBLE_ZOOM) {
+      return;
+    }
+
+    if (map.getZoom() < DWELLINGS_INDIVIDUAL_ZOOM) {
+      renderDwellingClusters();
       return;
     }
 
