@@ -387,7 +387,7 @@ async function hasClDAccess(user, cld) {
         JOIN user_clds ucl ON ucl.user_id = rel.crew_leader_id
         WHERE rel.user_id = $1
       ) allowed
-      WHERE cld = $2
+      WHERE cld = $2 OR cld = '0000'
       LIMIT 1;
     `,
     [user.id, cld]
