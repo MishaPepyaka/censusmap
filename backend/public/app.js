@@ -338,7 +338,7 @@
       return normalizeDwellingStatus(status) !== OPENED_CASE_STATUS;
     }).length;
     const closedPercent = records.length ? ((closedCases / records.length) * 100).toFixed(1) : "0.0";
-    routeSubtitle.textContent = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${closedCases} closed (${closedPercent}%)`;
+    routeSubtitle.textContent = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${closedCases} completed (${closedPercent}%)`;
   }
   updateRouteSubtitle();
   const cuCodes = zones.map((feature) => extractCuCode(feature.properties || {}));
@@ -654,6 +654,11 @@
     return numbers[0] === numbers[numbers.length - 1] ? String(numbers[0]) : `${numbers[0]}–${numbers[numbers.length - 1]}`;
   }
 
+  function isCompletedDwellingCluster(records) {
+    const completedStatuses = new Set(["400", "402", "701", "312", "324"]);
+    return records.length > 0 && records.every((record) => completedStatuses.has(normalizeDwellingStatus(record.status)));
+  }
+
   function splitConsecutiveDwellingRecords(records) {
     const ordered = [...records].sort((a, b) => Number(a.no) - Number(b.no));
     return ordered.reduce((groups, record) => {
@@ -684,10 +689,11 @@
           continue;
         }
         const bounds = L.latLngBounds(records.map((record) => [record.lat, record.lng]));
+        const completed = isCompletedDwellingCluster(records);
         L.marker(bounds.getCenter(), {
           icon: L.divIcon({
             className: "dwelling-cluster-wrap",
-            html: `<span class="dwelling-cluster">${escapeHtml(dwellingClusterLabel(records))}</span>`,
+            html: `<span class="dwelling-cluster${completed ? " dwelling-cluster-completed" : ""}">${escapeHtml(dwellingClusterLabel(records))}</span>`,
             iconAnchor: [35, 15]
           })
         }).on("click", () => map.fitBounds(bounds, { padding: [36, 36], maxZoom: 17 })).addTo(dwellingClusterLayer);

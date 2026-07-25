@@ -302,7 +302,6 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 54px;
   min-height: 30px;
   padding: 0 8px;
   border: 2px solid #111827;
@@ -313,6 +312,10 @@ body {
   font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.dwelling-cluster.dwelling-cluster-completed {
+  background: #bef264;
 }
 
 .editor-status-error {

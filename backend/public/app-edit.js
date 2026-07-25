@@ -453,6 +453,13 @@
     return numbers[0] === numbers[numbers.length - 1] ? String(numbers[0]) : `${numbers[0]}–${numbers[numbers.length - 1]}`;
   }
 
+  function isCompletedDwellingCluster(markers) {
+    const completedStatuses = new Set(["400", "402", "701", "312", "324"]);
+    return markers.length > 0 && markers.every((marker) =>
+      completedStatuses.has(normalizeDwellingStatus(marker.feature?.properties?.status))
+    );
+  }
+
   function splitConsecutiveDwellingMarkers(markers) {
     const ordered = [...markers].sort((a, b) => {
       const aNo = Number(extractDwellingNo(a.feature?.properties || {}));
@@ -500,10 +507,11 @@
           continue;
         }
         const bounds = L.latLngBounds(markers.map((marker) => marker.getLatLng()));
+        const completed = isCompletedDwellingCluster(markers);
         L.marker(bounds.getCenter(), {
           icon: L.divIcon({
             className: "dwelling-cluster-wrap",
-            html: `<span class="dwelling-cluster">${escapeHtml(dwellingClusterLabel(markers))}</span>`,
+            html: `<span class="dwelling-cluster${completed ? " dwelling-cluster-completed" : ""}">${escapeHtml(dwellingClusterLabel(markers))}</span>`,
             iconAnchor: [35, 15]
           })
         }).on("click", () => map.fitBounds(bounds, { padding: [36, 36], maxZoom: 17 })).addTo(dwellingClusterLayer);
