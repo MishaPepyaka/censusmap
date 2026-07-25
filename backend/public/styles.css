@@ -287,7 +287,8 @@ body {
 
 .dwelling-move-toggle {
   cursor: pointer;
-  background: #bfdbfe;
+  background: rgba(30, 41, 59, 0.88);
+  color: #f8fafc;
 }
 
 .dwelling-move-toggle.is-enabled {
