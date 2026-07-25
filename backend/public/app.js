@@ -478,15 +478,20 @@
     return dwellingDotIcon(status, selected);
   }
 
+  function iconForDwellingMarker(marker, selected) {
+    const info = marker?.__dwellingInfo || {};
+    return marker?.__forceSquareIcon
+      ? dwellingSquareIcon(info.displayNo || "0", info.status, selected)
+      : getDwellingIconForZoom(info.displayNo || "0", info.status, selected);
+  }
+
   function setSelectedDwelling(marker) {
     if (selectedDwellingMarker && selectedDwellingMarker !== marker) {
-      const prevNo = selectedDwellingMarker?.__dwellingInfo?.displayNo || "0";
-      selectedDwellingMarker.setIcon(getDwellingIconForZoom(prevNo, selectedDwellingMarker.__dwellingInfo?.status, false));
+      selectedDwellingMarker.setIcon(iconForDwellingMarker(selectedDwellingMarker, false));
     }
     selectedDwellingMarker = marker;
     if (selectedDwellingMarker) {
-      const no = selectedDwellingMarker?.__dwellingInfo?.displayNo || "0";
-      selectedDwellingMarker.setIcon(getDwellingIconForZoom(no, selectedDwellingMarker.__dwellingInfo?.status, true));
+      selectedDwellingMarker.setIcon(iconForDwellingMarker(selectedDwellingMarker, true));
     }
   }
 
@@ -544,12 +549,15 @@
     };
   }
 
-  function createDwellingMarker(record) {
+  function createDwellingMarker(record, forceSquareIcon = false) {
     const marker = L.marker([record.lat, record.lng], {
-      icon: getDwellingIconForZoom(record.displayNo, record.status, false),
+      icon: forceSquareIcon
+        ? dwellingSquareIcon(record.displayNo, record.status, false)
+        : getDwellingIconForZoom(record.displayNo, record.status, false),
       keyboard: true
     }).addTo(dwellingsLayer);
     marker.__dwellingInfo = record;
+    marker.__forceSquareIcon = forceSquareIcon;
     marker.bindPopup(buildDwellingPopupHtml(record), { autoPan: true });
     marker.on("click", () => setSelectedDwelling(marker));
     marker.on("popupopen", (event) => {
@@ -604,7 +612,7 @@
     }
     for (const records of buckets.values()) {
       if (records.length === 1) {
-        createDwellingMarker(records[0]);
+        createDwellingMarker(records[0], true);
         continue;
       }
       const bounds = L.latLngBounds(records.map((record) => [record.lat, record.lng]));
