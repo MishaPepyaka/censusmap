@@ -368,12 +368,12 @@
     apple: `<img src="/map-action-icons/apple-maps.png" alt="">`
   };
 
-  function buildMapActionButtons(lat, lng, shareTitle) {
+  function buildMapActionButtons(lat, lng, shareTitle, inline = false) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
     const googleUrl = getGoogleMapsLink(lat, lng);
     const appleUrl = getAppleMapsLink(lat, lng);
     return [
-      `<div class="dw-popup-actions">`,
+      `<div class="dw-popup-actions${inline ? " dw-popup-actions-inline" : ""}">`,
       `<button type="button" class="dw-action-btn dw-action-icon dw-action-share" data-title="${escapeHtml(shareTitle)}" aria-label="Share page link" title="Share page link">${MAP_ACTION_ICONS.share}</button>`,
       `<a class="dw-action-btn dw-action-icon dw-action-google" href="${escapeHtml(googleUrl)}" target="_blank" rel="noreferrer" aria-label="Open in Google Maps" title="Open in Google Maps">${MAP_ACTION_ICONS.google}</a>`,
       `<a class="dw-action-btn dw-action-icon dw-action-apple" href="${escapeHtml(appleUrl)}" target="_blank" rel="noreferrer" aria-label="Open in Apple Maps" title="Open in Apple Maps">${MAP_ACTION_ICONS.apple}</a>`,
@@ -1095,8 +1095,10 @@
       `<div class="dw-popup-code">${escapeHtml(code)}</div>`,
       `<div class="dw-popup-meta">CU ${escapeHtml(cu)} · Block ${escapeHtml(block)} · Dwelling ${escapeHtml(displayNo)}</div>`,
       notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
+      `<div class="dw-popup-status-row">`,
       `<label class="dw-popup-status">Status <select class="dw-status-select">${statusOptions}</select></label>`,
-      buildMapActionButtons(lat, lng, `Dwelling ${code}`),
+      buildMapActionButtons(lat, lng, `Dwelling ${code}`, true),
+      `</div>`,
       `</div>`
     ].join("");
   }

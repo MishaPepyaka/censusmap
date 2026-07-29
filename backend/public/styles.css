@@ -764,12 +764,21 @@ body {
   white-space: pre-wrap;
 }
 
+.dw-popup-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .dw-popup-status {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 8px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   color: #334155;
   font-size: 12px;
   font-weight: 700;
@@ -789,6 +798,11 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.dw-popup-actions-inline {
+  flex: 0 0 auto;
+  margin-top: 0;
 }
 
 .dw-action-btn {
