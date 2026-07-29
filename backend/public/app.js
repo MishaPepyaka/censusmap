@@ -667,6 +667,16 @@
     school: "school.svg",
     other: "other.svg"
   };
+  const SPECIAL_LOCATIONS_MAX_VISIBLE_ZOOM = 15;
+
+  function syncSpecialLocationVisibility() {
+    const visible = map.getZoom() < SPECIAL_LOCATIONS_MAX_VISIBLE_ZOOM;
+    specialLocationsLayer.eachLayer((marker) => {
+      marker.setOpacity(visible ? 1 : 0);
+      const element = marker.getElement?.();
+      if (element) element.style.pointerEvents = visible ? "" : "none";
+    });
+  }
 
   function specialLocationIcon(type) {
     const asset = SPECIAL_LOCATION_ICONS[type] || SPECIAL_LOCATION_ICONS.other;
@@ -813,8 +823,10 @@
     registerDwellingRecord(record);
   }
   for (const feature of specialLocations) createSpecialLocationMarker(feature);
+  syncSpecialLocationVisibility();
   renderVisibleDwellingMarkers();
   map.on("zoomend", renderVisibleDwellingMarkers);
+  map.on("zoomend", syncSpecialLocationVisibility);
 
   function focusDwelling(record, setStatusText = true) {
     if (!record) return;
