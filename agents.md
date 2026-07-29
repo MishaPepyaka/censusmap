@@ -1,108 +1,77 @@
-# agents.md
+# Agent workflow
 
-## Project Summary
+## Project map
 
-`selfhost-map-cmp` is a self-hosted GIS application for viewing and editing Census regions and dwellings on a dedicated server.
+- Runtime and API: `backend/src/server.js`.
+- Viewer: `backend/public/app.js` and `index.html` (`/:cld`).
+- Editor: `backend/public/app-edit.js` and `edit.html` (`/:cld/edit`).
+- Geometry editor: `app-edit-geometry.js` (`/:cld/edit_geometry`, admin only).
+- Shared map UI: `backend/public/styles.css`.
+- Backlog: `docs/TASKS.md`.
 
-The current product direction is:
-- region access by `CLD` route,
-- file-based storage per `CLD`,
-- viewer and editor pages for each region,
-- touch-friendly editing on iPhone,
-- server-side image upload and compression for dwelling photos.
+Treat the running server code and the current database/API behaviour as the source of truth. Some older README/task text describes a previous file-store design and may be stale.
 
-## Target User Flows
+## Working a task
 
-### Landing
+1. Read the relevant UI, API, and existing behaviour before changing it. Check `git status` first; preserve unrelated user changes.
+2. Keep viewer and editor behaviour/styles aligned when a feature is visible on both pages.
+3. Prefer small, scoped changes. Use `apply_patch` for source edits.
+4. For a new UI feature, cover the full path: data load, rendering, interaction, persistence, error state, and cache-busting asset versions when JavaScript or CSS changes.
+5. Update `docs/TASKS.md` only when a task is actually completed or when the user asks to manage the backlog.
 
-- User opens `/`.
-- User enters a `CLD` number or an `SSID`.
-- App resolves the input to a `CLD`.
-- App redirects to `/<CLD_number>`.
+## Required checks
 
-### Viewer
+Before committing, run the checks that apply:
 
-- Route: `/<CLD_number>`.
-- Loads `CU`, `Block`, and `dwelling` data only for that `CLD`.
-- Shows map and dwelling information.
-- Exposes an `Edit` button that opens `/<CLD_number>/edit`.
-
-### Editor
-
-- Route: `/<CLD_number>/edit`.
-- Allows adding, editing, moving, and deleting dwellings.
-- Allows editing `CU` and `Block` boundaries.
-- Allows uploading photos for new or existing dwellings.
-- Must remain usable on iPhone Safari.
-
-## Target Data Model
-
-### Region scope
-
-Each `CLD` is a separate storage unit.
-
-Suggested folder:
-
-```text
-data/cld/<CLD_number>/
-  index.json
-  cu.geojson
-  blocks.geojson
-  dwellings.geojson
-  media/
+```bash
+node --check backend/src/server.js
+node --check backend/public/app.js
+node --check backend/public/app-edit.js
+git diff --check
+git status --short --branch
 ```
 
-### `index.json`
+Run additional focused tests when available. Do not claim browser or device testing unless it was actually performed.
 
-Should contain:
-- `cld`,
-- accepted `ssid` values,
-- display label,
-- timestamps/version metadata,
-- optional region-level settings.
+## Git workflow
 
-### `cu.geojson`
+1. Stage only files belonging to the task.
+2. Make one clear commit per completed change.
+3. Push the current commit to production main explicitly:
 
-- Geometry for the CU area(s) inside the selected `CLD`.
-- Editable in the region editor.
+```bash
+git push origin HEAD:main
+```
 
-### `blocks.geojson`
+The usual local branch may be named `deploy-work`; do not assume a local `main` branch exists. Confirm the working tree and upstream state after pushing.
 
-- Block polygons for the selected `CLD`.
-- Editable in the region editor.
+## Dedicated deployment
 
-### `dwellings.geojson`
+Production target:
 
-- Point features for dwellings in the selected `CLD`.
-- Includes dwelling attributes and media references.
+- SSH: `root@38.180.12.146`
+- Application directory: `/opt/censusmap`
+- Health endpoint: `http://127.0.0.1:8080/health`
 
-### media
+Deploy the checked-out commit with:
 
-- Store original and compressed photos.
-- Keep references stable so files survive editing sessions and backups.
+```bash
+./deploy/dedicated-server/deploy-current.sh
+```
 
-## Technical Direction
+Use the existing approved SSH credential mechanism; never place passwords, private keys, or tokens in tracked files, commits, logs, or documentation.
 
-- Keep the main runtime in `backend/`.
-- Prefer region-scoped APIs over one global feature feed.
-- Prefer file-based storage for the dedicated server deployment.
-- Add authentication before exposing editor routes publicly.
-- Add automatic backups for `data/cld/`.
+The deployment script currently probes `/health` without port `8080`, which can report a 404 even after a successful Docker rebuild. Always verify the real endpoint after deployment:
 
-## Important UX Requirements
+```bash
+ssh root@38.180.12.146 'curl -fsS http://127.0.0.1:8080/health'
+```
 
-- Root page must be simple and keyboard-friendly.
-- Viewer must load directly from a shareable `/<CLD_number>` URL.
-- Editor controls must be touch-friendly on iPhone.
-- `Add a dwelling` must support direct camera capture where the browser allows it.
-- Users must be able to upload photos without creating a new dwelling.
-- Geometry editing must support curved/boundary correction for `CU` and `Block` shapes.
+If a frontend feature was deployed, also verify that the expected static asset or text exists under `/opt/censusmap/backend/public/`. Report the actual deployment and health-check result concisely.
 
-## Current Documentation Sources
+## Safety
 
-- Architecture and structure: `README.md`, `docs/PROJECT_STRUCTURE.md`
-- Backlog: `docs/TASKS.md`
-
-## Implementation Note
-
-The repository still contains earlier prototype assets and release artifacts. New implementation work should treat the CLD-scoped dedicated-server design as the source of truth.
+- Never reset, discard, or overwrite unrelated work.
+- Avoid destructive commands and database mutations unless the task clearly requires them.
+- Keep credentials out of terminal output and final responses.
+- If a requirement changes data shape, permissions, or production behaviour beyond the request, inspect first and explain the impact before proceeding.
