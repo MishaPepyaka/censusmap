@@ -447,16 +447,18 @@
 
   const cuCodes = blocks.map((f) => extractCuCode(f.properties || {}));
   const colorMap = buildColorMap(cuCodes);
+  const BLOCK_FILL_FADE_ZOOM = 18;
 
   function styleForFeature(feature, selected) {
     const props = feature?.properties || {};
     const cu = extractCuCode(props);
     const color = colorMap.get(cu) || { stroke: "#15803d", fill: "#22c55e" };
     const isCu = getZoneKind(props) === "cu";
+    const fadeBlockFill = !isCu && map.getZoom() >= BLOCK_FILL_FADE_ZOOM;
     return {
       color: color.stroke,
       fillColor: color.fill,
-      fillOpacity: isCu ? (selected ? 0.18 : 0.08) : (selected ? 0.38 : 0.24),
+      fillOpacity: isCu ? (selected ? 0.18 : 0.08) : (fadeBlockFill ? (selected ? 0.16 : 0.07) : (selected ? 0.38 : 0.24)),
       weight: selected ? 4 : (isCu ? 3 : 2),
       dashArray: isCu ? "8 6" : null,
       opacity: 0.95
@@ -1279,6 +1281,7 @@
 
   function redrawEditableZones() {
     editableLayer.eachLayer((layer) => {
+      layer.setStyle?.(styleForFeature(layer.feature, layer === selectedPolygonLayer));
       layer.redraw?.();
     });
     if (badgesReady) rebuildBadges();

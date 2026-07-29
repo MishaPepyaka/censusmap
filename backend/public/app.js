@@ -385,6 +385,7 @@
   updateRouteSubtitle();
   const cuCodes = zones.map((feature) => extractCuCode(feature.properties || {}));
   const colorMap = buildColorMap(cuCodes);
+  const BLOCK_FILL_FADE_ZOOM = 18;
 
   function styleForFeature(feature, selected) {
     const props = feature?.properties || {};
@@ -392,10 +393,11 @@
     const color = colorMap.get(cu) || { stroke: "#15803d", fill: "#22c55e" };
     const zoneKind = getZoneKind(props);
     const isCu = zoneKind === "cu";
+    const fadeBlockFill = !isCu && map.getZoom() >= BLOCK_FILL_FADE_ZOOM;
     return {
       color: color.stroke,
       fillColor: color.fill,
-      fillOpacity: isCu ? (selected ? 0.18 : 0.08) : (selected ? 0.34 : 0.2),
+      fillOpacity: isCu ? (selected ? 0.18 : 0.08) : (fadeBlockFill ? (selected ? 0.16 : 0.07) : (selected ? 0.34 : 0.2)),
       weight: selected ? 4 : (isCu ? 3 : 2),
       dashArray: isCu ? "8 6" : null,
       opacity: 0.95
@@ -496,6 +498,7 @@
 
   function redrawPolygonLayers() {
     polygonLayer.eachLayer((layer) => {
+      layer.setStyle?.(styleForFeature(layer.feature, layer === selectedPolygonLayer));
       layer.redraw?.();
     });
     if (badgesReady) rebuildBadges();
