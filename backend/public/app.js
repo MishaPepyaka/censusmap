@@ -5,8 +5,17 @@
     window.location.replace("/");
     return;
   }
-  const requestedZoomValue = new URLSearchParams(window.location.search).get("zoom");
+  const mapUrlParams = new URLSearchParams(window.location.search);
+  const requestedZoomValue = mapUrlParams.get("zoom");
   const requestedZoom = requestedZoomValue === null ? null : Number(requestedZoomValue);
+  const requestedLatValue = mapUrlParams.get("lat");
+  const requestedLngValue = mapUrlParams.get("lng");
+  const requestedLat = requestedLatValue === null ? null : Number(requestedLatValue);
+  const requestedLng = requestedLngValue === null ? null : Number(requestedLngValue);
+  const hasRequestedCenter = Number.isFinite(requestedLat)
+    && Number.isFinite(requestedLng)
+    && requestedLat >= -90 && requestedLat <= 90
+    && requestedLng >= -180 && requestedLng <= 180;
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {
@@ -284,20 +293,28 @@
     fadeAnimation: true
   }).setView([56.0, -96.0], 4);
 
-  function syncZoomUrl() {
+  function syncMapUrl() {
+    const center = map.getCenter();
     const params = new URLSearchParams(window.location.search);
     params.set("zoom", String(Math.round(map.getZoom())));
+    params.set("lat", center.lat.toFixed(6));
+    params.set("lng", center.lng.toFixed(6));
     const query = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}?${query}${window.location.hash}`);
     if (editRouteLink) editRouteLink.href = `/${cld}/edit?${query}`;
   }
 
-  function applyRequestedZoom() {
-    if (Number.isFinite(requestedZoom)) map.setZoom(Math.max(0, Math.min(22, requestedZoom)));
-    syncZoomUrl();
+  function applyRequestedMapView() {
+    if (hasRequestedCenter) {
+      const zoom = Number.isFinite(requestedZoom) ? Math.max(0, Math.min(22, requestedZoom)) : map.getZoom();
+      map.setView([requestedLat, requestedLng], zoom);
+    } else if (Number.isFinite(requestedZoom)) {
+      map.setZoom(Math.max(0, Math.min(22, requestedZoom)));
+    }
+    syncMapUrl();
   }
 
-  map.on("zoomend", syncZoomUrl);
+  map.on("zoomend moveend", syncMapUrl);
   L.control.zoom({ position: "bottomright" }).addTo(map);
   const vectorRenderer = L.svg({ padding: 0.5 });
 
@@ -982,7 +999,7 @@
   } else {
     setSearchStatus("No geometry or dwellings found for this CLD.", true);
   }
-  applyRequestedZoom();
+  applyRequestedMapView();
 
   function upsertUserLocation(latlng, accuracyMeters) {
     lastKnownLatLng = latlng;
