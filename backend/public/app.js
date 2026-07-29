@@ -218,8 +218,25 @@
   async function getMapData() {
     try {
       const apiData = await getJson(`/api/cld/${cld}/features`);
+      const features = Array.isArray(apiData.features) ? apiData.features : [];
+      try {
+        await window.CldOfflineStore?.saveSnapshot(cld, features);
+      } catch {
+        // A storage quota error must not prevent the online map from loading.
+      }
       return { ...parseFeatures(apiData), loadError: "" };
     } catch (error) {
+      try {
+        const snapshot = await window.CldOfflineStore?.readSnapshot(cld);
+        if (Array.isArray(snapshot?.features)) {
+          return {
+            ...parseFeatures({ features: snapshot.features }),
+            loadError: "Offline: showing the last map saved on this device."
+          };
+        }
+      } catch {
+        // Fall through to the explicit no-snapshot state.
+      }
       return {
         zones: [],
         dwellings: [],

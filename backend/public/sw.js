@@ -1,4 +1,4 @@
-const SHELL_CACHE = "cmp-shell-v2";
+const SHELL_CACHE = "cmp-shell-v3";
 const SHELL_CACHE_PREFIX = "cmp-shell-";
 const APP_SHELL = [
   "/landing.html",
@@ -7,6 +7,7 @@ const APP_SHELL = [
   "/edit-geometry.html",
   "/styles.css",
   "/app-auth.js",
+  "/offline-data.js",
   "/app-landing.js",
   "/app.js",
   "/app-edit.js",
