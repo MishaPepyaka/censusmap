@@ -89,6 +89,7 @@
     if (!props || typeof props !== "object") return false;
     const group = String(props._group || "").trim().toLowerCase();
     if (!isPointGeometry(geometry)) return false;
+    if (group === "special_locations") return false;
     if (group === "dwellings" || group === "dwelling") return true;
     return hasDwellingIdentifier(props);
   }

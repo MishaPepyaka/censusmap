@@ -131,6 +131,10 @@
     if (!props || typeof props !== "object") return false;
     if (!isPointGeometry(geometry)) return false;
     const group = String(props._group || "").trim().toLowerCase();
+    // Special locations are stored with the dwelling features, and older ones
+    // may retain a dwelling number. Keep them out of the dwelling layer so the
+    // special-location marker receives the click and its editor controls.
+    if (group === "special_locations") return false;
     if (group === "dwellings" || group === "dwelling") return true;
     return hasDwellingIdentifier(props);
   }
