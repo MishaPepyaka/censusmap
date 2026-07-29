@@ -1,4 +1,4 @@
-const SHELL_CACHE = "cmp-shell-v3";
+const SHELL_CACHE = "cmp-shell-v4";
 const SHELL_CACHE_PREFIX = "cmp-shell-";
 const APP_SHELL = [
   "/landing.html",
