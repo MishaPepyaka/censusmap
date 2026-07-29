@@ -21,7 +21,9 @@
   let currentBaseMode = "satellite";
   let badgesReady = false;
   let dwellingMovementEnabled = false;
+  let specialLocationPlacementPending = false;
   const dwellingMarkersById = new Map();
+  const specialLocationMarkersById = new Map();
   const allDwellingMarkers = new Set();
 
   const statusEl = document.getElementById("editor-status");
@@ -48,6 +50,10 @@
   const bulkStatusSsidsInput = document.getElementById("bulk-status-ssids");
   const bulkStatusCodeInput = document.getElementById("bulk-status-code");
   const bulkStatusApplyBtn = document.getElementById("bulk-status-apply-btn");
+  const specialLocationTypeInput = document.getElementById("special-location-type");
+  const specialLocationNameInput = document.getElementById("special-location-name");
+  const specialLocationNotesInput = document.getElementById("special-location-notes");
+  const specialLocationPlaceBtn = document.getElementById("special-location-place-btn");
   const dwellingMoveToggle = document.getElementById("dwelling-move-toggle");
   const dirtyDwellingMarkers = new Set();
 
@@ -122,6 +128,10 @@
     const group = String(props._group || "").trim().toLowerCase();
     if (group === "dwellings" || group === "dwelling") return true;
     return hasDwellingIdentifier(props);
+  }
+
+  function isSpecialLocationFeature(props, geometry) {
+    return isPointGeometry(geometry) && String(props?._group || "").trim().toLowerCase() === "special_locations";
   }
 
   function extractCuCode(props) {
@@ -209,7 +219,8 @@
         source: "api",
         loadError: "",
         blocks: features.filter((f) => isZoneFeature(f)),
-        dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {}))
+        dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {})),
+        specialLocations: features.filter((f) => isSpecialLocationFeature(f.properties || {}, f.geometry || {}))
       };
     } catch (apiError) {
       try {
@@ -219,7 +230,8 @@
             source: "cache",
             loadError: "Offline: showing the last map saved on this device.",
             blocks: cached.features.filter((f) => isZoneFeature(f)),
-            dwellings: cached.features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {}))
+            dwellings: cached.features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {})),
+            specialLocations: cached.features.filter((f) => isSpecialLocationFeature(f.properties || {}, f.geometry || {}))
           };
         }
       } catch {
@@ -229,7 +241,8 @@
         source: "none",
         loadError: `Data load failed: API (${apiError.message})`,
         blocks: [],
-        dwellings: []
+        dwellings: [],
+        specialLocations: []
       };
     }
   }
@@ -396,6 +409,7 @@
   const data = await getMapData();
   const blocks = data.blocks;
   const dwellings = data.dwellings;
+  const specialLocations = data.specialLocations;
   const canPersistEdits = data.source === "api" || data.source === "cache";
 
   if (data.loadError) {
@@ -423,6 +437,7 @@
   const editableLayer = L.featureGroup().addTo(map);
   const badgeLayer = L.layerGroup().addTo(map);
   const dwellingsLayer = L.layerGroup().addTo(map);
+  const specialLocationsLayer = L.layerGroup().addTo(map);
   const dwellingClusterLayer = L.layerGroup().addTo(map);
   const blockLayers = [];
 
@@ -666,6 +681,76 @@
       iconAnchor: [12, 12]
     });
   }
+
+  const SPECIAL_LOCATION_ICONS = {
+    band_hall: "band_hall.svg", stadium: "stadium.svg", cafe: "local_cafe.svg", gas_station: "gas_station.svg",
+    arena: "stadium.svg", cultural: "cultural.svg", church: "church.svg", band_office: "band_office.svg",
+    health_office: "health_office.svg", radio_tower: "radio_tower.svg", school: "school.svg", other: "other.svg"
+  };
+
+  function specialLocationIcon(type) {
+    const asset = SPECIAL_LOCATION_ICONS[type] || SPECIAL_LOCATION_ICONS.other;
+    return L.divIcon({
+      className: "special-location-marker-wrap",
+      html: `<span class="special-location-marker"><img src="/place-icons/${asset}" alt=""></span>`,
+      iconSize: [30, 30], iconAnchor: [15, 15]
+    });
+  }
+
+  function createSpecialLocationMarker(feature) {
+    const coordinates = feature?.geometry?.coordinates || [];
+    const lng = Number(coordinates[0]);
+    const lat = Number(coordinates[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const props = feature.properties || {};
+    const name = String(props.name || props.label || "Special location").trim();
+    const type = String(props.locationType || "other").trim();
+    const notes = String(props.notes || "").trim();
+    const marker = L.marker([lat, lng], { icon: specialLocationIcon(type), keyboard: true }).addTo(specialLocationsLayer);
+    marker.bindPopup([
+      `<div class="dw-popup">`,
+      `<div class="dw-popup-code">${escapeHtml(name)}</div>`,
+      `<div class="dw-popup-meta">${escapeHtml(type.replaceAll("_", " "))}</div>`,
+      notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
+      `</div>`
+    ].join(""), { autoPan: true });
+    const id = getFeatureId(feature);
+    if (id !== null) specialLocationMarkersById.set(id, marker);
+    return marker;
+  }
+
+  async function placeSpecialLocation(latlng) {
+    const type = String(specialLocationTypeInput?.value || "other");
+    const name = String(specialLocationNameInput?.value || "").trim() || type.replaceAll("_", " ");
+    const notes = String(specialLocationNotesInput?.value || "").trim();
+    const feature = {
+      type: "Feature",
+      properties: { _group: "special_locations", locationType: type, name, label: name, notes },
+      geometry: { type: "Point", coordinates: [Number(latlng.lng), Number(latlng.lat)] }
+    };
+    try {
+      setSyncStatus("Sending…", "pending");
+      const created = await getJson(`/api/cld/${cld}/features`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(feature)
+      });
+      const id = Number(created.ids?.[0]);
+      if (Number.isFinite(id)) feature.id = id;
+      createSpecialLocationMarker(feature);
+      specialLocationPlacementPending = false;
+      specialLocationPlaceBtn.textContent = "Place on Map";
+      setSyncStatus("Saved", "saved");
+      setStatus(`${name} added.`, false);
+    } catch (error) {
+      setSyncStatus("Save failed", "error");
+      setStatus(`Could not add special location: ${error.message}`, true);
+    }
+  }
+
+  specialLocationPlaceBtn?.addEventListener("click", () => {
+    specialLocationPlacementPending = !specialLocationPlacementPending;
+    specialLocationPlaceBtn.textContent = specialLocationPlacementPending ? "Tap Map to Place" : "Place on Map";
+    setStatus(specialLocationPlacementPending ? "Tap the map to place this special location." : "Special location placement cancelled.", false);
+  });
 
   function buildDwellingPopupHtml(feature) {
     const props = feature?.properties || {};
@@ -960,6 +1045,9 @@
   for (const feature of dwellings) {
     createDwellingMarker(feature);
   }
+  for (const feature of specialLocations) {
+    createSpecialLocationMarker(feature);
+  }
   setDwellingMovementEnabled(false);
   updateDwellingSaveAllState();
 
@@ -1034,15 +1122,25 @@
       const features = (data.features || []).filter((feature) => !isExcludedCuFeature(feature));
       localStorage.setItem(`cld-map-cache:${cld}`, JSON.stringify({ savedAt: Date.now(), features }));
       let added = 0;
+      let addedSpecialLocations = 0;
       for (const feature of features) {
+        if (isSpecialLocationFeature(feature.properties || {}, feature.geometry || {})) {
+          const id = getFeatureId(feature);
+          if (id !== null && specialLocationMarkersById.has(id)) continue;
+          if (createSpecialLocationMarker(feature)) addedSpecialLocations += 1;
+          continue;
+        }
         if (!isDwellingFeature(feature.properties || {}, feature.geometry || {})) continue;
         const id = getFeatureId(feature);
         if (id !== null && dwellingMarkersById.has(id)) continue;
         if (createDwellingMarker(feature)) added += 1;
       }
-      if (added > 0) {
+      if (added > 0 || addedSpecialLocations > 0) {
         syncDwellingDisplay();
-        setStatus(`${added} new house${added === 1 ? "" : "s"} added from the map.`, false);
+        const messages = [];
+        if (added) messages.push(`${added} new house${added === 1 ? "" : "s"}`);
+        if (addedSpecialLocations) messages.push(`${addedSpecialLocations} special location${addedSpecialLocations === 1 ? "" : "s"}`);
+        setStatus(`${messages.join(" and ")} added from the map.`, false);
       }
     } catch {
       // Keep the current map and retry at the next interval.
@@ -1441,6 +1539,13 @@
 
   map.on("click", (event) => {
     const src = event?.originalEvent;
+    if (specialLocationPlacementPending) {
+      if (src?.target?.closest?.("#editor-panel, #map-ui")) return;
+      src?.preventDefault?.();
+      src?.stopPropagation?.();
+      void placeSpecialLocation(event.latlng);
+      return;
+    }
     if (!isAddDwellingPointerIntent(src)) return;
     if (src?.target?.closest?.("#editor-panel, #map-ui")) return;
     src.preventDefault?.();
@@ -1453,6 +1558,10 @@
     if (src?.target?.closest?.("#editor-panel, #map-ui")) return;
     src.preventDefault?.();
     src.stopPropagation?.();
+    if (specialLocationPlacementPending) {
+      void placeSpecialLocation(event.latlng);
+      return;
+    }
     void addDwellingAt(event.latlng, null);
   });
 

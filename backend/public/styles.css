@@ -671,6 +671,32 @@ body {
   transform: translate(-12px, -12px);
 }
 
+/* Special locations deliberately share the dwelling marker language: one white
+   card, one dark outline. The icon is the only extra visual signal. */
+.special-location-marker-wrap {
+  background: transparent;
+  border: 0;
+}
+
+.special-location-marker {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #111111;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transform: translate(-15px, -15px);
+}
+
+.special-location-marker img {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
 .dwelling-marker.selected {
   border-color: #111111;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.95);

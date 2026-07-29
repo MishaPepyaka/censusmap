@@ -93,6 +93,10 @@
     return hasDwellingIdentifier(props);
   }
 
+  function isSpecialLocationFeature(props, geometry) {
+    return isPointGeometry(geometry) && String(props?._group || "").trim().toLowerCase() === "special_locations";
+  }
+
   function extractCuCode(props) {
     if (isNonEmpty(props.CUID)) return String(props.CUID).trim();
     if (isNonEmpty(props.cu)) return String(props.cu).trim();
@@ -178,7 +182,8 @@
     const features = Array.isArray(payload?.features) ? payload.features : [];
     return {
       zones: features.filter((feature) => isZoneFeature(feature)),
-      dwellings: features.filter((feature) => isDwellingFeature(feature.properties || {}, feature.geometry || {}))
+      dwellings: features.filter((feature) => isDwellingFeature(feature.properties || {}, feature.geometry || {})),
+      specialLocations: features.filter((feature) => isSpecialLocationFeature(feature.properties || {}, feature.geometry || {}))
     };
   }
 
@@ -331,6 +336,7 @@
 
   const zones = mapData.zones;
   const dwellings = mapData.dwellings;
+  const specialLocations = mapData.specialLocations;
   function updateRouteSubtitle() {
     const records = dwellingRecords.length ? dwellingRecords : dwellings;
     const closedCases = records.filter((item) => {
@@ -367,6 +373,7 @@
 
   const badgeLayer = L.layerGroup().addTo(map);
   const dwellingsLayer = L.layerGroup().addTo(map);
+  const specialLocationsLayer = L.layerGroup().addTo(map);
   const dwellingClusterLayer = L.layerGroup().addTo(map);
   polygonLayer.addData(buildFeatureCollection(zones));
 
@@ -645,6 +652,51 @@
     return marker;
   }
 
+  const SPECIAL_LOCATION_ICONS = {
+    band_hall: "band_hall.svg",
+    stadium: "stadium.svg",
+    cafe: "local_cafe.svg",
+    gas_station: "gas_station.svg",
+    arena: "stadium.svg",
+    cultural: "cultural.svg",
+    church: "church.svg",
+    band_office: "band_office.svg",
+    health_office: "health_office.svg",
+    radio_tower: "radio_tower.svg",
+    school: "school.svg",
+    other: "other.svg"
+  };
+
+  function specialLocationIcon(type) {
+    const asset = SPECIAL_LOCATION_ICONS[type] || SPECIAL_LOCATION_ICONS.other;
+    return L.divIcon({
+      className: "special-location-marker-wrap",
+      html: `<span class="special-location-marker"><img src="/place-icons/${asset}" alt=""></span>`,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
+    });
+  }
+
+  function createSpecialLocationMarker(feature) {
+    const coordinates = feature?.geometry?.coordinates || [];
+    const lng = Number(coordinates[0]);
+    const lat = Number(coordinates[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const props = feature.properties || {};
+    const name = String(props.name || props.label || "Special location").trim();
+    const type = String(props.locationType || "other").trim();
+    const notes = String(props.notes || "").trim();
+    L.marker([lat, lng], { icon: specialLocationIcon(type), keyboard: true })
+      .bindPopup([
+        `<div class="dw-popup">`,
+        `<div class="dw-popup-code">${escapeHtml(name)}</div>`,
+        `<div class="dw-popup-meta">${escapeHtml(type.replaceAll("_", " "))}</div>`,
+        notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
+        `</div>`
+      ].join(""), { autoPan: true })
+      .addTo(specialLocationsLayer);
+  }
+
   const DWELLINGS_MIN_VISIBLE_ZOOM = 10;
   const DWELLINGS_INDIVIDUAL_ZOOM = 15;
 
@@ -732,6 +784,7 @@
     dwellingRecords.push(record);
     registerDwellingRecord(record);
   }
+  for (const feature of specialLocations) createSpecialLocationMarker(feature);
   renderVisibleDwellingMarkers();
   map.on("zoomend", renderVisibleDwellingMarkers);
 

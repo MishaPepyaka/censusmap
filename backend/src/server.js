@@ -143,6 +143,10 @@ function hasDwellingIdentifier(properties) {
   );
 }
 
+function isSpecialLocationFeature(feature) {
+  return String(feature?.properties?._group || "").trim().toLowerCase() === "special_locations";
+}
+
 function normalizeRegionFeature(feature) {
   const normalized = feature && typeof feature === "object" ? { ...feature } : {};
   normalized.type = "Feature";
@@ -924,7 +928,8 @@ function summarizeRegion(index, bundle) {
     counts: {
       cu: bundle.cu.length,
       blocks: bundle.blocks.length,
-      dwellings: bundle.dwellings.length
+      dwellings: bundle.dwellings.filter((feature) => !isSpecialLocationFeature(feature)).length,
+      specialLocations: bundle.dwellings.filter((feature) => isSpecialLocationFeature(feature)).length
     }
   };
 }
