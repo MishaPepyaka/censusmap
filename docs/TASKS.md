@@ -2,7 +2,7 @@
 
 ## Current Priority Backlog
 
-- [ ] T025 Add offline-ready app shell for viewer and editor
+- [x] T025 Add offline-ready app shell for viewer and editor
   - Register the service worker from both `/:cld` and `/:cld/edit`.
   - Cache the route shell, JavaScript, CSS, Leaflet, icons, and other same-origin static assets.
   - Serve a cached route shell for `/:cld` and `/:cld/edit` when the device is offline.

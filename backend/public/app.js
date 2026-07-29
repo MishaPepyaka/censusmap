@@ -6,6 +6,12 @@
     return;
   }
 
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // The viewer still works online if a browser disallows service workers.
+    });
+  }
+
   let selectedPolygonLayer = null;
   let selectedDwellingMarker = null;
   let userMarker = null;
@@ -210,8 +216,19 @@
   }
 
   async function getMapData() {
-    const apiData = await getJson(`/api/cld/${cld}/features`);
-    return parseFeatures(apiData);
+    try {
+      const apiData = await getJson(`/api/cld/${cld}/features`);
+      return { ...parseFeatures(apiData), loadError: "" };
+    } catch (error) {
+      return {
+        zones: [],
+        dwellings: [],
+        specialLocations: [],
+        loadError: navigator.onLine
+          ? `Map data could not be loaded: ${error.message}`
+          : "Offline: application shell is ready. Connect once to download this CLD for offline use."
+      };
+    }
   }
 
   function getZoneCenter(layer) {
@@ -345,7 +362,8 @@
       return normalizeDwellingStatus(status) !== OPENED_CASE_STATUS;
     }).length;
     const closedPercent = records.length ? ((closedCases / records.length) * 100).toFixed(1) : "0.0";
-    routeSubtitle.textContent = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${closedCases} completed (${closedPercent}%)`;
+    const summaryText = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${closedCases} completed (${closedPercent}%)`;
+    routeSubtitle.textContent = mapData.loadError ? `${summaryText} · ${mapData.loadError}` : summaryText;
   }
   updateRouteSubtitle();
   const cuCodes = zones.map((feature) => extractCuCode(feature.properties || {}));
