@@ -47,27 +47,17 @@ The usual local branch may be named `deploy-work`; do not assume a local `main` 
 
 ## Dedicated deployment
 
-Production target:
-
-- SSH: `root@38.180.12.146`
-- Application directory: `/opt/censusmap`
-- Health endpoint: `http://127.0.0.1:8080/health`
-
-Deploy the checked-out commit with:
+Deploy the checked-out commit with the local production credentials:
 
 ```bash
 ./deploy/dedicated-server/deploy-current.sh
 ```
 
-Use the existing approved SSH credential mechanism; never place passwords, private keys, or tokens in tracked files, commits, logs, or documentation.
+Server addresses, SSH commands, passwords, private keys, and deployment-specific options are local-only operational data. Keep them in an ignored file such as `SERVER_ACCESS.md`, `SSH_ACCESS.md`, or `DEPLOYMENT.local.md`; never put them in a tracked document, commit, terminal transcript, or final report.
 
-The deployment script currently probes `/health` without port `8080`, which can report a 404 even after a successful Docker rebuild. Always verify the real endpoint after deployment:
+If the environment has no usable SSH authentication, do not attempt to bypass it or ask for credentials in the repository. Push the verified commit to `origin/main`, state that production deployment is pending because SSH access is unavailable, and stop there. The code is still ready for an operator with production access to deploy.
 
-```bash
-ssh root@38.180.12.146 'curl -fsS http://127.0.0.1:8080/health'
-```
-
-If a frontend feature was deployed, also verify that the expected static asset or text exists under `/opt/censusmap/backend/public/`. Report the actual deployment and health-check result concisely.
+When deployment access is available, verify the real application health endpoint and the expected deployed asset or text. Report the actual result concisely; do not report a deployment as successful based only on a push.
 
 ## Safety
 
