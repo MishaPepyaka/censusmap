@@ -667,10 +667,10 @@
     school: "school.svg",
     other: "other.svg"
   };
-  const SPECIAL_LOCATIONS_MAX_VISIBLE_ZOOM = 15;
+  const SPECIAL_LOCATIONS_MIN_VISIBLE_ZOOM = 10;
 
   function syncSpecialLocationVisibility() {
-    const visible = map.getZoom() < SPECIAL_LOCATIONS_MAX_VISIBLE_ZOOM;
+    const visible = map.getZoom() >= SPECIAL_LOCATIONS_MIN_VISIBLE_ZOOM;
     specialLocationsLayer.eachLayer((marker) => {
       marker.setOpacity(visible ? 1 : 0);
       const element = marker.getElement?.();

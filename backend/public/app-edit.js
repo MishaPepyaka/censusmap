@@ -449,7 +449,7 @@
   const specialLocationsLayer = L.layerGroup().addTo(map);
   const dwellingClusterLayer = L.layerGroup().addTo(map);
   const blockLayers = [];
-  const SPECIAL_LOCATIONS_MAX_VISIBLE_ZOOM = 15;
+  const SPECIAL_LOCATIONS_MIN_VISIBLE_ZOOM = 10;
 
   async function showGeometryLinkForAdmin() {
     try {
@@ -516,7 +516,7 @@
   function syncDwellingDisplay() {
     if (!map || !dwellingClusterLayer) return;
     dwellingClusterLayer.clearLayers();
-    const specialLocationsVisible = map.getZoom() < SPECIAL_LOCATIONS_MAX_VISIBLE_ZOOM;
+    const specialLocationsVisible = map.getZoom() >= SPECIAL_LOCATIONS_MIN_VISIBLE_ZOOM;
     for (const marker of allSpecialLocationMarkers) {
       marker.setOpacity(specialLocationsVisible ? 1 : 0);
       const element = marker.getElement?.();
