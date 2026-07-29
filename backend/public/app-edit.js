@@ -5,6 +5,8 @@
     window.location.replace("/");
     return;
   }
+  const requestedZoomValue = new URLSearchParams(window.location.search).get("zoom");
+  const requestedZoom = requestedZoomValue === null ? null : Number(requestedZoomValue);
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {
@@ -356,6 +358,21 @@
     fadeAnimation: true,
     inertia: false
   }).setView([56.0, -96.0], 4);
+
+  function syncZoomUrl() {
+    const params = new URLSearchParams(window.location.search);
+    params.set("zoom", String(Math.round(map.getZoom())));
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}?${query}${window.location.hash}`);
+    if (editorViewLink) editorViewLink.href = `/${cld}?${query}`;
+  }
+
+  function applyRequestedZoom() {
+    if (Number.isFinite(requestedZoom)) map.setZoom(Math.max(0, Math.min(22, requestedZoom)));
+    syncZoomUrl();
+  }
+
+  map.on("zoomend", syncZoomUrl);
   const userLocationPane = map.createPane("user-location-pane");
   userLocationPane.style.zIndex = "650";
   userLocationPane.style.pointerEvents = "none";
@@ -447,18 +464,25 @@
 
   const cuCodes = blocks.map((f) => extractCuCode(f.properties || {}));
   const colorMap = buildColorMap(cuCodes);
+  const BLOCK_FILL_TRANSITION_ZOOM = 15;
   const BLOCK_FILL_FADE_ZOOM = 18;
+
+  function blockFillOpacity(selected) {
+    const zoom = map.getZoom();
+    if (zoom >= BLOCK_FILL_FADE_ZOOM) return selected ? 0.14 : 0.07;
+    if (zoom >= BLOCK_FILL_TRANSITION_ZOOM) return selected ? 0.24 : 0.16;
+    return selected ? 0.38 : 0.24;
+  }
 
   function styleForFeature(feature, selected) {
     const props = feature?.properties || {};
     const cu = extractCuCode(props);
     const color = colorMap.get(cu) || { stroke: "#15803d", fill: "#22c55e" };
     const isCu = getZoneKind(props) === "cu";
-    const fadeBlockFill = !isCu && map.getZoom() >= BLOCK_FILL_FADE_ZOOM;
     return {
       color: color.stroke,
       fillColor: color.fill,
-      fillOpacity: isCu ? (selected ? 0.18 : 0.08) : (fadeBlockFill ? (selected ? 0.16 : 0.07) : (selected ? 0.38 : 0.24)),
+      fillOpacity: isCu ? (selected ? 0.18 : 0.08) : blockFillOpacity(selected),
       weight: selected ? 4 : (isCu ? 3 : 2),
       dashArray: isCu ? "8 6" : null,
       opacity: 0.95
@@ -1313,6 +1337,7 @@
       true
     );
   }
+  applyRequestedZoom();
 
   function clearDwellingForm() {
     dwellingFields.cu.value = "";
