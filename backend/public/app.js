@@ -313,9 +313,20 @@
           await navigator.share({ title, text: title, url });
         } else if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(url);
+          let copyStatus = root.querySelector(".dw-popup-share-status");
+          if (!copyStatus) {
+            copyStatus = document.createElement("div");
+            copyStatus.className = "dw-popup-share-status";
+            copyStatus.setAttribute("role", "status");
+            copyStatus.setAttribute("aria-live", "polite");
+            (root.querySelector(".dw-popup") || root).append(copyStatus);
+          }
+          copyStatus.textContent = "✓ Link copied";
+          copyStatus.hidden = false;
           shareBtn.classList.add("is-copied");
           shareBtn.title = "Link copied";
           window.setTimeout(() => {
+            copyStatus.hidden = true;
             shareBtn.classList.remove("is-copied");
             shareBtn.title = "Share page link";
           }, 1200);
