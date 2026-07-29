@@ -2,6 +2,39 @@
 
 ## Current Priority Backlog
 
+- [ ] T025 Add offline-ready app shell for viewer and editor
+  - Register the service worker from both `/:cld` and `/:cld/edit`.
+  - Cache the route shell, JavaScript, CSS, Leaflet, icons, and other same-origin static assets.
+  - Serve a cached route shell for `/:cld` and `/:cld/edit` when the device is offline.
+  - Add a visible offline/last-updated status instead of a browser network error.
+
+- [ ] T026 Download and use an offline CLD snapshot
+  - Add a `Download for offline` action for the currently open CLD.
+  - Store the CU and Block geometry, dwellings, special locations, a snapshot timestamp, and data revision in IndexedDB.
+  - Use the local snapshot first on viewer and editor; refresh it in the background when online.
+  - Render the CLD area, dwellings, and special locations from the snapshot without a network connection.
+  - Build the dwelling/SSID search index from the local snapshot so search works offline.
+  - Provide clear states for not downloaded, downloading, ready offline, stale, and failed download.
+
+- [ ] T027 Make offline edits durable and safely synchronised
+  - Move the pending mutation queue from `localStorage` to IndexedDB.
+  - Apply an edit optimistically to the local CLD snapshot before queuing it.
+  - Retry queued writes on application open and when connectivity returns; do not depend only on Background Sync.
+  - Add server-side revision/conflict handling so a later remote edit is not silently overwritten.
+  - Show the number of pending changes and any sync conflict in the editor.
+
+- [ ] T028 Add an optional offline map background
+  - Keep CU/Block geometry and all markers usable without map tiles as the baseline offline map.
+  - Host a bounded, same-origin tile package for selected CLDs and zoom levels; do not rely on caching third-party Esri or OpenStreetMap tiles.
+  - Download/cache the selected tile package with the CLD snapshot and report its size before download.
+  - Allow users to remove a downloaded CLD and its tiles to reclaim storage.
+
+- [ ] T029 Validate offline mode on target browsers
+  - Test first download while online, reload in airplane mode, search, map navigation, and special-location visibility on iPhone Safari and Chromium.
+  - Test offline editing, restart before reconnecting, reconnect, successful sync, and conflict reporting.
+  - Request persistent browser storage where supported and display available/used storage.
+  - Document the supported offline scope, storage limits, and recovery steps.
+
 - [x] T018 Simplify dwelling details and add status colours
   - Keep only CU, Block, Dwelling No, Status, and Notes in the dwelling form.
   - Make Status a dropdown: 429, 400, 402, 701, 500, 312, 324; default to 429.
