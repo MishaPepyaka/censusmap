@@ -6,7 +6,7 @@
     <title>CLD Region Editor</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
     <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260720a" />
-    <link rel="stylesheet" href="/styles.css?v=20260728c" />
+    <link rel="stylesheet" href="/styles.css?v=20260728e" />
   </head>
   <body>
     <main id="map"></main>
@@ -78,7 +78,7 @@
           </div>
         </details>
 
-        <details class="editor-group">
+        <details id="special-location-group" class="editor-group">
           <summary class="editor-group-title">Special Locations</summary>
           <div class="editor-group-body">
             <label class="editor-label">Type
@@ -103,7 +103,11 @@
             <label class="editor-label">Notes
               <textarea id="special-location-notes" class="editor-input editor-textarea" rows="2" placeholder="Optional notes"></textarea>
             </label>
-            <button id="special-location-place-btn" type="button" class="editor-save-btn">Place on Map</button>
+            <div class="editor-row-actions">
+              <button id="special-location-place-btn" type="button" class="editor-save-btn">New</button>
+              <button id="special-location-save-btn" type="button" class="editor-save-btn">Save</button>
+              <button id="special-location-delete-btn" type="button" class="editor-danger-btn">Delete</button>
+            </div>
           </div>
         </details>
 

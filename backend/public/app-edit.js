@@ -22,9 +22,11 @@
   let badgesReady = false;
   let dwellingMovementEnabled = false;
   let specialLocationPlacementPending = false;
+  let selectedSpecialLocationMarker = null;
   const dwellingMarkersById = new Map();
   const specialLocationMarkersById = new Map();
   const allDwellingMarkers = new Set();
+  const allSpecialLocationMarkers = new Set();
 
   const statusEl = document.getElementById("editor-status");
   const editorRouteLabel = document.getElementById("editor-route-label");
@@ -53,7 +55,10 @@
   const specialLocationTypeInput = document.getElementById("special-location-type");
   const specialLocationNameInput = document.getElementById("special-location-name");
   const specialLocationNotesInput = document.getElementById("special-location-notes");
+  const specialLocationGroup = document.getElementById("special-location-group");
   const specialLocationPlaceBtn = document.getElementById("special-location-place-btn");
+  const specialLocationSaveBtn = document.getElementById("special-location-save-btn");
+  const specialLocationDeleteBtn = document.getElementById("special-location-delete-btn");
   const dwellingMoveToggle = document.getElementById("dwelling-move-toggle");
   const dirtyDwellingMarkers = new Set();
 
@@ -456,6 +461,9 @@
     for (const marker of allDwellingMarkers) {
       marker.dragging?.[dwellingMovementEnabled ? "enable" : "disable"]();
     }
+    for (const marker of allSpecialLocationMarkers) {
+      marker.dragging?.[dwellingMovementEnabled ? "enable" : "disable"]();
+    }
     dwellingMoveToggle?.classList.toggle("is-enabled", dwellingMovementEnabled);
     dwellingMoveToggle?.setAttribute("aria-pressed", String(dwellingMovementEnabled));
     if (dwellingMoveToggle) {
@@ -541,7 +549,7 @@
 
   dwellingMoveToggle?.addEventListener("click", () => {
     setDwellingMovementEnabled(!dwellingMovementEnabled);
-    setStatus(dwellingMovementEnabled ? "House movement unlocked. Dragging saves automatically." : "House movement locked.", false);
+    setStatus(dwellingMovementEnabled ? "House and special-location movement unlocked. Dragging saves automatically." : "House and special-location movement locked.", false);
   });
 
   function updateDwellingSaveAllState() {
@@ -688,27 +696,55 @@
     health_office: "health_office.svg", radio_tower: "radio_tower.svg", school: "school.svg", other: "other.svg"
   };
 
-  function specialLocationIcon(type) {
+  function specialLocationIcon(type, selected = false) {
     const asset = SPECIAL_LOCATION_ICONS[type] || SPECIAL_LOCATION_ICONS.other;
     return L.divIcon({
       className: "special-location-marker-wrap",
-      html: `<span class="special-location-marker"><img src="/place-icons/${asset}" alt=""></span>`,
+      html: `<span class="special-location-marker${selected ? " selected" : ""}"><img src="/place-icons/${asset}" alt=""></span>`,
       iconSize: [30, 30], iconAnchor: [15, 15]
     });
   }
 
-  function createSpecialLocationMarker(feature) {
+  function applySpecialLocationMarkerIcon(marker, selected) {
+    const type = String(marker?.feature?.properties?.locationType || "other").trim();
+    marker?.setIcon?.(specialLocationIcon(type, selected));
+  }
+
+  function clearSelectedSpecialLocation() {
+    if (!selectedSpecialLocationMarker) return;
+    applySpecialLocationMarkerIcon(selectedSpecialLocationMarker, false);
+    selectedSpecialLocationMarker = null;
+  }
+
+  function selectSpecialLocationMarker(marker) {
+    if (!marker) return;
+    if (selectedDwellingMarker) {
+      applyMarkerIcon(selectedDwellingMarker, false);
+      selectedDwellingMarker = null;
+    }
+    if (selectedSpecialLocationMarker && selectedSpecialLocationMarker !== marker) {
+      applySpecialLocationMarkerIcon(selectedSpecialLocationMarker, false);
+    }
+    selectedSpecialLocationMarker = marker;
+    applySpecialLocationMarkerIcon(marker, true);
+    if (specialLocationGroup) specialLocationGroup.open = true;
+    const props = marker.feature?.properties || {};
+    specialLocationTypeInput.value = String(props.locationType || "other");
+    specialLocationNameInput.value = String(props.name || props.label || "");
+    specialLocationNotesInput.value = String(props.notes || "");
+    setStatus(`${specialLocationNameInput.value || "Special location"} selected`, false);
+  }
+
+  function buildSpecialLocationPopupHtml(feature) {
+    const props = feature?.properties || {};
     const coordinates = feature?.geometry?.coordinates || [];
     const lng = Number(coordinates[0]);
     const lat = Number(coordinates[1]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const props = feature.properties || {};
     const name = String(props.name || props.label || "Special location").trim();
     const type = String(props.locationType || "other").trim();
     const notes = String(props.notes || "").trim();
     const gmapsUrl = getGoogleMapsLink(lat, lng);
-    const marker = L.marker([lat, lng], { icon: specialLocationIcon(type), keyboard: true }).addTo(specialLocationsLayer);
-    marker.bindPopup([
+    return [
       `<div class="dw-popup">`,
       `<div class="dw-popup-code">${escapeHtml(name)}</div>`,
       `<div class="dw-popup-meta">${escapeHtml(type.replaceAll("_", " "))}</div>`,
@@ -718,7 +754,12 @@
       `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>`,
       `</div>`,
       `</div>`
-    ].join(""), { autoPan: true });
+    ].join("");
+  }
+
+  function attachSpecialLocationPopupHandlers(marker) {
+    marker.bindPopup(buildSpecialLocationPopupHtml(marker.feature), { autoPan: true });
+    marker.off("popupopen");
     marker.on("popupopen", (event) => {
       const shareBtn = event?.popup?.getElement?.()?.querySelector(".special-location-share");
       shareBtn?.addEventListener("click", async (shareEvent) => {
@@ -741,6 +782,31 @@
         }
       }, { once: true });
     });
+  }
+
+  function createSpecialLocationMarker(feature) {
+    const coordinates = feature?.geometry?.coordinates || [];
+    const lng = Number(coordinates[0]);
+    const lat = Number(coordinates[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const marker = L.marker([lat, lng], { icon: specialLocationIcon(feature?.properties?.locationType), keyboard: true, draggable: dwellingMovementEnabled }).addTo(specialLocationsLayer);
+    marker.feature = {
+      type: "Feature",
+      id: feature.id ?? null,
+      properties: { ...(feature.properties || {}) },
+      geometry: { type: "Point", coordinates: [lng, lat] }
+    };
+    allSpecialLocationMarkers.add(marker);
+    marker.on("click", () => selectSpecialLocationMarker(marker));
+    marker.on("dragend", () => {
+      const ll = marker.getLatLng();
+      marker.feature.geometry = { type: "Point", coordinates: [Number(ll.lng), Number(ll.lat)] };
+      attachSpecialLocationPopupHandlers(marker);
+      setSyncStatus("Sending…", "pending");
+      setStatus("Special-location position changed; saving automatically.", false);
+      void persistSpecialLocationMarker(marker, { useMarkerProperties: true });
+    });
+    attachSpecialLocationPopupHandlers(marker);
     const id = getFeatureId(feature);
     if (id !== null) specialLocationMarkersById.set(id, marker);
     return marker;
@@ -762,9 +828,10 @@
       });
       const id = Number(created.ids?.[0]);
       if (Number.isFinite(id)) feature.id = id;
-      createSpecialLocationMarker(feature);
+      const marker = createSpecialLocationMarker(feature);
+      selectSpecialLocationMarker(marker);
       specialLocationPlacementPending = false;
-      specialLocationPlaceBtn.textContent = "Place on Map";
+      specialLocationPlaceBtn.textContent = "New";
       setSyncStatus("Saved", "saved");
       setStatus(`${name} added.`, false);
     } catch (error) {
@@ -774,9 +841,129 @@
   }
 
   specialLocationPlaceBtn?.addEventListener("click", () => {
+    if (selectedDwellingMarker) {
+      applyMarkerIcon(selectedDwellingMarker, false);
+      selectedDwellingMarker = null;
+    }
+    clearSelectedSpecialLocation();
+    if (specialLocationGroup) specialLocationGroup.open = true;
     specialLocationPlacementPending = !specialLocationPlacementPending;
-    specialLocationPlaceBtn.textContent = specialLocationPlacementPending ? "Tap Map to Place" : "Place on Map";
+    specialLocationPlaceBtn.textContent = specialLocationPlacementPending ? "Tap Map to Place" : "New";
     setStatus(specialLocationPlacementPending ? "Tap the map to place this special location." : "Special location placement cancelled.", false);
+  });
+
+  function specialLocationFeatureFromForm(existingId, latlng, originalProperties = {}) {
+    const type = String(specialLocationTypeInput?.value || "other").trim();
+    const name = String(specialLocationNameInput?.value || "").trim() || type.replaceAll("_", " ");
+    return {
+      type: "Feature",
+      ...(existingId !== null ? { id: existingId } : {}),
+      properties: {
+        ...(originalProperties || {}),
+        _group: "special_locations",
+        locationType: type,
+        name,
+        label: name,
+        notes: String(specialLocationNotesInput?.value || "").trim()
+      },
+      geometry: { type: "Point", coordinates: [Number(latlng.lng), Number(latlng.lat)] }
+    };
+  }
+
+  function specialLocationFeatureFromMarkerProperties(existingId, latlng, originalProperties = {}) {
+    const props = { ...(originalProperties || {}) };
+    const type = String(props.locationType || "other").trim();
+    const name = String(props.name || props.label || type.replaceAll("_", " ")).trim();
+    return {
+      type: "Feature",
+      ...(existingId !== null ? { id: existingId } : {}),
+      properties: { ...props, _group: "special_locations", locationType: type, name, label: String(props.label || name).trim() },
+      geometry: { type: "Point", coordinates: [Number(latlng.lng), Number(latlng.lat)] }
+    };
+  }
+
+  async function persistSpecialLocationMarker(marker, { useMarkerProperties = false } = {}) {
+    if (!canPersistEdits) {
+      setStatus("Cannot save special location: API source unavailable.", true);
+      return false;
+    }
+    if (!marker) {
+      setStatus("Select a special location first, or press New.", true);
+      return false;
+    }
+    const id = getFeatureId(marker.feature);
+    const payload = useMarkerProperties
+      ? specialLocationFeatureFromMarkerProperties(id, marker.getLatLng(), marker.feature?.properties)
+      : specialLocationFeatureFromForm(id, marker.getLatLng(), marker.feature?.properties);
+    try {
+      setSyncStatus("Sending…", "pending");
+      if (id === null) {
+        const created = await getJson(`/api/cld/${cld}/features`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+        });
+        const createdId = Number(created.ids?.[0]);
+        if (!Number.isFinite(createdId)) throw new Error("Create did not return new id");
+        payload.id = createdId;
+        specialLocationMarkersById.set(createdId, marker);
+      } else {
+        await getJson(`/api/cld/${cld}/features/${id}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+        });
+      }
+      marker.feature = payload;
+      applySpecialLocationMarkerIcon(marker, marker === selectedSpecialLocationMarker);
+      attachSpecialLocationPopupHandlers(marker);
+      setSyncStatus("Saved", "saved");
+      setStatus(`${payload.properties.name} saved`, false);
+      return true;
+    } catch (error) {
+      setSyncStatus("Save failed", "error");
+      setStatus(`Special-location save failed: ${error.message}`, true);
+      return false;
+    }
+  }
+
+  function removeSpecialLocationMarkerLocally(marker) {
+    if (!marker) return;
+    const id = getFeatureId(marker.feature);
+    if (selectedSpecialLocationMarker === marker) {
+      selectedSpecialLocationMarker = null;
+      specialLocationNameInput.value = "";
+      specialLocationNotesInput.value = "";
+      specialLocationTypeInput.value = "other";
+    }
+    specialLocationsLayer.removeLayer(marker);
+    allSpecialLocationMarkers.delete(marker);
+    if (id !== null) specialLocationMarkersById.delete(id);
+  }
+
+  specialLocationSaveBtn?.addEventListener("click", () => {
+    void persistSpecialLocationMarker(selectedSpecialLocationMarker);
+  });
+
+  specialLocationDeleteBtn?.addEventListener("click", async () => {
+    const marker = selectedSpecialLocationMarker;
+    if (!marker) {
+      setStatus("Select a special location to delete.", true);
+      return;
+    }
+    const id = getFeatureId(marker.feature);
+    if (id === null) {
+      removeSpecialLocationMarkerLocally(marker);
+      setStatus("Unsaved special location removed", false);
+      return;
+    }
+    if (!canPersistEdits) {
+      setStatus("Cannot delete special location: API source unavailable.", true);
+      return;
+    }
+    try {
+      await getJson(`/api/cld/${cld}/features/${id}`, { method: "DELETE" });
+      removeSpecialLocationMarkerLocally(marker);
+      setStatus("Special location deleted", false);
+    } catch (error) {
+      setStatus(`Special-location delete failed: ${error.message}`, true);
+    }
   });
 
   function buildDwellingPopupHtml(feature) {
@@ -1024,6 +1211,7 @@
     }
 
     marker.on("click", () => {
+      clearSelectedSpecialLocation();
       if (selectedDwellingMarker && selectedDwellingMarker !== marker) {
         applyMarkerIcon(selectedDwellingMarker, false);
       }
@@ -1567,7 +1755,7 @@
   map.on("click", (event) => {
     const src = event?.originalEvent;
     if (specialLocationPlacementPending) {
-      if (src?.target?.closest?.("#editor-panel, #map-ui")) return;
+      if (src?.target?.closest?.("#editor-panel, #map-ui, .leaflet-marker-icon, .leaflet-popup")) return;
       src?.preventDefault?.();
       src?.stopPropagation?.();
       void placeSpecialLocation(event.latlng);
