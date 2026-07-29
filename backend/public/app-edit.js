@@ -45,6 +45,9 @@
   const dwellingDeleteBtn = document.getElementById("dwelling-delete-btn");
   const dwellingExportBtn = document.getElementById("dwelling-export-btn");
   const copyOpenedSsidsBtn = document.getElementById("copy-opened-ssids-btn");
+  const bulkStatusSsidsInput = document.getElementById("bulk-status-ssids");
+  const bulkStatusCodeInput = document.getElementById("bulk-status-code");
+  const bulkStatusApplyBtn = document.getElementById("bulk-status-apply-btn");
   const dwellingMoveToggle = document.getElementById("dwelling-move-toggle");
   const dirtyDwellingMarkers = new Set();
 
@@ -1267,6 +1270,64 @@
   dwellingExportBtn?.addEventListener("click", exportDwellingsXls);
   copyOpenedSsidsBtn?.addEventListener("click", () => {
     void copyOpenedSsids();
+  });
+
+  async function applyBulkStatusChange() {
+    const requestedSsids = new Set(
+      String(bulkStatusSsidsInput?.value || "")
+        .split(/\r?\n/)
+        .map((value) => value.replace(/\D/g, ""))
+        .filter(Boolean)
+    );
+    const nextStatus = normalizeDwellingStatus(bulkStatusCodeInput?.value);
+    if (requestedSsids.size === 0) {
+      setStatus("Paste one SSID per line first.", true);
+      return;
+    }
+
+    const markersBySsid = new Map(
+      [...allDwellingMarkers].map((marker) => {
+        const props = marker.feature?.properties || {};
+        return [`${extractCuCode(props)}${extractDwellingNo(props)}`, marker];
+      })
+    );
+    const markers = [];
+    const missing = [];
+    for (const ssid of requestedSsids) {
+      const marker = markersBySsid.get(ssid);
+      if (marker) markers.push(marker);
+      else missing.push(ssid);
+    }
+    if (markers.length === 0) {
+      setStatus("No SSIDs from the list were found in this CLD.", true);
+      return;
+    }
+
+    bulkStatusApplyBtn.disabled = true;
+    setStatus(`Applying status ${nextStatus} to ${markers.length} dwelling(s)…`, false);
+    let saved = 0;
+    let failed = 0;
+    for (const marker of markers) {
+      marker.feature.properties.status = nextStatus;
+      applyMarkerIcon(marker, marker === selectedDwellingMarker);
+      markDwellingDirty(marker);
+      const didSave = await persistDwellingMarker(marker, {
+        selectAfterSave: marker === selectedDwellingMarker,
+        useMarkerProperties: true
+      });
+      if (didSave) saved += 1;
+      else failed += 1;
+    }
+    bulkStatusApplyBtn.disabled = false;
+    if (failed > 0) {
+      setStatus(`Bulk status finished: ${saved} saved, ${failed} failed${missing.length ? `, ${missing.length} SSID(s) not found` : ""}.`, true);
+      return;
+    }
+    setStatus(`Bulk status saved for ${saved} dwelling(s)${missing.length ? `; ${missing.length} SSID(s) not found` : ""}.`, false);
+  }
+
+  bulkStatusApplyBtn?.addEventListener("click", () => {
+    void applyBulkStatusChange();
   });
 
   async function saveAllDirtyDwellings() {

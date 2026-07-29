@@ -10,7 +10,7 @@
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260728a</div>
+    <div class="app-version-badge">v20260728b</div>
 
     <footer class="app-attribution">
       <a href="https://geoprod.statcan.gc.ca/camv1/index.html" target="_blank" rel="noreferrer">Publicly Available Map Source</a>.
@@ -87,6 +87,21 @@
               <button id="dwelling-export-btn" type="button" class="editor-save-btn">Export XLS</button>
               <button id="copy-opened-ssids-btn" type="button" class="editor-save-btn">Copy Opened SSIDs</button>
             </div>
+            <label class="editor-label">Bulk status SSIDs
+              <textarea id="bulk-status-ssids" class="editor-input editor-textarea" rows="4" placeholder="One SSID per line"></textarea>
+            </label>
+            <label class="editor-label">New status
+              <select id="bulk-status-code" class="editor-input">
+                <option value="429">429</option>
+                <option value="400">400</option>
+                <option value="402">402</option>
+                <option value="701">701</option>
+                <option value="500">500</option>
+                <option value="312">312</option>
+                <option value="324">324</option>
+              </select>
+            </label>
+            <button id="bulk-status-apply-btn" type="button" class="editor-save-btn">Apply Status to List</button>
           </div>
         </details>
 
@@ -95,6 +110,6 @@
 
     <script src="/vendor/leaflet/leaflet.js?v=20260721a"></script>
     <script src="/app-auth.js?v=20260721n"></script>
-    <script src="/app-edit.js?v=20260728a"></script>
+    <script src="/app-edit.js?v=20260728b"></script>
   </body>
 </html>
