@@ -278,6 +278,56 @@
     return `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
   }
 
+  function getAppleMapsLink(lat, lng) {
+    return `https://maps.apple.com/?ll=${lat.toFixed(6)},${lng.toFixed(6)}&q=${lat.toFixed(6)},${lng.toFixed(6)}`;
+  }
+
+  const MAP_ACTION_ICONS = {
+    share: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M13 7l5 5-5 5M6 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"/></svg>`,
+    google: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#34a853" d="M12 2a7 7 0 0 0-6 10.6L12 22l3-4.8V10h-3z"/><path fill="#4285f4" d="M12 2v8h3v7.2l3-4.6A7 7 0 0 0 12 2z"/><circle cx="12" cy="9" r="2.3" fill="#fbbc04"/></svg>`,
+    apple: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#d9f3ff" d="M3 3h18v18H3z"/><path fill="#57b7ed" d="M4 16c4-4 5-7 10-11M9 20c3-5 6-7 11-9" stroke="#1677c8" stroke-width="2"/><path fill="#89c95b" d="M3 5h7v5H3zM14 14h7v7h-7z"/><path fill="#f8ce55" d="M10 3h4v18h-4z"/><circle cx="12" cy="12" r="2.5" fill="#e94f4f"/></svg>`
+  };
+
+  function buildMapActionButtons(lat, lng, shareTitle) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
+    const googleUrl = getGoogleMapsLink(lat, lng);
+    const appleUrl = getAppleMapsLink(lat, lng);
+    return [
+      `<div class="dw-popup-actions">`,
+      `<button type="button" class="dw-action-btn dw-action-icon dw-action-share" data-title="${escapeHtml(shareTitle)}" aria-label="Share page link" title="Share page link">${MAP_ACTION_ICONS.share}</button>`,
+      `<a class="dw-action-btn dw-action-icon dw-action-google" href="${escapeHtml(googleUrl)}" target="_blank" rel="noreferrer" aria-label="Open in Google Maps" title="Open in Google Maps">${MAP_ACTION_ICONS.google}</a>`,
+      `<a class="dw-action-btn dw-action-icon dw-action-apple" href="${escapeHtml(appleUrl)}" target="_blank" rel="noreferrer" aria-label="Open in Apple Maps" title="Open in Apple Maps">${MAP_ACTION_ICONS.apple}</a>`,
+      `</div>`
+    ].join("");
+  }
+
+  function attachMapActionHandlers(root) {
+    const shareBtn = root?.querySelector(".dw-action-share");
+    if (!shareBtn) return;
+    shareBtn.addEventListener("click", async (shareEvent) => {
+      shareEvent.preventDefault();
+      const url = window.location.href;
+      const title = shareBtn.getAttribute("data-title") || "Map location";
+      try {
+        if (navigator.share) {
+          await navigator.share({ title, text: title, url });
+        } else if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(url);
+          shareBtn.classList.add("is-copied");
+          shareBtn.title = "Link copied";
+          window.setTimeout(() => {
+            shareBtn.classList.remove("is-copied");
+            shareBtn.title = "Share page link";
+          }, 1200);
+        } else {
+          window.prompt("Copy link:", url);
+        }
+      } catch {
+        // Ignore share cancellation.
+      }
+    }, { once: true });
+  }
+
   function setSearchStatus(message, isError = false) {
     if (!searchStatus) return;
     searchStatus.textContent = message || "";
@@ -468,16 +518,12 @@
     const zoneKind = getZoneKind(props) === "cu" ? "CU" : "Block";
     const details = block ? `${zoneKind}: ${escapeHtml(block)}` : zoneKind;
     const point = popupLatLng || getZoneCenter(layer);
-    const gmapsUrl = getGoogleMapsLink(point.lat, point.lng);
     const shareTitle = block ? `Block ${cu}/${block}` : `CU ${cu}`;
     layer.bindPopup([
       `<div class="dw-popup">`,
       `<div class="dw-popup-code">${escapeHtml(shareTitle)}</div>`,
       `<div class="dw-popup-meta">CU: ${escapeHtml(cu)}<br>${details}</div>`,
-      `<div class="dw-popup-actions">`,
-      `<button type="button" class="dw-action-btn dw-action-share" data-code="${escapeHtml(shareTitle)}" data-url="${escapeHtml(gmapsUrl)}">Share Link</button>`,
-      `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>`,
-      `</div>`,
+      buildMapActionButtons(point.lat, point.lng, shareTitle),
       `</div>`
     ].join(""), { autoPan: false });
     if (popupLatLng) layer.openPopup(popupLatLng);
@@ -509,29 +555,7 @@
     layer.on("tap", (event) => selectZone(layer, event?.latlng || null));
     layer.on("popupopen", (event) => {
       const root = event?.popup?.getElement?.();
-      const shareBtn = root?.querySelector(".dw-action-share");
-      if (!shareBtn) return;
-      shareBtn.addEventListener("click", async (shareEvent) => {
-        shareEvent.preventDefault();
-        const url = shareBtn.getAttribute("data-url") || "";
-        const code = shareBtn.getAttribute("data-code") || "Map location";
-        try {
-          if (navigator.share) {
-            await navigator.share({ title: code, text: code, url });
-          } else if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(url);
-            const old = shareBtn.textContent;
-            shareBtn.textContent = "Copied";
-            window.setTimeout(() => {
-              shareBtn.textContent = old;
-            }, 1200);
-          } else {
-            window.prompt("Copy link:", url);
-          }
-        } catch {
-          // Ignore share cancellation.
-        }
-      }, { once: true });
+      attachMapActionHandlers(root);
     });
   });
   badgesReady = true;
@@ -603,10 +627,7 @@
       `<div class="dw-popup-meta">CU ${escapeHtml(info.cu)} · Block ${escapeHtml(info.block)} · Dwelling ${escapeHtml(info.displayNo)}</div>`,
       notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
       `<label class="dw-popup-status">Status <select class="dw-status-select" data-key="${escapeHtml(info.key)}">${statusOptions}</select></label>`,
-      `<div class="dw-popup-actions">`,
-      `<button type="button" class="dw-action-btn dw-action-share" data-code="${escapeHtml(info.code)}" data-url="${escapeHtml(info.gmapsUrl)}">Share Link</button>`,
-      `<a class="dw-action-btn dw-action-open" href="${escapeHtml(info.gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>`,
-      `</div>`,
+      buildMapActionButtons(info.lat, info.lng, `Dwelling ${info.code}`),
       `</div>`
     ].join("");
   }
@@ -666,29 +687,7 @@
     marker.on("click", () => setSelectedDwelling(marker));
     marker.on("popupopen", (event) => {
       const root = event?.popup?.getElement?.();
-      const shareBtn = root?.querySelector(".dw-action-share");
-      shareBtn?.addEventListener("click", async (shareEvent) => {
-        shareEvent.preventDefault();
-        const url = shareBtn.getAttribute("data-url") || "";
-        const codeValue = shareBtn.getAttribute("data-code") || "";
-        const text = `Dwelling ${codeValue}`;
-        try {
-          if (navigator.share) {
-            await navigator.share({ title: text, text, url });
-          } else if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(url);
-            const old = shareBtn.textContent;
-            shareBtn.textContent = "Copied";
-            window.setTimeout(() => {
-              shareBtn.textContent = old;
-            }, 1200);
-          } else {
-            window.prompt("Copy link:", url);
-          }
-        } catch {
-          // Ignore share cancellation.
-        }
-      }, { once: true });
+      attachMapActionHandlers(root);
 
       const statusSelect = root?.querySelector(".dw-status-select");
       statusSelect?.addEventListener("change", async () => {
@@ -776,41 +775,18 @@
     const name = String(props.name || props.label || "Special location").trim();
     const type = String(props.locationType || "other").trim();
     const notes = String(props.notes || "").trim();
-    const gmapsUrl = getGoogleMapsLink(lat, lng);
     const marker = L.marker([lat, lng], { icon: specialLocationIcon(type), keyboard: true })
       .bindPopup([
         `<div class="dw-popup">`,
         `<div class="dw-popup-code">${escapeHtml(name)}</div>`,
         `<div class="dw-popup-meta">${escapeHtml(type.replaceAll("_", " "))}</div>`,
         notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
-        `<div class="dw-popup-actions">`,
-        `<button type="button" class="dw-action-btn special-location-share" data-name="${escapeHtml(name)}" data-url="${escapeHtml(gmapsUrl)}">Share Link</button>`,
-        `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>`,
-        `</div>`,
+        buildMapActionButtons(lat, lng, name),
         `</div>`
       ].join(""), { autoPan: true })
       .addTo(specialLocationsLayer);
     marker.on("popupopen", (event) => {
-      const shareBtn = event?.popup?.getElement?.()?.querySelector(".special-location-share");
-      shareBtn?.addEventListener("click", async (shareEvent) => {
-        shareEvent.preventDefault();
-        const url = shareBtn.getAttribute("data-url") || "";
-        const locationName = shareBtn.getAttribute("data-name") || "Special location";
-        try {
-          if (navigator.share) {
-            await navigator.share({ title: locationName, text: locationName, url });
-          } else if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(url);
-            const old = shareBtn.textContent;
-            shareBtn.textContent = "Copied";
-            window.setTimeout(() => { shareBtn.textContent = old; }, 1200);
-          } else {
-            window.prompt("Copy link:", url);
-          }
-        } catch {
-          // Ignore share cancellation.
-        }
-      }, { once: true });
+      attachMapActionHandlers(event?.popup?.getElement?.());
     });
   }
 
