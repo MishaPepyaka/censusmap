@@ -283,9 +283,9 @@
   }
 
   const MAP_ACTION_ICONS = {
-    share: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M13 7l5 5-5 5M6 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"/></svg>`,
-    google: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#34a853" d="M12 2a7 7 0 0 0-6 10.6L12 22l3-4.8V10h-3z"/><path fill="#4285f4" d="M12 2v8h3v7.2l3-4.6A7 7 0 0 0 12 2z"/><circle cx="12" cy="9" r="2.3" fill="#fbbc04"/></svg>`,
-    apple: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#d9f3ff" d="M3 3h18v18H3z"/><path fill="#57b7ed" d="M4 16c4-4 5-7 10-11M9 20c3-5 6-7 11-9" stroke="#1677c8" stroke-width="2"/><path fill="#89c95b" d="M3 5h7v5H3zM14 14h7v7h-7z"/><path fill="#f8ce55" d="M10 3h4v18h-4z"/><circle cx="12" cy="12" r="2.5" fill="#e94f4f"/></svg>`
+    share: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0 4 4m-4-4-4 4M5 10.5v7.75A1.75 1.75 0 0 0 6.75 20h10.5A1.75 1.75 0 0 0 19 18.25V10.5"/></svg>`,
+    google: `<img src="/map-action-icons/google-maps.png" alt="">`,
+    apple: `<img src="/map-action-icons/apple-maps.png" alt="">`
   };
 
   function buildMapActionButtons(lat, lng, shareTitle) {

@@ -1,4 +1,4 @@
-const SHELL_CACHE = "cmp-shell-v7";
+const SHELL_CACHE = "cmp-shell-v8";
 const SHELL_CACHE_PREFIX = "cmp-shell-";
 const APP_SHELL = [
   "/landing.html",
@@ -15,6 +15,8 @@ const APP_SHELL = [
   "/vendor/leaflet/leaflet.css",
   "/vendor/leaflet/leaflet.js",
   "/person-marker.svg",
+  "/map-action-icons/google-maps.png",
+  "/map-action-icons/apple-maps.png",
   "/place-icons/band_hall.svg",
   "/place-icons/band_office.svg",
   "/place-icons/church.svg",

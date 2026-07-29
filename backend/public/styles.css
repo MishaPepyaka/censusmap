@@ -811,9 +811,11 @@ body {
   padding: 0;
 }
 
-.dw-action-icon svg {
+.dw-action-icon svg,
+.dw-action-icon img {
   width: 20px;
   height: 20px;
+  object-fit: contain;
 }
 
 .dw-action-share svg {
