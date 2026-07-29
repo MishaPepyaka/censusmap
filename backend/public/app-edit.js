@@ -706,14 +706,41 @@
     const name = String(props.name || props.label || "Special location").trim();
     const type = String(props.locationType || "other").trim();
     const notes = String(props.notes || "").trim();
+    const gmapsUrl = getGoogleMapsLink(lat, lng);
     const marker = L.marker([lat, lng], { icon: specialLocationIcon(type), keyboard: true }).addTo(specialLocationsLayer);
     marker.bindPopup([
       `<div class="dw-popup">`,
       `<div class="dw-popup-code">${escapeHtml(name)}</div>`,
       `<div class="dw-popup-meta">${escapeHtml(type.replaceAll("_", " "))}</div>`,
       notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
+      `<div class="dw-popup-actions">`,
+      `<button type="button" class="dw-action-btn special-location-share" data-name="${escapeHtml(name)}" data-url="${escapeHtml(gmapsUrl)}">Share Link</button>`,
+      `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>`,
+      `</div>`,
       `</div>`
     ].join(""), { autoPan: true });
+    marker.on("popupopen", (event) => {
+      const shareBtn = event?.popup?.getElement?.()?.querySelector(".special-location-share");
+      shareBtn?.addEventListener("click", async (shareEvent) => {
+        shareEvent.preventDefault();
+        const url = shareBtn.getAttribute("data-url") || "";
+        const locationName = shareBtn.getAttribute("data-name") || "Special location";
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: locationName, text: locationName, url });
+          } else if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(url);
+            const old = shareBtn.textContent;
+            shareBtn.textContent = "Copied";
+            window.setTimeout(() => { shareBtn.textContent = old; }, 1200);
+          } else {
+            window.prompt("Copy link:", url);
+          }
+        } catch {
+          // Ignore share cancellation.
+        }
+      }, { once: true });
+    });
     const id = getFeatureId(feature);
     if (id !== null) specialLocationMarkersById.set(id, marker);
     return marker;
