@@ -43,6 +43,8 @@
   const dwellingSaveBtn = document.getElementById("dwelling-save-btn");
   const dwellingSaveAllBtn = document.getElementById("dwelling-save-all-btn");
   const dwellingDeleteBtn = document.getElementById("dwelling-delete-btn");
+  const dwellingExportBtn = document.getElementById("dwelling-export-btn");
+  const copyOpenedSsidsBtn = document.getElementById("copy-opened-ssids-btn");
   const dwellingMoveToggle = document.getElementById("dwelling-move-toggle");
   const dirtyDwellingMarkers = new Set();
 
@@ -672,13 +674,17 @@
     const displayNo = displayDwellingNo(props);
     const code = `${cu}${extractDwellingNo(props)}`;
     const gmapsUrl = Number.isFinite(lat) && Number.isFinite(lng) ? getGoogleMapsLink(lat, lng) : "";
-    const meta = [];
-    if (props.status) meta.push(`Status: ${escapeHtml(props.status)}`);
+    const notes = String(props.notes || "").trim();
+    const currentStatus = normalizeDwellingStatus(props.status);
+    const statusOptions = [...DWELLING_STATUSES]
+      .map((status) => `<option value="${status}"${status === currentStatus ? " selected" : ""}>${status}</option>`)
+      .join("");
     return [
       `<div class="dw-popup">`,
       `<div class="dw-popup-code">${escapeHtml(code)}</div>`,
       `<div class="dw-popup-meta">CU ${escapeHtml(cu)} · Block ${escapeHtml(block)} · Dwelling ${escapeHtml(displayNo)}</div>`,
-      meta.length > 0 ? `<div class="dw-popup-meta">${meta.join(" · ")}</div>` : "",
+      notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
+      `<label class="dw-popup-status">Status <select class="dw-status-select">${statusOptions}</select></label>`,
       gmapsUrl ? `<div class="dw-popup-actions">` : "",
       gmapsUrl ? `<button type="button" class="dw-action-btn dw-action-share" data-code="${escapeHtml(code)}" data-url="${escapeHtml(gmapsUrl)}">Share Link</button>` : "",
       gmapsUrl ? `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>` : "",
@@ -715,6 +721,33 @@
           // Ignore share cancellation.
         }
       }, { once: true });
+
+      const statusSelect = root?.querySelector(".dw-status-select");
+      statusSelect?.addEventListener("change", async () => {
+        const previousStatus = normalizeDwellingStatus(marker.feature?.properties?.status);
+        const nextStatus = normalizeDwellingStatus(statusSelect.value);
+        if (nextStatus === previousStatus) return;
+        statusSelect.disabled = true;
+        marker.feature.properties.status = nextStatus;
+        applyMarkerIcon(marker, marker === selectedDwellingMarker);
+        if (marker === selectedDwellingMarker && dwellingFields.status) {
+          dwellingFields.status.value = nextStatus;
+        }
+        markDwellingDirty(marker);
+        const saved = await persistDwellingMarker(marker, {
+          selectAfterSave: marker === selectedDwellingMarker,
+          useMarkerProperties: true
+        });
+        if (!saved) {
+          marker.feature.properties.status = previousStatus;
+          statusSelect.value = previousStatus;
+          applyMarkerIcon(marker, marker === selectedDwellingMarker);
+          if (marker === selectedDwellingMarker && dwellingFields.status) {
+            dwellingFields.status.value = previousStatus;
+          }
+        }
+        statusSelect.disabled = false;
+      });
     });
   }
 
@@ -1174,6 +1207,67 @@
       setStatus("Dwelling fields changed. Press Save or Save All.", false);
     });
   }
+
+  function getDwellingBulkRows() {
+    return [...allDwellingMarkers]
+      .filter((marker) => dwellingsLayer.hasLayer(marker))
+      .map((marker) => {
+        const props = marker.feature?.properties || {};
+        const latlng = marker.getLatLng();
+        return {
+          ssid: `${extractCuCode(props)}${extractDwellingNo(props)}`,
+          coordinate: `${Number(latlng.lng).toFixed(6)}, ${Number(latlng.lat).toFixed(6)}`,
+          status: normalizeDwellingStatus(props.status)
+        };
+      })
+      .sort((a, b) => a.ssid.localeCompare(b.ssid));
+  }
+
+  function exportDwellingsXls() {
+    const rows = getDwellingBulkRows();
+    const cells = (value) => escapeHtml(value);
+    const tableRows = rows.map((row) =>
+      `<tr><td style="mso-number-format:'\\@';">${cells(row.ssid)}</td><td>${cells(row.coordinate)}</td><td>${cells(row.status)}</td></tr>`
+    ).join("");
+    const workbook = `<!doctype html><html><head><meta charset="utf-8"></head><body><table><tr><th>SSID</th><th>Coordinate</th><th>Status</th></tr>${tableRows}</table></body></html>`;
+    const blob = new Blob([workbook], { type: "application/vnd.ms-excel;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `cld-${cld}-dwellings.xls`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setStatus(`Exported ${rows.length} dwelling(s).`, false);
+  }
+
+  async function copyOpenedSsids() {
+    const ssids = getDwellingBulkRows()
+      .filter((row) => row.status === "429")
+      .map((row) => row.ssid)
+      .join("\n");
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(ssids);
+      } else {
+        const fallback = document.createElement("textarea");
+        fallback.value = ssids;
+        document.body.appendChild(fallback);
+        fallback.select();
+        document.execCommand("copy");
+        fallback.remove();
+      }
+      setStatus(`${ssids ? ssids.split("\n").length : 0} opened SSID(s) copied.`, false);
+    } catch (error) {
+      setStatus(`Could not copy opened SSIDs: ${error.message}`, true);
+    }
+  }
+
+  dwellingExportBtn?.addEventListener("click", exportDwellingsXls);
+  copyOpenedSsidsBtn?.addEventListener("click", () => {
+    void copyOpenedSsids();
+  });
 
   async function saveAllDirtyDwellings() {
     if (!canPersistEdits) {
