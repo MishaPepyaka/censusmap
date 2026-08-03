@@ -851,6 +851,12 @@
       };
       layer.on("click", (event) => {
         const src = event?.originalEvent;
+        if (specialLocationPlacementPending) {
+          src?.preventDefault?.();
+          src?.stopPropagation?.();
+          void placeSpecialLocation(event.latlng);
+          return;
+        }
         if (isAddingMode() && isAddDwellingPointerIntent(src)) {
           src.preventDefault?.();
           src.stopPropagation?.();
@@ -862,11 +868,22 @@
       layer.on("contextmenu", (event) => {
         if (!isAddingMode()) return;
         const src = event?.originalEvent;
+        if (specialLocationPlacementPending) {
+          src?.preventDefault?.();
+          src?.stopPropagation?.();
+          return;
+        }
         src?.preventDefault?.();
         src?.stopPropagation?.();
         void addDwellingAt(event.latlng, layer);
       });
       layer.on("tap", (event) => {
+        if (specialLocationPlacementPending) {
+          event?.originalEvent?.preventDefault?.();
+          event?.originalEvent?.stopPropagation?.();
+          void placeSpecialLocation(event.latlng);
+          return;
+        }
         selectZone(layer, { showPopup: true, popupLatLng: event?.latlng || null });
       });
       editableLayer.addLayer(layer);
@@ -1023,8 +1040,8 @@
     clearSelectedSpecialLocation();
     if (specialLocationGroup) specialLocationGroup.open = true;
     specialLocationPlacementPending = !specialLocationPlacementPending;
-    specialLocationPlaceBtn.textContent = specialLocationPlacementPending ? "Tap Map to Place" : "New";
-    setStatus(specialLocationPlacementPending ? "Tap the map to place this special location." : "Special location placement cancelled.", false);
+    specialLocationPlaceBtn.textContent = specialLocationPlacementPending ? "Click Map to Place" : "New";
+    setStatus(specialLocationPlacementPending ? "Click or tap the map to place this special location." : "Special location placement cancelled.", false);
   });
 
   function specialLocationFeatureFromForm(existingId, latlng, originalProperties = {}) {
@@ -1930,7 +1947,6 @@
     src.preventDefault?.();
     src.stopPropagation?.();
     if (specialLocationPlacementPending) {
-      void placeSpecialLocation(event.latlng);
       return;
     }
     void addDwellingAt(event.latlng, null);
