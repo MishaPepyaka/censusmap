@@ -466,14 +466,14 @@
   map.on("zoomend", syncZoomUiMode);
   syncZoomUiMode();
   const satelliteLayer = L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    "/tiles/satellite/{z}/{y}/{x}",
     {
       maxZoom: 22,
       maxNativeZoom: 17,
       attribution: "Tiles &copy; Esri"
     }
   );
-  const schematicLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  const schematicLayer = L.tileLayer("/tiles/schematic/{z}/{y}/{x}", {
     maxZoom: 19,
     attribution: "&copy; OpenStreetMap contributors"
   });

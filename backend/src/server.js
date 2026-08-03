@@ -1679,6 +1679,50 @@ app.get("/api/arcgis-proxy*", async (req, res) => {
   }
 });
 
+const bufferedTileSources = {
+  satellite: {
+    maxZoom: 22,
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+  },
+  schematic: {
+    maxZoom: 19,
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+  }
+};
+
+app.get("/tiles/:source/:z/:y/:x", async (req, res) => {
+  const source = bufferedTileSources[req.params.source];
+  const z = Number(req.params.z);
+  const y = Number(req.params.y);
+  const x = Number(req.params.x);
+  const tileCount = Number.isInteger(z) && z >= 0 && z <= 30 ? 2 ** z : 0;
+  if (!source || !Number.isInteger(z) || !Number.isInteger(x) || !Number.isInteger(y)
+    || z < 0 || z > source.maxZoom || x < 0 || y < 0 || x >= tileCount || y >= tileCount) {
+    return res.status(400).json({ error: "Invalid tile coordinates" });
+  }
+
+  const targetUrl = source.url
+    .replace("{z}", String(z))
+    .replace("{x}", String(x))
+    .replace("{y}", String(y));
+  const upstreamHeaders = {
+    "user-agent": process.env.TILE_PROXY_USER_AGENT || "CensusMap/1.0 (self-hosted map tile proxy)",
+    accept: req.headers.accept || "image/avif,image/webp,image/png,image/*,*/*;q=0.8"
+  };
+  if (req.headers.referer) upstreamHeaders.referer = req.headers.referer;
+
+  try {
+    const upstream = await fetch(targetUrl, { method: "GET", headers: upstreamHeaders });
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    const contentType = upstream.headers.get("content-type");
+    if (contentType) res.setHeader("content-type", contentType);
+    res.setHeader("cache-control", "public, max-age=604800");
+    return res.status(upstream.status).send(buffer);
+  } catch (error) {
+    return res.status(502).json({ error: `Tile request failed: ${error.message}` });
+  }
+});
+
 app.get("/api/features", async (_req, res) => {
   if (useFileStore) {
     const store = await readFileStore();

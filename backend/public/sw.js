@@ -1,5 +1,7 @@
-const SHELL_CACHE = "cmp-shell-v13";
+const SHELL_CACHE = "cmp-shell-v14";
 const SHELL_CACHE_PREFIX = "cmp-shell-";
+const TILE_CACHE = "cmp-map-tiles-v1";
+const TILE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const APP_SHELL = [
   "/landing.html",
   "/index.html",
@@ -44,6 +46,37 @@ function isCacheableStaticAsset(pathname) {
     || /\.(?:css|js|svg|png|webp|woff2?)$/.test(pathname);
 }
 
+function isBufferedTile(pathname) {
+  return pathname.startsWith("/tiles/");
+}
+
+async function cacheTileResponse(cache, request, response) {
+  const headers = new Headers(response.headers);
+  headers.set("x-censusmap-cached-at", new Date().toISOString());
+  const body = await response.clone().blob();
+  await cache.put(request, new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  }));
+}
+
+async function bufferedTileResponse(request) {
+  const cache = await caches.open(TILE_CACHE);
+  const cached = await cache.match(request);
+  const cachedAt = cached?.headers.get("x-censusmap-cached-at");
+  const age = cachedAt ? Date.now() - Date.parse(cachedAt) : Number.POSITIVE_INFINITY;
+  if (cached && Number.isFinite(age) && age < TILE_CACHE_MAX_AGE_MS) return cached;
+  try {
+    const response = await fetch(request);
+    if (response.ok) await cacheTileResponse(cache, request, response);
+    return response;
+  } catch (error) {
+    if (cached) return cached;
+    throw error;
+  }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE)
@@ -73,6 +106,11 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(fallback))
     );
+    return;
+  }
+
+  if (isBufferedTile(url.pathname)) {
+    event.respondWith(bufferedTileResponse(event.request));
     return;
   }
 
