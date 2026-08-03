@@ -299,6 +299,11 @@ body {
   color: #0f172a;
 }
 
+.dwelling-move-toggle.is-adding {
+  background: #fde68a;
+  color: #0f172a;
+}
+
 .dwelling-cluster-wrap { background: transparent; border: 0; }
 
 .dwelling-cluster {
@@ -434,6 +439,10 @@ body {
 
 #dwellings-form-wrap.collapsed {
   display: none;
+}
+
+#dwellings-form-wrap.editor-form-relocation {
+  opacity: 0.62;
 }
 
 .editor-group {

@@ -6,7 +6,7 @@
     <title>CLD Region Editor</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
     <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260720a" />
-    <link rel="stylesheet" href="/styles.css?v=20260729d" />
+    <link rel="stylesheet" href="/styles.css?v=20260803a" />
   </head>
   <body>
     <main id="map"></main>
@@ -31,7 +31,7 @@
         </div>
         <div class="editor-route-links">
           <a id="editor-view-link" class="route-link-btn" href="#">Viewer</a>
-          <button id="dwelling-move-toggle" type="button" class="route-link-btn dwelling-move-toggle" aria-pressed="false">Unlock movement</button>
+          <button id="dwelling-move-toggle" type="button" class="route-link-btn dwelling-move-toggle" aria-label="Switch editor mode" title="Switch editor mode">Editing mode</button>
           <a id="geometry-editor-link" class="route-link-btn" href="#" hidden>Edit geometry</a>
           <a class="route-link-btn" href="/">Find CLD</a>
         </div>
@@ -39,8 +39,8 @@
 
       <button id="dwellings-collapse-btn" type="button" class="editor-collapse-btn" aria-expanded="false">Dwellings Editor</button>
       <div id="dwellings-form-wrap" class="collapsed">
-        <div class="editor-help">
-          House movement is locked by default. When unlocked, drag a house and its position saves automatically.
+        <div id="editor-mode-help" class="editor-help">
+          Edit house and special-location information. Adding and moving are disabled.
         </div>
 
         <details class="editor-group" open>
@@ -151,6 +151,6 @@
     <script src="/vendor/leaflet/leaflet.js?v=20260721a"></script>
     <script src="/app-auth.js?v=20260721n"></script>
     <script src="/offline-data.js?v=20260729a"></script>
-    <script src="/app-edit.js?v=20260729j"></script>
+    <script src="/app-edit.js?v=20260803a"></script>
   </body>
 </html>

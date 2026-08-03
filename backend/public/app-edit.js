@@ -31,7 +31,7 @@
   let lastKnownLatLng = null;
   let currentBaseMode = "satellite";
   let badgesReady = false;
-  let dwellingMovementEnabled = false;
+  let editorMode = "editing";
   let specialLocationPlacementPending = false;
   let selectedSpecialLocationMarker = null;
   const dwellingMarkersById = new Map();
@@ -71,6 +71,7 @@
   const specialLocationSaveBtn = document.getElementById("special-location-save-btn");
   const specialLocationDeleteBtn = document.getElementById("special-location-delete-btn");
   const dwellingMoveToggle = document.getElementById("dwelling-move-toggle");
+  const editorModeHelp = document.getElementById("editor-mode-help");
   const dirtyDwellingMarkers = new Set();
 
   if (editorRouteLabel) {
@@ -585,19 +586,68 @@
   }
   void showGeometryLinkForAdmin();
 
-  function setDwellingMovementEnabled(enabled) {
-    dwellingMovementEnabled = Boolean(enabled);
+  const EDITOR_MODES = ["editing", "adding", "relocation"];
+  const EDITOR_MODE_LABELS = {
+    editing: "Editing mode",
+    adding: "Adding mode",
+    relocation: "Relocation mode"
+  };
+  const EDITOR_MODE_HELP = {
+    editing: "Edit house and special-location information. Adding and moving are disabled.",
+    adding: "Tap inside a block to add a house. You can also edit information, but cannot move markers.",
+    relocation: "Drag houses and special locations to relocate them. Their positions save automatically; editing and adding are disabled."
+  };
+
+  function isAddingMode() {
+    return editorMode === "adding";
+  }
+
+  function isRelocationMode() {
+    return editorMode === "relocation";
+  }
+
+  function syncEditorModeUi() {
+    const relocation = isRelocationMode();
+    const adding = isAddingMode();
+    if (formWrap) {
+      formWrap.classList.toggle("editor-form-relocation", relocation);
+      for (const control of formWrap.querySelectorAll("input, select, textarea, button")) {
+        control.disabled = relocation;
+      }
+    }
+    if (!relocation) {
+      if (dwellingNewBtn) dwellingNewBtn.disabled = !adding || !canPersistEdits;
+      if (specialLocationPlaceBtn) specialLocationPlaceBtn.disabled = !adding || !canPersistEdits;
+      updateDwellingSaveAllState();
+    }
+    document.querySelectorAll(".dw-status-select").forEach((select) => {
+      select.disabled = relocation;
+    });
+    dwellingMoveToggle?.classList.toggle("is-enabled", relocation);
+    dwellingMoveToggle?.classList.toggle("is-adding", adding);
+    if (dwellingMoveToggle) {
+      const label = EDITOR_MODE_LABELS[editorMode];
+      dwellingMoveToggle.textContent = label;
+      dwellingMoveToggle.setAttribute("aria-label", `Switch editor mode (current: ${label})`);
+      dwellingMoveToggle.title = `Switch mode (current: ${label})`;
+    }
+    if (editorModeHelp) editorModeHelp.textContent = EDITOR_MODE_HELP[editorMode];
+  }
+
+  function setEditorMode(mode) {
+    editorMode = EDITOR_MODES.includes(mode) ? mode : "editing";
+    const relocation = isRelocationMode();
     for (const marker of allDwellingMarkers) {
-      marker.dragging?.[dwellingMovementEnabled ? "enable" : "disable"]();
+      marker.dragging?.[relocation ? "enable" : "disable"]();
     }
     for (const marker of allSpecialLocationMarkers) {
-      marker.dragging?.[dwellingMovementEnabled ? "enable" : "disable"]();
+      marker.dragging?.[relocation ? "enable" : "disable"]();
     }
-    dwellingMoveToggle?.classList.toggle("is-enabled", dwellingMovementEnabled);
-    dwellingMoveToggle?.setAttribute("aria-pressed", String(dwellingMovementEnabled));
-    if (dwellingMoveToggle) {
-      dwellingMoveToggle.textContent = dwellingMovementEnabled ? "Lock movement" : "Unlock movement";
+    if (!isAddingMode()) {
+      specialLocationPlacementPending = false;
+      if (specialLocationPlaceBtn) specialLocationPlaceBtn.textContent = "New";
     }
+    syncEditorModeUi();
     syncDwellingDisplay();
   }
 
@@ -646,7 +696,7 @@
       const element = marker.getElement?.();
       if (element) element.style.pointerEvents = specialLocationsVisible ? "" : "none";
     }
-    const clusterMode = !dwellingMovementEnabled && map.getZoom() < 15;
+    const clusterMode = !isRelocationMode() && map.getZoom() < 15;
     const buckets = new Map();
     for (const marker of allDwellingMarkers) {
       marker.setOpacity(clusterMode ? 0 : 1);
@@ -683,8 +733,10 @@
   }
 
   dwellingMoveToggle?.addEventListener("click", () => {
-    setDwellingMovementEnabled(!dwellingMovementEnabled);
-    setStatus(dwellingMovementEnabled ? "House and special-location movement unlocked. Dragging saves automatically." : "House and special-location movement locked.", false);
+    const currentIndex = EDITOR_MODES.indexOf(editorMode);
+    const nextMode = EDITOR_MODES[(currentIndex + 1) % EDITOR_MODES.length];
+    setEditorMode(nextMode);
+    setStatus(EDITOR_MODE_HELP[nextMode], false);
   });
 
   function updateDwellingSaveAllState() {
@@ -802,8 +854,7 @@
       };
       layer.on("click", (event) => {
         const src = event?.originalEvent;
-        const isAddIntent = Boolean(src && (src.ctrlKey || src.metaKey || src.button === 2));
-        if (isAddIntent) {
+        if (isAddingMode()) {
           src.preventDefault?.();
           src.stopPropagation?.();
           void addDwellingAt(event.latlng, layer);
@@ -812,12 +863,21 @@
         selectZone(layer, { showPopup: true, popupLatLng: event?.latlng || null });
       });
       layer.on("contextmenu", (event) => {
+        if (!isAddingMode()) return;
         const src = event?.originalEvent;
         src?.preventDefault?.();
         src?.stopPropagation?.();
         void addDwellingAt(event.latlng, layer);
       });
-      layer.on("tap", (event) => selectZone(layer, { showPopup: true, popupLatLng: event?.latlng || null }));
+      layer.on("tap", (event) => {
+        if (isAddingMode()) {
+          event?.originalEvent?.preventDefault?.();
+          event?.originalEvent?.stopPropagation?.();
+          void addDwellingAt(event.latlng, layer);
+          return;
+        }
+        selectZone(layer, { showPopup: true, popupLatLng: event?.latlng || null });
+      });
       editableLayer.addLayer(layer);
       if (getZoneKind(layer.feature?.properties || {}) === "block") {
         blockLayers.push(layer);
@@ -910,7 +970,7 @@
     const lng = Number(coordinates[0]);
     const lat = Number(coordinates[1]);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const marker = L.marker([lat, lng], { icon: specialLocationIcon(feature?.properties?.locationType), keyboard: true, draggable: dwellingMovementEnabled }).addTo(specialLocationsLayer);
+    const marker = L.marker([lat, lng], { icon: specialLocationIcon(feature?.properties?.locationType), keyboard: true, draggable: isRelocationMode() }).addTo(specialLocationsLayer);
     marker.feature = {
       type: "Feature",
       id: feature.id ?? null,
@@ -920,6 +980,7 @@
     allSpecialLocationMarkers.add(marker);
     marker.on("click", () => selectSpecialLocationMarker(marker));
     marker.on("dragend", () => {
+      if (!isRelocationMode()) return;
       const ll = marker.getLatLng();
       marker.feature.geometry = { type: "Point", coordinates: [Number(ll.lng), Number(ll.lat)] };
       attachSpecialLocationPopupHandlers(marker);
@@ -934,6 +995,7 @@
   }
 
   async function placeSpecialLocation(latlng) {
+    if (!isAddingMode()) return;
     const type = String(specialLocationTypeInput?.value || "other");
     const name = String(specialLocationNameInput?.value || "").trim() || type.replaceAll("_", " ");
     const notes = String(specialLocationNotesInput?.value || "").trim();
@@ -962,6 +1024,7 @@
   }
 
   specialLocationPlaceBtn?.addEventListener("click", () => {
+    if (!isAddingMode()) return;
     if (selectedDwellingMarker) {
       applyMarkerIcon(selectedDwellingMarker, false);
       selectedDwellingMarker = null;
@@ -1107,7 +1170,7 @@
       `<div class="dw-popup-meta">CU ${escapeHtml(cu)} · Block ${escapeHtml(block)} · Dwelling ${escapeHtml(displayNo)}</div>`,
       notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
       `<div class="dw-popup-status-row">`,
-      `<label class="dw-popup-status">Status <select class="dw-status-select">${statusOptions}</select></label>`,
+      `<label class="dw-popup-status">Status <select class="dw-status-select"${isRelocationMode() ? " disabled" : ""}>${statusOptions}</select></label>`,
       buildMapActionButtons(lat, lng, `Dwelling ${code}`, true),
       `</div>`,
       `</div>`
@@ -1122,6 +1185,7 @@
 
       const statusSelect = root?.querySelector(".dw-status-select");
       statusSelect?.addEventListener("change", async () => {
+        if (isRelocationMode()) return;
         const previousStatus = normalizeDwellingStatus(marker.feature?.properties?.status);
         const nextStatus = normalizeDwellingStatus(statusSelect.value);
         if (nextStatus === previousStatus) return;
@@ -1319,6 +1383,7 @@
     attachDwellingPopupHandlers(marker);
 
     marker.on("dragend", () => {
+      if (!isRelocationMode()) return;
       const ll = marker.getLatLng();
       marker.feature.geometry = { type: "Point", coordinates: [Number(ll.lng), Number(ll.lat)] };
       markDwellingDirty(marker);
@@ -1360,7 +1425,7 @@
   for (const feature of specialLocations) {
     createSpecialLocationMarker(feature);
   }
-  setDwellingMovementEnabled(false);
+  setEditorMode("editing");
   updateDwellingSaveAllState();
 
   if (editableLayer.getLayers().length > 0) {
@@ -1514,6 +1579,7 @@
   }
 
   dwellingNewBtn?.addEventListener("click", () => {
+    if (!isAddingMode()) return;
     const marker = createNewDwellingDraft();
     if (marker) {
       setStatus("New dwelling created. Fill fields and press Save.", false);
@@ -1608,6 +1674,7 @@
     if (!field) continue;
     const eventName = field.type === "checkbox" ? "change" : "input";
     field.addEventListener(eventName, () => {
+      if (isRelocationMode()) return;
       if (!selectedDwellingMarker) return;
       if (field === dwellingFields.status) {
         const no = displayDwellingNo(selectedDwellingMarker.feature?.properties || {});
@@ -1780,12 +1847,9 @@
     await saveAllDirtyDwellings();
   });
 
-  function isAddDwellingPointerIntent(src) {
-    return Boolean(src && (src.ctrlKey || src.metaKey || src.button === 2));
-  }
-
   let addDwellingInProgress = false;
   async function addDwellingAt(latlng, preferredZoneLayer = null) {
+    if (!isAddingMode()) return;
     if (addDwellingInProgress) return;
     addDwellingInProgress = true;
     try {
@@ -1798,7 +1862,7 @@
         ? preferredZoneLayer
         : resolveZoneForDwellingAdd(latlng);
       if (!zoneLayer || getZoneKind(zoneLayer.feature?.properties || {}) !== "block") {
-        setStatus("Right-click inside a block polygon to create a dwelling.", true);
+        setStatus("Tap inside a block polygon to create a dwelling.", true);
         return;
       }
 
@@ -1859,8 +1923,8 @@
       void placeSpecialLocation(event.latlng);
       return;
     }
-    if (!isAddDwellingPointerIntent(src)) return;
-    if (src?.target?.closest?.("#editor-panel, #map-ui")) return;
+    if (!isAddingMode()) return;
+    if (src?.target?.closest?.("#editor-panel, #map-ui, .leaflet-marker-icon, .leaflet-popup")) return;
     src.preventDefault?.();
     src.stopPropagation?.();
     void addDwellingAt(event.latlng, null);
@@ -1868,6 +1932,7 @@
 
   map.on("contextmenu", (event) => {
     const src = event?.originalEvent;
+    if (!isAddingMode()) return;
     if (src?.target?.closest?.("#editor-panel, #map-ui")) return;
     src.preventDefault?.();
     src.stopPropagation?.();
