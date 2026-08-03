@@ -42,6 +42,25 @@ body {
   letter-spacing: 0.04em;
 }
 
+.tile-cache-status {
+  position: fixed;
+  right: 12px;
+  bottom: 46px;
+  z-index: 1400;
+  max-width: min(220px, calc(100vw - 24px));
+  padding: 5px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.84);
+  color: #cbd5e1;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .app-attribution {
   position: fixed;
   left: 50%;

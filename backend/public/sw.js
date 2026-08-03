@@ -1,7 +1,9 @@
-const SHELL_CACHE = "cmp-shell-v14";
+const SHELL_CACHE = "cmp-shell-v15";
 const SHELL_CACHE_PREFIX = "cmp-shell-";
 const TILE_CACHE = "cmp-map-tiles-v1";
 const TILE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const TILE_CACHE_MAX_BYTES = 1024 * 1024 * 1024;
+let tileCacheTrimTask = Promise.resolve();
 const APP_SHELL = [
   "/landing.html",
   "/index.html",
@@ -52,13 +54,41 @@ function isBufferedTile(pathname) {
 
 async function cacheTileResponse(cache, request, response) {
   const headers = new Headers(response.headers);
-  headers.set("x-censusmap-cached-at", new Date().toISOString());
   const body = await response.clone().blob();
+  headers.set("x-censusmap-cached-at", new Date().toISOString());
+  headers.set("x-censusmap-size", String(body.size));
   await cache.put(request, new Response(body, {
     status: response.status,
     statusText: response.statusText,
     headers
   }));
+  tileCacheTrimTask = tileCacheTrimTask
+    .catch(() => {})
+    .then(() => trimTileCache(cache));
+  await tileCacheTrimTask;
+}
+
+async function tileCacheEntry(cache, request) {
+  const response = await cache.match(request);
+  if (!response) return null;
+  const declaredSize = Number(response.headers.get("x-censusmap-size") || response.headers.get("content-length"));
+  const size = Number.isFinite(declaredSize) && declaredSize >= 0
+    ? declaredSize
+    : (await response.clone().blob()).size;
+  const cachedAt = Date.parse(response.headers.get("x-censusmap-cached-at") || "") || 0;
+  return { request, size, cachedAt };
+}
+
+async function trimTileCache(cache) {
+  const entries = (await Promise.all((await cache.keys()).map((request) => tileCacheEntry(cache, request))))
+    .filter(Boolean)
+    .sort((a, b) => a.cachedAt - b.cachedAt);
+  let totalBytes = entries.reduce((total, entry) => total + entry.size, 0);
+  for (const entry of entries) {
+    if (totalBytes <= TILE_CACHE_MAX_BYTES) break;
+    await cache.delete(entry.request);
+    totalBytes -= entry.size;
+  }
 }
 
 async function bufferedTileResponse(request) {
@@ -91,6 +121,8 @@ self.addEventListener("activate", (event) => {
       .then((keys) => Promise.all(keys
         .filter((key) => (key.startsWith(SHELL_CACHE_PREFIX) && key !== SHELL_CACHE) || key === "cmp-editor-static-v1")
         .map((key) => caches.delete(key))))
+      .then(() => caches.open(TILE_CACHE))
+      .then((cache) => trimTileCache(cache))
       .then(() => self.clients.claim())
   );
 });

@@ -44,6 +44,38 @@
   const editorViewLink = document.getElementById("editor-view-link");
   const geometryEditorLink = document.getElementById("geometry-editor-link");
   const syncStatusEl = document.getElementById("editor-sync-status");
+  const tileCacheStatus = document.getElementById("tile-cache-status");
+
+  let tileCacheRefreshTimer = null;
+  async function refreshTileCacheStatus() {
+    if (!tileCacheStatus) return;
+    if (!("caches" in window)) {
+      tileCacheStatus.textContent = "Tiles: unavailable";
+      return;
+    }
+    try {
+      const cache = await caches.open("cmp-map-tiles-v1");
+      const requests = await cache.keys();
+      const sizes = await Promise.all(requests.map(async (request) => {
+        const response = await cache.match(request);
+        if (!response) return 0;
+        const length = Number(response.headers.get("content-length"));
+        return Number.isFinite(length) && length >= 0 ? length : (await response.blob()).size;
+      }));
+      const bytes = sizes.reduce((total, size) => total + size, 0);
+      const megabytes = bytes / (1024 * 1024);
+      tileCacheStatus.textContent = `Tiles: ${megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes)} MB · ${requests.length}`;
+    } catch {
+      tileCacheStatus.textContent = "Tiles: unavailable";
+    }
+  }
+
+  function scheduleTileCacheStatusRefresh() {
+    window.clearTimeout(tileCacheRefreshTimer);
+    tileCacheRefreshTimer = window.setTimeout(() => {
+      void refreshTileCacheStatus();
+    }, 1200);
+  }
 
   const collapseBtn = document.getElementById("dwellings-collapse-btn");
   const formWrap = document.getElementById("dwellings-form-wrap");
@@ -478,6 +510,10 @@
     attribution: "&copy; OpenStreetMap contributors"
   });
   satelliteLayer.addTo(map);
+  satelliteLayer.on("load", scheduleTileCacheStatusRefresh);
+  schematicLayer.on("load", scheduleTileCacheStatusRefresh);
+  void refreshTileCacheStatus();
+  window.setInterval(() => void refreshTileCacheStatus(), 30000);
 
   function setBaseMode(mode) {
     if (mode === currentBaseMode) return;
