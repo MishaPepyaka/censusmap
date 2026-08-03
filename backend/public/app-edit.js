@@ -594,8 +594,8 @@
   };
   const EDITOR_MODE_HELP = {
     editing: "Edit house and special-location information. Adding and moving are disabled.",
-    adding: "Tap inside a block to add a house. You can also edit information, but cannot move markers.",
-    relocation: "Drag houses and special locations to relocate them. Their positions save automatically; editing and adding are disabled."
+    adding: "Add a house with right-click, Ctrl/Cmd+click, or a long tap inside a block. You can also edit information, but cannot move markers.",
+    relocation: "Drag houses and special locations to relocate them. Their positions save automatically; editing remains available, but adding is disabled."
   };
 
   function isAddingMode() {
@@ -610,18 +610,15 @@
     const relocation = isRelocationMode();
     const adding = isAddingMode();
     if (formWrap) {
-      formWrap.classList.toggle("editor-form-relocation", relocation);
       for (const control of formWrap.querySelectorAll("input, select, textarea, button")) {
-        control.disabled = relocation;
+        control.disabled = false;
       }
     }
-    if (!relocation) {
-      if (dwellingNewBtn) dwellingNewBtn.disabled = !adding || !canPersistEdits;
-      if (specialLocationPlaceBtn) specialLocationPlaceBtn.disabled = !adding || !canPersistEdits;
-      updateDwellingSaveAllState();
-    }
+    if (dwellingNewBtn) dwellingNewBtn.disabled = !adding || !canPersistEdits;
+    if (specialLocationPlaceBtn) specialLocationPlaceBtn.disabled = !adding || !canPersistEdits;
+    updateDwellingSaveAllState();
     document.querySelectorAll(".dw-status-select").forEach((select) => {
-      select.disabled = relocation;
+      select.disabled = false;
     });
     dwellingMoveToggle?.classList.toggle("is-enabled", relocation);
     dwellingMoveToggle?.classList.toggle("is-adding", adding);
@@ -854,7 +851,7 @@
       };
       layer.on("click", (event) => {
         const src = event?.originalEvent;
-        if (isAddingMode()) {
+        if (isAddingMode() && isAddDwellingPointerIntent(src)) {
           src.preventDefault?.();
           src.stopPropagation?.();
           void addDwellingAt(event.latlng, layer);
@@ -870,12 +867,6 @@
         void addDwellingAt(event.latlng, layer);
       });
       layer.on("tap", (event) => {
-        if (isAddingMode()) {
-          event?.originalEvent?.preventDefault?.();
-          event?.originalEvent?.stopPropagation?.();
-          void addDwellingAt(event.latlng, layer);
-          return;
-        }
         selectZone(layer, { showPopup: true, popupLatLng: event?.latlng || null });
       });
       editableLayer.addLayer(layer);
@@ -1170,7 +1161,7 @@
       `<div class="dw-popup-meta">CU ${escapeHtml(cu)} · Block ${escapeHtml(block)} · Dwelling ${escapeHtml(displayNo)}</div>`,
       notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
       `<div class="dw-popup-status-row">`,
-      `<label class="dw-popup-status">Status <select class="dw-status-select"${isRelocationMode() ? " disabled" : ""}>${statusOptions}</select></label>`,
+      `<label class="dw-popup-status">Status <select class="dw-status-select">${statusOptions}</select></label>`,
       buildMapActionButtons(lat, lng, `Dwelling ${code}`, true),
       `</div>`,
       `</div>`
@@ -1185,7 +1176,6 @@
 
       const statusSelect = root?.querySelector(".dw-status-select");
       statusSelect?.addEventListener("change", async () => {
-        if (isRelocationMode()) return;
         const previousStatus = normalizeDwellingStatus(marker.feature?.properties?.status);
         const nextStatus = normalizeDwellingStatus(statusSelect.value);
         if (nextStatus === previousStatus) return;
@@ -1674,7 +1664,6 @@
     if (!field) continue;
     const eventName = field.type === "checkbox" ? "change" : "input";
     field.addEventListener(eventName, () => {
-      if (isRelocationMode()) return;
       if (!selectedDwellingMarker) return;
       if (field === dwellingFields.status) {
         const no = displayDwellingNo(selectedDwellingMarker.feature?.properties || {});
@@ -1847,6 +1836,10 @@
     await saveAllDirtyDwellings();
   });
 
+  function isAddDwellingPointerIntent(src) {
+    return Boolean(src && (src.ctrlKey || src.metaKey || src.button === 2));
+  }
+
   let addDwellingInProgress = false;
   async function addDwellingAt(latlng, preferredZoneLayer = null) {
     if (!isAddingMode()) return;
@@ -1862,7 +1855,7 @@
         ? preferredZoneLayer
         : resolveZoneForDwellingAdd(latlng);
       if (!zoneLayer || getZoneKind(zoneLayer.feature?.properties || {}) !== "block") {
-        setStatus("Tap inside a block polygon to create a dwelling.", true);
+        setStatus("Use right-click, Ctrl/Cmd+click, or a long tap inside a block polygon to create a dwelling.", true);
         return;
       }
 
@@ -1923,7 +1916,7 @@
       void placeSpecialLocation(event.latlng);
       return;
     }
-    if (!isAddingMode()) return;
+    if (!isAddingMode() || !isAddDwellingPointerIntent(src)) return;
     if (src?.target?.closest?.("#editor-panel, #map-ui, .leaflet-marker-icon, .leaflet-popup")) return;
     src.preventDefault?.();
     src.stopPropagation?.();

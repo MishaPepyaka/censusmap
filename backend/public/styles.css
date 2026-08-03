@@ -441,10 +441,6 @@ body {
   display: none;
 }
 
-#dwellings-form-wrap.editor-form-relocation {
-  opacity: 0.62;
-}
-
 .editor-group {
   margin: 0;
   border: 1px solid #334155;
