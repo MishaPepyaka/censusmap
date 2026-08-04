@@ -1,4 +1,5 @@
 (async function initLanding() {
+  const { getJson } = window.CensusMapApi;
   const form = document.getElementById("lookup-form");
   const input = document.getElementById("lookup-input");
   const status = document.getElementById("lookup-status");
@@ -7,15 +8,6 @@
     if (!status) return;
     status.textContent = message || "";
     status.classList.toggle("landing-status-error", Boolean(isError));
-  }
-
-  async function getJson(url, options) {
-    const response = await fetch(url, options);
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || payload.message || "Request failed");
-    }
-    return payload;
   }
 
   async function submitLookup(rawValue) {

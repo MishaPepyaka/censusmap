@@ -1,4 +1,5 @@
 (async function initGeometryEditor() {
+  const { getJson } = window.CensusMapApi;
   const match = window.location.pathname.match(/^\/(\d+)\/edit_geometry\/?$/);
   const cld = match ? match[1] : "";
   if (!cld) return window.location.replace("/");
@@ -13,13 +14,6 @@
     status.textContent = message;
     status.classList.toggle("pending", state === "pending");
     status.classList.toggle("error", state === "error");
-  }
-
-  async function getJson(url, options) {
-    const response = await fetch(url, options);
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || "Request failed");
-    return payload;
   }
 
   const map = L.map("map", { zoomControl: false }).setView([56, -96], 4);

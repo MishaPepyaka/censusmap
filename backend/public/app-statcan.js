@@ -1,4 +1,5 @@
 (async function initStatcanViewer() {
+  const { getJson } = window.CensusMapApi;
   const searchInput = document.getElementById("dwelling-search-input");
   const searchBtn = document.getElementById("dwelling-search-btn");
   const searchStatus = document.getElementById("dwelling-search-status");
@@ -92,15 +93,6 @@
     dwellingsByCu.get(record.cu).push(record);
     if (!dwellingsByNo.has(record.no)) dwellingsByNo.set(record.no, []);
     dwellingsByNo.get(record.no).push(record);
-  }
-
-  async function getJson(url) {
-    const response = await fetch(url);
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error || payload.message || "Request failed");
-    }
-    return payload;
   }
 
   function parseFeatures(payload) {

@@ -12,6 +12,7 @@
     extractCuCode,
     buildColorMap
   } = window.CensusMapData;
+  const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
@@ -167,25 +168,6 @@
     const normalized = extractDwellingNo(props);
     const numeric = Number(String(normalized).replace(/\D/g, ""));
     return Number.isFinite(numeric) ? String(numeric) : normalized;
-  }
-
-  async function getJson(url, options) {
-    const response = await fetch(url, options);
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload.error || payload.message || "Request failed");
-    }
-    return payload;
-  }
-
-  async function getJsonWithTimeout(url, options = {}, timeoutMs = 5000) {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      return await getJson(url, { ...options, signal: controller.signal });
-    } finally {
-      window.clearTimeout(timer);
-    }
   }
 
   function applyPendingMutations(features) {

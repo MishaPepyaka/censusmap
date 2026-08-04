@@ -1,12 +1,7 @@
 (async function initAuthWidget() {
   const root = document.getElementById('user-widget-root');
   if (!root) return;
-
-  async function getJson(url) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Not logged in');
-    return res.json();
-  }
+  const { getJson } = window.CensusMapApi;
 
   try {
     const { user } = await getJson('/api/me');

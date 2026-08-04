@@ -7,7 +7,7 @@
   - Keep page-specific dwelling/block fallback rules in their current page scripts.
   - Load the shared script before viewer/editor code and include it in the offline shell.
 
-- [ ] R002 Extract shared API client
+- [x] R002 Extract shared API client
   - Centralise JSON response parsing, HTTP errors, and timeout handling.
   - Keep editor queue retry policy separate from simple viewer reads.
 
