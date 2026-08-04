@@ -50,5 +50,34 @@
     });
   }
 
-  window.CldOfflineStore = { readSnapshot, saveSnapshot };
+  function localSnapshotKey(cld) {
+    return `cld-map-cache:${cld}`;
+  }
+
+  async function readCachedFeatures(cld) {
+    try {
+      const snapshot = await readSnapshot(cld);
+      if (Array.isArray(snapshot?.features)) return snapshot;
+    } catch {
+      // Fall back to localStorage when IndexedDB is unavailable.
+    }
+    try {
+      const cached = JSON.parse(localStorage.getItem(localSnapshotKey(cld)) || "null");
+      return Array.isArray(cached?.features) ? cached : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveCachedFeatures(cld, features) {
+    const snapshot = { cld: String(cld), features: Array.isArray(features) ? features : [], savedAt: Date.now() };
+    void saveSnapshot(cld, snapshot.features).catch(() => {});
+    try {
+      localStorage.setItem(localSnapshotKey(cld), JSON.stringify(snapshot));
+    } catch {
+      // IndexedDB remains the preferred offline store.
+    }
+  }
+
+  window.CldOfflineStore = { readSnapshot, saveSnapshot, readCachedFeatures, saveCachedFeatures };
 })();

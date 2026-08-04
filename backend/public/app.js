@@ -138,21 +138,15 @@
       if (!navigator.onLine) throw new Error("Offline");
       const apiData = await getJsonWithTimeout(`/api/cld/${cld}/features`);
       const features = Array.isArray(apiData.features) ? apiData.features : [];
-      void Promise.resolve(window.CldOfflineStore?.saveSnapshot(cld, features)).catch(() => {
-        // A storage quota error must not prevent the online map from loading.
-      });
+      window.CldOfflineStore?.saveCachedFeatures(cld, features);
       return { ...parseFeatures(apiData), loadError: "" };
     } catch (error) {
-      try {
-        const snapshot = await window.CldOfflineStore?.readSnapshot(cld);
-        if (Array.isArray(snapshot?.features)) {
-          return {
-            ...parseFeatures({ features: snapshot.features }),
-            loadError: "Offline: showing the last map saved on this device."
-          };
-        }
-      } catch {
-        // Fall through to the explicit no-snapshot state.
+      const snapshot = await window.CldOfflineStore?.readCachedFeatures(cld);
+      if (Array.isArray(snapshot?.features)) {
+        return {
+          ...parseFeatures({ features: snapshot.features }),
+          loadError: "Offline: showing the last map saved on this device."
+        };
       }
       return {
         zones: [],

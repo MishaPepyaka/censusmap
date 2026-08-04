@@ -155,14 +155,7 @@
       if (!navigator.onLine) throw new Error("Offline");
       const data = await getJsonWithTimeout(`/api/cld/${cld}/features`);
       const features = applyPendingMutations((data.features || []).filter((f) => !isExcludedCuFeature(f)));
-      void Promise.resolve(window.CldOfflineStore?.saveSnapshot(cld, features)).catch(() => {
-        // The existing localStorage fallback still supports a smaller snapshot.
-      });
-      try {
-        localStorage.setItem(`cld-map-cache:${cld}`, JSON.stringify({ savedAt: Date.now(), features }));
-      } catch {
-        // IndexedDB remains the primary offline store.
-      }
+      window.CldOfflineStore?.saveCachedFeatures(cld, features);
       return {
         source: "api",
         loadError: "",
@@ -171,31 +164,16 @@
         specialLocations: features.filter((f) => isSpecialLocationFeature(f.properties || {}, f.geometry || {}))
       };
     } catch (apiError) {
-      try {
-        const snapshot = await window.CldOfflineStore?.readSnapshot(cld);
-        if (Array.isArray(snapshot?.features)) {
-          const features = applyPendingMutations(snapshot.features.filter((f) => !isExcludedCuFeature(f)));
-          return {
-            source: "cache",
-            loadError: "Offline: showing the last map saved on this device.",
-            blocks: features.filter((f) => isZoneFeature(f)),
-            dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {})),
-            specialLocations: features.filter((f) => isSpecialLocationFeature(f.properties || {}, f.geometry || {}))
-          };
-        }
-        const cached = JSON.parse(localStorage.getItem(`cld-map-cache:${cld}`) || "null");
-        if (Array.isArray(cached?.features)) {
-          const features = applyPendingMutations(cached.features.filter((f) => !isExcludedCuFeature(f)));
-          return {
-            source: "cache",
-            loadError: "Offline: showing the last map saved on this device.",
-            blocks: features.filter((f) => isZoneFeature(f)),
-            dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {})),
-            specialLocations: features.filter((f) => isSpecialLocationFeature(f.properties || {}, f.geometry || {}))
-          };
-        }
-      } catch {
-        // A corrupt cache must not prevent the normal error state.
+      const snapshot = await window.CldOfflineStore?.readCachedFeatures(cld);
+      if (Array.isArray(snapshot?.features)) {
+        const features = applyPendingMutations(snapshot.features.filter((f) => !isExcludedCuFeature(f)));
+        return {
+          source: "cache",
+          loadError: "Offline: showing the last map saved on this device.",
+          blocks: features.filter((f) => isZoneFeature(f)),
+          dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {})),
+          specialLocations: features.filter((f) => isSpecialLocationFeature(f.properties || {}, f.geometry || {}))
+        };
       }
       return {
         source: "none",
@@ -1314,12 +1292,7 @@
     try {
       const data = await getJsonWithTimeout(`/api/cld/${cld}/features`);
       const features = applyPendingMutations((data.features || []).filter((feature) => !isExcludedCuFeature(feature)));
-      localStorage.setItem(`cld-map-cache:${cld}`, JSON.stringify({ savedAt: Date.now(), features }));
-      try {
-        await window.CldOfflineStore?.saveSnapshot(cld, features);
-      } catch {
-        // The visible map remains usable if the offline snapshot cannot be refreshed.
-      }
+      window.CldOfflineStore?.saveCachedFeatures(cld, features);
       let added = 0;
       let addedSpecialLocations = 0;
       for (const feature of features) {

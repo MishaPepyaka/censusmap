@@ -19,7 +19,7 @@
   - Share URL zoom/coordinate state, base-layer switching, tile-cache status, and browser/Capacitor location tracking.
   - Leave editor modes and marker mutation handling in the editor.
 
-- [ ] R005 Consolidate offline loading primitives
+- [x] R005 Consolidate offline loading primitives
   - Share snapshot reading/writing and timeout-safe map loading primitives.
   - Keep the editor's mutation queue and optimistic overlay as an editor-specific layer.
 
