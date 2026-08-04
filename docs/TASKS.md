@@ -23,7 +23,7 @@
   - Share snapshot reading/writing and timeout-safe map loading primitives.
   - Keep the editor's mutation queue and optimistic overlay as an editor-specific layer.
 
-- [ ] R006 Organise shared CSS components
+- [x] R006 Organise shared CSS components
   - Group base tokens, map overlays, panels/forms, popups, and responsive rules into component sections or files.
   - Remove literal duplicate declarations without changing visual behaviour.
 
