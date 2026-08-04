@@ -27,7 +27,7 @@
   - Group base tokens, map overlays, panels/forms, popups, and responsive rules into component sections or files.
   - Remove literal duplicate declarations without changing visual behaviour.
 
-- [ ] R007 Align geometry editor with shared map infrastructure
+- [x] R007 Align geometry editor with shared map infrastructure
   - Decide whether the geometry editor should use the same same-origin tile buffer and API helper.
   - Keep boundary-editing interactions isolated from viewer/editor marker logic.
 

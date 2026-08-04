@@ -1,5 +1,6 @@
 (async function initGeometryEditor() {
   const { getJson } = window.CensusMapApi;
+  const { isPolygonGeometry } = window.CensusMapData;
   const match = window.location.pathname.match(/^\/(\d+)\/edit_geometry\/?$/);
   const cld = match ? match[1] : "";
   if (!cld) return window.location.replace("/");
@@ -18,7 +19,7 @@
 
   const map = L.map("map", { zoomControl: false }).setView([56, -96], 4);
   L.control.zoom({ position: "bottomright" }).addTo(map);
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  L.tileLayer("/tiles/satellite/{z}/{y}/{x}", {
     maxZoom: 22, maxNativeZoom: 17, attribution: "Tiles © Esri"
   }).addTo(map);
 
@@ -26,10 +27,6 @@
   const handles = L.layerGroup().addTo(map);
   const dirty = new Set();
   let selected = null;
-
-  function isPolygon(feature) {
-    return feature?.geometry?.type === "Polygon" || feature?.geometry?.type === "MultiPolygon";
-  }
 
   function zoneName(feature) {
     const props = feature.properties || {};
@@ -91,7 +88,7 @@
   try {
     const data = await getJson(`/api/cld/${cld}/features`);
     for (const feature of data.features || []) {
-      if (!isPolygon(feature)) continue;
+      if (!isPolygonGeometry(feature?.geometry)) continue;
       const geo = L.geoJSON(feature, { style: () => style(null, false) });
       geo.eachLayer((layer) => {
         layer.feature = feature;
