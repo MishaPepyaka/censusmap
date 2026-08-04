@@ -1,4 +1,17 @@
 (async function initEditor() {
+  const {
+    isNonEmpty,
+    escapeHtml,
+    isPolygonGeometry,
+    isPointGeometry,
+    hasDwellingIdentifier,
+    getZoneKind,
+    isZoneFeature,
+    isDwellingFeature,
+    isSpecialLocationFeature,
+    extractCuCode,
+    buildColorMap
+  } = window.CensusMapData;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
@@ -124,75 +137,10 @@
     syncStatusEl.classList.toggle("error", state === "error");
   }
 
-  function isNonEmpty(value) {
-    return value !== undefined && value !== null && String(value).trim().length > 0;
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
   function setStatus(message, isError) {
     if (!statusEl) return;
     statusEl.textContent = message;
     statusEl.classList.toggle("editor-status-error", Boolean(isError));
-  }
-
-  function isPolygonGeometry(geometry) {
-    return geometry?.type === "Polygon" || geometry?.type === "MultiPolygon";
-  }
-
-  function isPointGeometry(geometry) {
-    return geometry?.type === "Point";
-  }
-
-  function hasDwellingIdentifier(props) {
-    return isNonEmpty(props?.dwellingNo) || isNonEmpty(props?.DWELLING_NO) || isNonEmpty(props?.vrNumber) || isNonEmpty(props?.VR_NUMBER);
-  }
-
-  function getZoneKind(props) {
-    if (!props || typeof props !== "object") return "";
-    const group = String(props._group || "").trim().toLowerCase();
-    if (group === "cu" || group === "cus") return "cu";
-    if (group === "blocks" || group === "block") return "block";
-    if (isNonEmpty(props.COLB_UID) || isNonEmpty(props.CB_COLCODE)) return "block";
-    if (isNonEmpty(props.CU_TYPE) || isNonEmpty(props.CUID) || isNonEmpty(props.cu)) return "cu";
-    return "";
-  }
-
-  function isZoneFeature(feature) {
-    const props = feature?.properties || {};
-    const geometry = feature?.geometry || {};
-    return isPolygonGeometry(geometry) && (getZoneKind(props) === "cu" || getZoneKind(props) === "block");
-  }
-
-  function isDwellingFeature(props, geometry) {
-    if (!props || typeof props !== "object") return false;
-    if (!isPointGeometry(geometry)) return false;
-    const group = String(props._group || "").trim().toLowerCase();
-    // Special locations are stored with the dwelling features, and older ones
-    // may retain a dwelling number. Keep them out of the dwelling layer so the
-    // special-location marker receives the click and its editor controls.
-    if (group === "special_locations") return false;
-    if (group === "dwellings" || group === "dwelling") return true;
-    return hasDwellingIdentifier(props);
-  }
-
-  function isSpecialLocationFeature(props, geometry) {
-    return isPointGeometry(geometry) && String(props?._group || "").trim().toLowerCase() === "special_locations";
-  }
-
-  function extractCuCode(props) {
-    if (isNonEmpty(props.CUID)) return String(props.CUID).trim();
-    if (isNonEmpty(props.cu)) return String(props.cu).trim();
-    if (isNonEmpty(props.name)) return String(props.name).split("/")[0].trim();
-    if (isNonEmpty(props.label)) return String(props.label).split("/")[0].trim();
-    return "UNKNOWN";
   }
 
   const EXCLUDED_CU_CODES = new Set();
@@ -219,39 +167,6 @@
     const normalized = extractDwellingNo(props);
     const numeric = Number(String(normalized).replace(/\D/g, ""));
     return Number.isFinite(numeric) ? String(numeric) : normalized;
-  }
-
-  function hashText(value) {
-    const text = String(value || "");
-    let hash = 0;
-    for (let i = 0; i < text.length; i += 1) {
-      hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-    }
-    return hash;
-  }
-
-  function buildColorMap(cuCodes) {
-    const unique = [...new Set(cuCodes)].sort();
-    const map = new Map();
-    const variants = [
-      { strokeS: 78, strokeL: 28, fillS: 82, fillL: 52 },
-      { strokeS: 72, strokeL: 34, fillS: 76, fillL: 60 },
-      { strokeS: 86, strokeL: 24, fillS: 88, fillL: 48 },
-      { strokeS: 68, strokeL: 30, fillS: 72, fillL: 56 }
-    ];
-    for (let i = 0; i < unique.length; i += 1) {
-      const code = unique[i];
-      const seed = hashText(code);
-      const orderHue = (i * 137.508) % 360;
-      const hueJitter = (seed % 31) - 15;
-      const hue = Math.round((orderHue + hueJitter + 360) % 360);
-      const variant = variants[seed % variants.length];
-      map.set(code, {
-        stroke: `hsl(${hue} ${variant.strokeS}% ${variant.strokeL}%)`,
-        fill: `hsl(${hue} ${variant.fillS}% ${variant.fillL}%)`
-      });
-    }
-    return map;
   }
 
   async function getJson(url, options) {

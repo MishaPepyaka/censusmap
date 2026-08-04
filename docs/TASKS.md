@@ -1,5 +1,36 @@
 # Tasks
 
+## Refactoring Roadmap
+
+- [x] R001 Extract shared GeoJSON and display helpers
+  - Move identical pure helpers from viewer and editor to `map-data-helpers.js`.
+  - Keep page-specific dwelling/block fallback rules in their current page scripts.
+  - Load the shared script before viewer/editor code and include it in the offline shell.
+
+- [ ] R002 Extract shared API client
+  - Centralise JSON response parsing, HTTP errors, and timeout handling.
+  - Keep editor queue retry policy separate from simple viewer reads.
+
+- [ ] R003 Extract map action popups
+  - Share Google Maps, Apple Maps, Share Link markup and copy feedback.
+  - Preserve each page's popup-specific content and edit controls.
+
+- [ ] R004 Extract shared map setup and location tracking
+  - Share URL zoom/coordinate state, base-layer switching, tile-cache status, and browser/Capacitor location tracking.
+  - Leave editor modes and marker mutation handling in the editor.
+
+- [ ] R005 Consolidate offline loading primitives
+  - Share snapshot reading/writing and timeout-safe map loading primitives.
+  - Keep the editor's mutation queue and optimistic overlay as an editor-specific layer.
+
+- [ ] R006 Organise shared CSS components
+  - Group base tokens, map overlays, panels/forms, popups, and responsive rules into component sections or files.
+  - Remove literal duplicate declarations without changing visual behaviour.
+
+- [ ] R007 Align geometry editor with shared map infrastructure
+  - Decide whether the geometry editor should use the same same-origin tile buffer and API helper.
+  - Keep boundary-editing interactions isolated from viewer/editor marker logic.
+
 ## Current Priority Backlog
 
 - [x] T025 Add offline-ready app shell for viewer and editor
