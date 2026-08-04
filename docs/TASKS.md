@@ -15,7 +15,7 @@
   - Share Google Maps, Apple Maps, Share Link markup and copy feedback.
   - Preserve each page's popup-specific content and edit controls.
 
-- [ ] R004 Extract shared map setup and location tracking
+- [x] R004 Extract shared map setup and location tracking
   - Share URL zoom/coordinate state, base-layer switching, tile-cache status, and browser/Capacitor location tracking.
   - Leave editor modes and marker mutation handling in the editor.
 
