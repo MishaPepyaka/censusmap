@@ -14,23 +14,14 @@
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { getGoogleMapsLink, buildMapActionButtons, attachMapActionHandlers } = window.CensusMapActions;
+  const { readMapUrlState, bindMapUrlState, setupBaseMap, setupTileCacheStatus, createUserLocationTracker } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
     window.location.replace("/");
     return;
   }
-  const mapUrlParams = new URLSearchParams(window.location.search);
-  const requestedZoomValue = mapUrlParams.get("zoom");
-  const requestedZoom = requestedZoomValue === null ? null : Number(requestedZoomValue);
-  const requestedLatValue = mapUrlParams.get("lat");
-  const requestedLngValue = mapUrlParams.get("lng");
-  const requestedLat = requestedLatValue === null ? null : Number(requestedLatValue);
-  const requestedLng = requestedLngValue === null ? null : Number(requestedLngValue);
-  const hasRequestedCenter = Number.isFinite(requestedLat)
-    && Number.isFinite(requestedLng)
-    && requestedLat >= -90 && requestedLat <= 90
-    && requestedLng >= -180 && requestedLng <= 180;
+  const requestedMapView = readMapUrlState();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {
@@ -40,11 +31,6 @@
 
   let selectedPolygonLayer = null;
   let selectedDwellingMarker = null;
-  let userMarker = null;
-  let userAccuracy = null;
-  let locationWatchId = null;
-  let lastKnownLatLng = null;
-  let currentBaseMode = "satellite";
   let badgesReady = false;
 
   const dwellingByCode = new Map();
@@ -66,37 +52,6 @@
   const searchStatus = document.getElementById("dwelling-search-status");
   const tileCacheStatus = document.getElementById("tile-cache-status");
   let currentUser = null;
-
-  let tileCacheRefreshTimer = null;
-  async function refreshTileCacheStatus() {
-    if (!tileCacheStatus) return;
-    if (!("caches" in window)) {
-      tileCacheStatus.textContent = "Tiles: unavailable";
-      return;
-    }
-    try {
-      const cache = await caches.open("cmp-map-tiles-v1");
-      const requests = await cache.keys();
-      let bytes = 0;
-      for (const request of requests) {
-        const response = await cache.match(request);
-        if (!response) continue;
-        const length = Number(response.headers.get("x-censusmap-size") || response.headers.get("content-length"));
-        bytes += Number.isFinite(length) && length >= 0 ? length : (await response.blob()).size;
-      }
-      const megabytes = bytes / (1024 * 1024);
-      tileCacheStatus.textContent = `Tiles: ${megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes)} MB · ${requests.length}`;
-    } catch {
-      tileCacheStatus.textContent = "Tiles: unavailable";
-    }
-  }
-
-  function scheduleTileCacheStatusRefresh() {
-    window.clearTimeout(tileCacheRefreshTimer);
-    tileCacheRefreshTimer = window.setTimeout(() => {
-      void refreshTileCacheStatus();
-    }, 1200);
-  }
 
   async function loadCurrentUser() {
     if (!navigator.onLine) return;
@@ -240,28 +195,9 @@
     fadeAnimation: true
   }).setView([56.0, -96.0], 4);
 
-  function syncMapUrl() {
-    const center = map.getCenter();
-    const params = new URLSearchParams(window.location.search);
-    params.set("zoom", String(Math.round(map.getZoom())));
-    params.set("lat", center.lat.toFixed(6));
-    params.set("lng", center.lng.toFixed(6));
-    const query = params.toString();
-    window.history.replaceState(null, "", `${window.location.pathname}?${query}${window.location.hash}`);
+  const mapUrlState = bindMapUrlState(map, requestedMapView, (query) => {
     if (editRouteLink) editRouteLink.href = `/${cld}/edit?${query}`;
-  }
-
-  function applyRequestedMapView() {
-    if (hasRequestedCenter) {
-      const zoom = Number.isFinite(requestedZoom) ? Math.max(0, Math.min(22, requestedZoom)) : map.getZoom();
-      map.setView([requestedLat, requestedLng], zoom);
-    } else if (Number.isFinite(requestedZoom)) {
-      map.setZoom(Math.max(0, Math.min(22, requestedZoom)));
-    }
-    syncMapUrl();
-  }
-
-  map.on("zoomend moveend", syncMapUrl);
+  });
   L.control.zoom({ position: "bottomright" }).addTo(map);
   const vectorRenderer = L.svg({ padding: 0.5 });
 
@@ -274,74 +210,19 @@
   map.on("zoomend", syncZoomUiMode);
   syncZoomUiMode();
 
-  const satelliteLayer = L.tileLayer(
-    "/tiles/satellite/{z}/{y}/{x}",
-    {
-      maxZoom: 22,
-      maxNativeZoom: 17,
-      attribution: "Tiles &copy; Esri"
-    }
-  );
-  const schematicLayer = L.tileLayer("/tiles/schematic/{z}/{y}/{x}", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors"
-  });
-  satelliteLayer.addTo(map);
-  satelliteLayer.on("load", scheduleTileCacheStatusRefresh);
-  schematicLayer.on("load", scheduleTileCacheStatusRefresh);
-  void refreshTileCacheStatus();
-  window.setInterval(() => void refreshTileCacheStatus(), 120000);
-
-  function setBaseMode(mode) {
-    if (mode === currentBaseMode) return;
-    if (mode === "satellite") {
-      map.removeLayer(schematicLayer);
-      map.addLayer(satelliteLayer);
-      currentBaseMode = "satellite";
-      return;
-    }
-    map.removeLayer(satelliteLayer);
-    map.addLayer(schematicLayer);
-    currentBaseMode = "schematic";
-  }
-
-  function toggleBaseMode() {
-    setBaseMode(currentBaseMode === "satellite" ? "schematic" : "satellite");
-    const modeLabel = currentBaseMode === "satellite" ? "Satellite" : "Schematic";
-    baseMapBtn?.setAttribute("title", `Switch base map (current: ${modeLabel})`);
-    baseMapBtn?.setAttribute("aria-label", `Switch base map (current: ${modeLabel})`);
-  }
-
-  async function focusUserLocation() {
-    if (lastKnownLatLng) {
-      map.flyTo(lastKnownLatLng, Math.max(map.getZoom(), 15), { duration: 0.6 });
-      return;
-    }
-    const position = await requestCurrentLocation();
-    if (position) {
-      const latlng = L.latLng(position.coords.latitude, position.coords.longitude);
-      upsertUserLocation(latlng, position.coords.accuracy || 0);
-      map.flyTo(latlng, Math.max(map.getZoom(), 15), { duration: 0.6 });
-    }
-  }
+  const baseMap = setupBaseMap(map, baseMapBtn);
+  setupTileCacheStatus(tileCacheStatus, [baseMap.satelliteLayer, baseMap.schematicLayer]);
+  const userLocationTracker = createUserLocationTracker(map);
 
   if (locateBtn) {
     locateBtn.textContent = "🧍";
     locateBtn.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      await focusUserLocation();
+      await userLocationTracker.focus();
     });
   }
 
-  if (baseMapBtn) {
-    baseMapBtn.textContent = "🗺️";
-    baseMapBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      toggleBaseMode();
-    });
-  }
 
   await loadCurrentUser();
   if (editRouteLink) {
@@ -878,121 +759,8 @@
   } else {
     setSearchStatus("No geometry or dwellings found for this CLD.", true);
   }
-  applyRequestedMapView();
+  mapUrlState.applyRequestedMapView();
 
-  function upsertUserLocation(latlng, accuracyMeters) {
-    lastKnownLatLng = latlng;
-    if (!userMarker) {
-      const icon = L.icon({
-        iconUrl: "/person-marker.svg?v=20260721e",
-        iconSize: [36, 36],
-        iconAnchor: [18, 30]
-      });
-      userMarker = L.marker(latlng, { icon, interactive: false }).addTo(map);
-    } else {
-      userMarker.setLatLng(latlng);
-    }
-
-    if (!userAccuracy) {
-      userAccuracy = L.circle(latlng, {
-        radius: accuracyMeters,
-        color: "#2563eb",
-        fillColor: "#60a5fa",
-        fillOpacity: 0.14,
-        weight: 1
-      }).addTo(map);
-    } else {
-      userAccuracy.setLatLng(latlng);
-      userAccuracy.setRadius(accuracyMeters);
-    }
-  }
-
-  async function requestCurrentLocation() {
-    const capacitor = window.Capacitor;
-    const geoPlugin = capacitor?.Plugins?.Geolocation;
-    const isNative = typeof capacitor?.isNativePlatform === "function" && capacitor.isNativePlatform();
-    if (isNative && geoPlugin) {
-      try {
-        await geoPlugin.requestPermissions();
-        return await geoPlugin.getCurrentPosition({
-          enableHighAccuracy: true,
-          timeout: 20000,
-          maximumAge: 0
-        });
-      } catch {
-        // Fall through to browser API.
-      }
-    }
-
-    if (!navigator.geolocation) return null;
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (position) => resolve(position),
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-      );
-    });
-  }
-
-  async function startNativeWatch() {
-    const capacitor = window.Capacitor;
-    const geoPlugin = capacitor?.Plugins?.Geolocation;
-    const isNative = typeof capacitor?.isNativePlatform === "function" && capacitor.isNativePlatform();
-    if (!isNative || !geoPlugin) return false;
-
-    try {
-      await geoPlugin.requestPermissions();
-      locationWatchId = await geoPlugin.watchPosition(
-        {
-          enableHighAccuracy: true,
-          timeout: 20000,
-          maximumAge: 5000
-        },
-        (position, err) => {
-          if (err || !position?.coords) return;
-          const latlng = L.latLng(position.coords.latitude, position.coords.longitude);
-          upsertUserLocation(latlng, position.coords.accuracy || 0);
-        }
-      );
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  function startBrowserWatch() {
-    if (!navigator.geolocation) return false;
-    locationWatchId = navigator.geolocation.watchPosition(
-      (position) => {
-        if (!position?.coords) return;
-        const latlng = L.latLng(position.coords.latitude, position.coords.longitude);
-        upsertUserLocation(latlng, position.coords.accuracy || 0);
-      },
-      () => {
-        // Silent on permission denial.
-      },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 }
-    );
-    return true;
-  }
-
-  async function startLocationTracking() {
-    const firstPosition = await requestCurrentLocation();
-    if (firstPosition?.coords) {
-      const latlng = L.latLng(firstPosition.coords.latitude, firstPosition.coords.longitude);
-      upsertUserLocation(latlng, firstPosition.coords.accuracy || 0);
-    }
-    const nativeWatchStarted = await startNativeWatch();
-    if (!nativeWatchStarted) {
-      startBrowserWatch();
-    }
-  }
-
-  await startLocationTracking();
-
-  window.addEventListener("beforeunload", () => {
-    if (typeof locationWatchId === "number" && navigator.geolocation?.clearWatch) {
-      navigator.geolocation.clearWatch(locationWatchId);
-    }
-  });
+  await userLocationTracker.start();
+  window.addEventListener("beforeunload", () => userLocationTracker.stop());
 })();
