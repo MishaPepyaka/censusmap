@@ -56,13 +56,13 @@
     try {
       const cache = await caches.open("cmp-map-tiles-v1");
       const requests = await cache.keys();
-      const sizes = await Promise.all(requests.map(async (request) => {
+      let bytes = 0;
+      for (const request of requests) {
         const response = await cache.match(request);
-        if (!response) return 0;
-        const length = Number(response.headers.get("content-length"));
-        return Number.isFinite(length) && length >= 0 ? length : (await response.blob()).size;
-      }));
-      const bytes = sizes.reduce((total, size) => total + size, 0);
+        if (!response) continue;
+        const length = Number(response.headers.get("x-censusmap-size") || response.headers.get("content-length"));
+        bytes += Number.isFinite(length) && length >= 0 ? length : (await response.blob()).size;
+      }
       const megabytes = bytes / (1024 * 1024);
       tileCacheStatus.textContent = `Tiles: ${megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes)} MB · ${requests.length}`;
     } catch {
@@ -263,15 +263,48 @@
     return payload;
   }
 
+  async function getJsonWithTimeout(url, options = {}, timeoutMs = 5000) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await getJson(url, { ...options, signal: controller.signal });
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  function applyPendingMutations(features) {
+    const nextFeatures = Array.isArray(features) ? [...features] : [];
+    try {
+      const queue = JSON.parse(localStorage.getItem(`cld-map-pending:${cld}`) || "[]");
+      if (!Array.isArray(queue)) return nextFeatures;
+      for (const item of queue) {
+        if (item.method === "POST" && item.payload?.geometry) {
+          nextFeatures.push({ ...item.payload, _offlineQueueId: item.id, _offlineMutationKey: item.dedupeKey || item.id });
+          continue;
+        }
+        const id = String(item.payload?.id ?? item.url?.split("/").pop() ?? "");
+        const index = nextFeatures.findIndex((feature) => String(getFeatureId(feature) ?? "") === id);
+        if (item.method === "PUT" && index >= 0 && item.payload?.geometry) {
+          nextFeatures[index] = item.payload;
+        } else if (item.method === "DELETE" && index >= 0) {
+          nextFeatures.splice(index, 1);
+        }
+      }
+    } catch {
+      // A damaged queue must not prevent the saved map from opening.
+    }
+    return nextFeatures;
+  }
+
   async function getMapData() {
     try {
-      const data = await getJson(`/api/cld/${cld}/features`);
-      const features = (data.features || []).filter((f) => !isExcludedCuFeature(f));
-      try {
-        await window.CldOfflineStore?.saveSnapshot(cld, features);
-      } catch {
+      if (!navigator.onLine) throw new Error("Offline");
+      const data = await getJsonWithTimeout(`/api/cld/${cld}/features`);
+      const features = applyPendingMutations((data.features || []).filter((f) => !isExcludedCuFeature(f)));
+      void Promise.resolve(window.CldOfflineStore?.saveSnapshot(cld, features)).catch(() => {
         // The existing localStorage fallback still supports a smaller snapshot.
-      }
+      });
       try {
         localStorage.setItem(`cld-map-cache:${cld}`, JSON.stringify({ savedAt: Date.now(), features }));
       } catch {
@@ -288,7 +321,7 @@
       try {
         const snapshot = await window.CldOfflineStore?.readSnapshot(cld);
         if (Array.isArray(snapshot?.features)) {
-          const features = snapshot.features.filter((f) => !isExcludedCuFeature(f));
+          const features = applyPendingMutations(snapshot.features.filter((f) => !isExcludedCuFeature(f)));
           return {
             source: "cache",
             loadError: "Offline: showing the last map saved on this device.",
@@ -299,12 +332,13 @@
         }
         const cached = JSON.parse(localStorage.getItem(`cld-map-cache:${cld}`) || "null");
         if (Array.isArray(cached?.features)) {
+          const features = applyPendingMutations(cached.features.filter((f) => !isExcludedCuFeature(f)));
           return {
             source: "cache",
             loadError: "Offline: showing the last map saved on this device.",
-            blocks: cached.features.filter((f) => isZoneFeature(f)),
-            dwellings: cached.features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {})),
-            specialLocations: cached.features.filter((f) => isSpecialLocationFeature(f.properties || {}, f.geometry || {}))
+            blocks: features.filter((f) => isZoneFeature(f)),
+            dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {})),
+            specialLocations: features.filter((f) => isSpecialLocationFeature(f.properties || {}, f.geometry || {}))
           };
         }
       } catch {
@@ -513,7 +547,7 @@
   satelliteLayer.on("load", scheduleTileCacheStatusRefresh);
   schematicLayer.on("load", scheduleTileCacheStatusRefresh);
   void refreshTileCacheStatus();
-  window.setInterval(() => void refreshTileCacheStatus(), 30000);
+  window.setInterval(() => void refreshTileCacheStatus(), 120000);
 
   function setBaseMode(mode) {
     if (mode === currentBaseMode) return;
@@ -1021,6 +1055,8 @@
       properties: { ...(feature.properties || {}) },
       geometry: { type: "Point", coordinates: [lng, lat] }
     };
+    marker._offlineMutationId = feature._offlineQueueId || null;
+    marker._offlineMutationKey = feature._offlineMutationKey || null;
     allSpecialLocationMarkers.add(marker);
     marker.on("click", () => selectSpecialLocationMarker(marker));
     marker.on("dragend", () => {
@@ -1048,23 +1084,16 @@
       properties: { _group: "special_locations", locationType: type, name, label: name, notes },
       geometry: { type: "Point", coordinates: [Number(latlng.lng), Number(latlng.lat)] }
     };
-    try {
-      setSyncStatus("Sending…", "pending");
-      const created = await getJson(`/api/cld/${cld}/features`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(feature)
-      });
-      const id = Number(created.ids?.[0]);
-      if (Number.isFinite(id)) feature.id = id;
-      const marker = createSpecialLocationMarker(feature);
-      selectSpecialLocationMarker(marker);
-      specialLocationPlacementPending = false;
-      specialLocationPlaceBtn.textContent = "New";
-      setSyncStatus("Saved", "saved");
-      setStatus(`${name} added.`, false);
-    } catch (error) {
-      setSyncStatus("Save failed", "error");
-      setStatus(`Could not add special location: ${error.message}`, true);
+    const marker = createSpecialLocationMarker(feature);
+    if (!marker) {
+      setStatus("Could not add special location marker.", true);
+      return;
     }
+    selectSpecialLocationMarker(marker);
+    specialLocationPlacementPending = false;
+    specialLocationPlaceBtn.textContent = "New";
+    void persistSpecialLocationMarker(marker);
+    setStatus(`${name} added on this device; queued for sending.`, false);
   }
 
   specialLocationPlaceBtn?.addEventListener("click", () => {
@@ -1123,32 +1152,17 @@
     const payload = useMarkerProperties
       ? specialLocationFeatureFromMarkerProperties(id, marker.getLatLng(), marker.feature?.properties)
       : specialLocationFeatureFromForm(id, marker.getLatLng(), marker.feature?.properties);
-    try {
-      setSyncStatus("Sending…", "pending");
-      if (id === null) {
-        const created = await getJson(`/api/cld/${cld}/features`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
-        });
-        const createdId = Number(created.ids?.[0]);
-        if (!Number.isFinite(createdId)) throw new Error("Create did not return new id");
-        payload.id = createdId;
-        specialLocationMarkersById.set(createdId, marker);
-      } else {
-        await getJson(`/api/cld/${cld}/features/${id}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
-        });
-      }
-      marker.feature = payload;
-      applySpecialLocationMarkerIcon(marker, marker === selectedSpecialLocationMarker);
-      attachSpecialLocationPopupHandlers(marker);
-      setSyncStatus("Saved", "saved");
-      setStatus(`${payload.properties.name} saved`, false);
-      return true;
-    } catch (error) {
-      setSyncStatus("Save failed", "error");
-      setStatus(`Special-location save failed: ${error.message}`, true);
-      return false;
-    }
+    const url = id === null ? `/api/cld/${cld}/features` : `/api/cld/${cld}/features/${id}`;
+    marker._offlineMutationKey ||= id === null
+      ? `special:new:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      : `special:${id}`;
+    const queued = queueMutation(id === null ? "POST" : "PUT", url, payload, marker._offlineMutationKey);
+    marker._offlineMutationId = id === null ? queued.id : null;
+    marker.feature = payload;
+    applySpecialLocationMarkerIcon(marker, marker === selectedSpecialLocationMarker);
+    attachSpecialLocationPopupHandlers(marker);
+    setStatus(`${payload.properties.name} queued for sending`, false);
+    return true;
   }
 
   function removeSpecialLocationMarkerLocally(marker) {
@@ -1407,6 +1421,8 @@
         coordinates: [lng, lat]
       }
     };
+    marker._offlineMutationId = feature._offlineQueueId || null;
+    marker._offlineMutationKey = feature._offlineMutationKey || null;
     marker._temporary = temporary;
     allDwellingMarkers.add(marker);
     if (temporary) {
@@ -1495,6 +1511,7 @@
   }
 
   const offlineQueueKey = `cld-map-pending:${cld}`;
+  let offlineQueueFlushInProgress = false;
 
   function readOfflineQueue() {
     try {
@@ -1505,43 +1522,90 @@
     }
   }
 
-  function queueMutation(method, url, payload) {
+  function queueMutation(method, url, payload, dedupeKey = "") {
     const queue = readOfflineQueue();
-    const existing = queue.findIndex((item) => item.method === method && item.url === url);
-    const item = { method, url, payload, queuedAt: Date.now() };
-    if (existing >= 0 && method === "PUT") queue.splice(existing, 1, item);
+    const existing = dedupeKey
+      ? queue.findIndex((item) => item.dedupeKey === dedupeKey)
+      : queue.findIndex((item) => item.method === method && item.url === url && method === "PUT");
+    const item = {
+      id: existing >= 0 ? queue[existing].id : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      method,
+      url,
+      payload,
+      dedupeKey,
+      queuedAt: existing >= 0 ? queue[existing].queuedAt : Date.now()
+    };
+    if (existing >= 0) queue.splice(existing, 1, item);
     else queue.push(item);
     localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
     setSyncStatus("Waiting to send", "pending");
+    void flushOfflineQueue();
+    return item;
+  }
+
+  function applyQueuedCreateResult(item, result) {
+    if (item.method !== "POST") return;
+    const id = Number(result?.ids?.[0]);
+    if (!Number.isFinite(id)) return;
+    const isSpecialLocation = item.payload?.properties?._group === "special_locations";
+    const markers = isSpecialLocation ? allSpecialLocationMarkers : allDwellingMarkers;
+    for (const marker of markers) {
+      if (marker._offlineMutationId !== item.id) continue;
+      marker.feature.id = id;
+      marker._offlineMutationId = null;
+      marker._offlineMutationKey = null;
+      marker._temporary = false;
+      if (isSpecialLocation) {
+        specialLocationMarkersById.set(id, marker);
+        attachSpecialLocationPopupHandlers(marker);
+      } else {
+        dwellingMarkersById.set(id, marker);
+        clearDwellingDirty(marker);
+        attachDwellingPopupHandlers(marker);
+      }
+      break;
+    }
   }
 
   async function flushOfflineQueue() {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || offlineQueueFlushInProgress) return;
     const queue = readOfflineQueue();
     if (queue.length === 0) return;
+    offlineQueueFlushInProgress = true;
     setSyncStatus(`Sending ${queue.length} change${queue.length === 1 ? "" : "s"}…`, "pending");
     const remaining = [];
-    for (const item of queue) {
-      try {
-        await getJson(item.url, {
-          method: item.method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(item.payload)
-        });
-      } catch {
-        remaining.push(item);
+    try {
+      for (const item of queue) {
+        try {
+          const result = await getJsonWithTimeout(item.url, {
+            method: item.method,
+            headers: { "Content-Type": "application/json" },
+            body: item.payload === undefined ? undefined : JSON.stringify(item.payload)
+          });
+          applyQueuedCreateResult(item, result);
+        } catch {
+          remaining.push(item);
+        }
       }
+      localStorage.setItem(offlineQueueKey, JSON.stringify(remaining));
+      setSyncStatus(remaining.length ? "Waiting to send" : "Saved", remaining.length ? "pending" : "saved");
+      if (!remaining.length) void refreshMapChanges();
+    } finally {
+      offlineQueueFlushInProgress = false;
     }
-    localStorage.setItem(offlineQueueKey, JSON.stringify(remaining));
-    setSyncStatus(remaining.length ? "Waiting to send" : "Saved", remaining.length ? "pending" : "saved");
   }
 
   async function refreshMapChanges() {
     if (!navigator.onLine) return;
     try {
-      const data = await getJson(`/api/cld/${cld}/features`);
-      const features = (data.features || []).filter((feature) => !isExcludedCuFeature(feature));
+      const data = await getJsonWithTimeout(`/api/cld/${cld}/features`);
+      const features = applyPendingMutations((data.features || []).filter((feature) => !isExcludedCuFeature(feature)));
       localStorage.setItem(`cld-map-cache:${cld}`, JSON.stringify({ savedAt: Date.now(), features }));
+      try {
+        await window.CldOfflineStore?.saveSnapshot(cld, features);
+      } catch {
+        // The visible map remains usable if the offline snapshot cannot be refreshed.
+      }
       let added = 0;
       let addedSpecialLocations = 0;
       for (const feature of features) {
@@ -1663,50 +1727,22 @@
       return false;
     }
 
-    try {
-      setSyncStatus("Sending…", "pending");
-      if (id === null) {
-        const createRes = await getJson(`/api/cld/${cld}/features`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        const createdId = Array.isArray(createRes.ids) ? Number(createRes.ids[0]) : null;
-        if (!Number.isFinite(createdId)) throw new Error("Create did not return new id");
-        payload.id = createdId;
-        marker.feature = payload;
-        marker._temporary = false;
-        dwellingMarkersById.set(createdId, marker);
-      } else {
-        await getJson(`/api/cld/${cld}/features/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        marker.feature = payload;
-      }
-
-      if (selectAfterSave) {
-        selectedDwellingMarker = marker;
-        applyMarkerIcon(marker, true);
-      } else {
-        applyMarkerIcon(marker, false);
-      }
-      clearDwellingDirty(marker);
-      setSyncStatus("Saved", "saved");
-      setStatus(`Dwelling ${extractDwellingNo(payload.properties || {})} saved`, false);
-      return true;
-    } catch (error) {
-      if (!navigator.onLine || error instanceof TypeError) {
-        const url = id === null ? `/api/cld/${cld}/features` : `/api/cld/${cld}/features/${id}`;
-        queueMutation(id === null ? "POST" : "PUT", url, payload);
-        setStatus("Saved on this device; it will be sent when the connection returns.", false);
-        return true;
-      }
-      setSyncStatus("Save failed", "error");
-      setStatus(`Dwelling save failed: ${error.message}`, true);
-      return false;
+    const url = id === null ? `/api/cld/${cld}/features` : `/api/cld/${cld}/features/${id}`;
+    marker._offlineMutationKey ||= id === null
+      ? `dwelling:new:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      : `dwelling:${id}`;
+    const queued = queueMutation(id === null ? "POST" : "PUT", url, payload, marker._offlineMutationKey);
+    marker._offlineMutationId = id === null ? queued.id : null;
+    marker.feature = payload;
+    if (selectAfterSave) {
+      selectedDwellingMarker = marker;
+      applyMarkerIcon(marker, true);
+    } else {
+      applyMarkerIcon(marker, false);
     }
+    clearDwellingDirty(marker);
+    setStatus(`Dwelling ${extractDwellingNo(payload.properties || {})} queued for sending`, false);
+    return true;
   }
 
   dwellingSaveBtn?.addEventListener("click", async () => {
@@ -1893,71 +1929,60 @@
     return Boolean(src && (src.ctrlKey || src.metaKey || src.button === 2));
   }
 
-  let addDwellingInProgress = false;
-  async function addDwellingAt(latlng, preferredZoneLayer = null) {
+  function addDwellingAt(latlng, preferredZoneLayer = null) {
     if (!isAddingMode()) return;
-    if (addDwellingInProgress) return;
-    addDwellingInProgress = true;
-    try {
-      if (!canPersistEdits) {
-        setStatus("Cannot add dwelling: API source unavailable.", true);
-        return;
-      }
-
-      const zoneLayer = preferredZoneLayer && getZoneKind(preferredZoneLayer.feature?.properties || {}) === "block"
-        ? preferredZoneLayer
-        : resolveZoneForDwellingAdd(latlng);
-      if (!zoneLayer || getZoneKind(zoneLayer.feature?.properties || {}) !== "block") {
-        setStatus("Use right-click, Ctrl/Cmd+click, or a long tap inside a block polygon to create a dwelling.", true);
-        return;
-      }
-
-      selectZone(zoneLayer, { showPopup: false });
-
-      if (selectedDwellingMarker) {
-        applyMarkerIcon(selectedDwellingMarker, false);
-        selectedDwellingMarker = null;
-      }
-
-      const zoneProps = zoneLayer.feature?.properties || {};
-      const ctxCu = extractCuCode(zoneProps);
-      const ctxBlock = extractBlockCode(zoneProps);
-
-      const feature = {
-        type: "Feature",
-        id: null,
-        properties: {
-          _group: "dwellings",
-          CUID: ctxCu,
-          CB_COLCODE: ctxBlock,
-          dwellingNo: nextDwellingNoForCu(ctxCu),
-          notes: "",
-          status: "429",
-          photos: [],
-          label: ""
-        },
-        geometry: { type: "Point", coordinates: [latlng.lng, latlng.lat] }
-      };
-
-      const marker = createDwellingMarker(feature, { temporary: true });
-      if (!marker) {
-        setStatus("Failed to add dwelling marker.", true);
-        return;
-      }
-
-      selectedDwellingMarker = marker;
-      applyMarkerIcon(marker, true);
-      fillFormFromFeature(feature);
-
-      const saved = await persistDwellingMarker(marker, { selectAfterSave: true });
-      if (!saved) {
-        setStatus("Dwelling marker created, but save failed.", true);
-        return;
-      }
-      map.flyTo(latlng, Math.max(map.getZoom(), 18), { duration: 0.35 });
-    } finally {
-      addDwellingInProgress = false;
+    if (!canPersistEdits) {
+      setStatus("Cannot add dwelling: API source unavailable.", true);
+      return;
     }
+
+    const zoneLayer = preferredZoneLayer && getZoneKind(preferredZoneLayer.feature?.properties || {}) === "block"
+      ? preferredZoneLayer
+      : resolveZoneForDwellingAdd(latlng);
+    if (!zoneLayer || getZoneKind(zoneLayer.feature?.properties || {}) !== "block") {
+      setStatus("Use right-click, Ctrl/Cmd+click, or a long tap inside a block polygon to create a dwelling.", true);
+      return;
+    }
+
+    selectZone(zoneLayer, { showPopup: false });
+
+    if (selectedDwellingMarker) {
+      applyMarkerIcon(selectedDwellingMarker, false);
+      selectedDwellingMarker = null;
+    }
+
+    const zoneProps = zoneLayer.feature?.properties || {};
+    const ctxCu = extractCuCode(zoneProps);
+    const ctxBlock = extractBlockCode(zoneProps);
+
+    const feature = {
+      type: "Feature",
+      id: null,
+      properties: {
+        _group: "dwellings",
+        CUID: ctxCu,
+        CB_COLCODE: ctxBlock,
+        dwellingNo: nextDwellingNoForCu(ctxCu),
+        notes: "",
+        status: "429",
+        photos: [],
+        label: ""
+      },
+      geometry: { type: "Point", coordinates: [latlng.lng, latlng.lat] }
+    };
+
+    const marker = createDwellingMarker(feature, { temporary: true });
+    if (!marker) {
+      setStatus("Failed to add dwelling marker.", true);
+      return;
+    }
+
+    selectedDwellingMarker = marker;
+    applyMarkerIcon(marker, true);
+    fillFormFromFeature(feature);
+
+    void persistDwellingMarker(marker, { selectAfterSave: true });
+    map.flyTo(latlng, Math.max(map.getZoom(), 18), { duration: 0.35 });
   }
 
   map.on("click", (event) => {

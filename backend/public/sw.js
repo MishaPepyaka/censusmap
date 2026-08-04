@@ -1,4 +1,4 @@
-const SHELL_CACHE = "cmp-shell-v15";
+const SHELL_CACHE = "cmp-shell-v16";
 const SHELL_CACHE_PREFIX = "cmp-shell-";
 const TILE_CACHE = "cmp-map-tiles-v1";
 const TILE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -148,7 +148,7 @@ self.addEventListener("fetch", (event) => {
 
   if (!isCacheableStaticAsset(url.pathname)) return;
   event.respondWith(
-    caches.match(event.request, { ignoreSearch: true }).then((cached) => {
+    caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(event.request).then((response) => {
         if (response.ok) {

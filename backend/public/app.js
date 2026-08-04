@@ -62,13 +62,13 @@
     try {
       const cache = await caches.open("cmp-map-tiles-v1");
       const requests = await cache.keys();
-      const sizes = await Promise.all(requests.map(async (request) => {
+      let bytes = 0;
+      for (const request of requests) {
         const response = await cache.match(request);
-        if (!response) return 0;
-        const length = Number(response.headers.get("content-length"));
-        return Number.isFinite(length) && length >= 0 ? length : (await response.blob()).size;
-      }));
-      const bytes = sizes.reduce((total, size) => total + size, 0);
+        if (!response) continue;
+        const length = Number(response.headers.get("x-censusmap-size") || response.headers.get("content-length"));
+        bytes += Number.isFinite(length) && length >= 0 ? length : (await response.blob()).size;
+      }
       const megabytes = bytes / (1024 * 1024);
       tileCacheStatus.textContent = `Tiles: ${megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes)} MB · ${requests.length}`;
     } catch {
@@ -84,10 +84,9 @@
   }
 
   async function loadCurrentUser() {
+    if (!navigator.onLine) return;
     try {
-      const response = await fetch("/api/me");
-      if (!response.ok) return;
-      const payload = await response.json();
+      const payload = await getJsonWithTimeout("/api/me");
       currentUser = payload.user || null;
     } catch {
       currentUser = null;
@@ -228,6 +227,16 @@
     return payload;
   }
 
+  async function getJsonWithTimeout(url, options = {}, timeoutMs = 5000) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await getJson(url, { ...options, signal: controller.signal });
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
   function parseFeatures(payload) {
     const features = Array.isArray(payload?.features) ? payload.features : [];
     return {
@@ -245,8 +254,17 @@
   }
 
   async function loadRegionSummary() {
+    if (!navigator.onLine) {
+      return {
+        cld,
+        label: `CLD ${cld}`,
+        ssids: [],
+        counts: { cu: 0, blocks: 0, dwellings: 0 },
+        loadError: "Offline"
+      };
+    }
     try {
-      return await getJson(`/api/cld/${cld}`);
+      return await getJsonWithTimeout(`/api/cld/${cld}`);
     } catch (error) {
       return {
         cld,
@@ -260,13 +278,12 @@
 
   async function getMapData() {
     try {
-      const apiData = await getJson(`/api/cld/${cld}/features`);
+      if (!navigator.onLine) throw new Error("Offline");
+      const apiData = await getJsonWithTimeout(`/api/cld/${cld}/features`);
       const features = Array.isArray(apiData.features) ? apiData.features : [];
-      try {
-        await window.CldOfflineStore?.saveSnapshot(cld, features);
-      } catch {
+      void Promise.resolve(window.CldOfflineStore?.saveSnapshot(cld, features)).catch(() => {
         // A storage quota error must not prevent the online map from loading.
-      }
+      });
       return { ...parseFeatures(apiData), loadError: "" };
     } catch (error) {
       try {
@@ -436,7 +453,7 @@
   satelliteLayer.on("load", scheduleTileCacheStatusRefresh);
   schematicLayer.on("load", scheduleTileCacheStatusRefresh);
   void refreshTileCacheStatus();
-  window.setInterval(() => void refreshTileCacheStatus(), 30000);
+  window.setInterval(() => void refreshTileCacheStatus(), 120000);
 
   function setBaseMode(mode) {
     if (mode === currentBaseMode) return;
