@@ -14,23 +14,14 @@
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { buildMapActionButtons, attachMapActionHandlers } = window.CensusMapActions;
+  const { readMapUrlState, bindMapUrlState, setupBaseMap, setupTileCacheStatus, createUserLocationTracker } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
     window.location.replace("/");
     return;
   }
-  const mapUrlParams = new URLSearchParams(window.location.search);
-  const requestedZoomValue = mapUrlParams.get("zoom");
-  const requestedZoom = requestedZoomValue === null ? null : Number(requestedZoomValue);
-  const requestedLatValue = mapUrlParams.get("lat");
-  const requestedLngValue = mapUrlParams.get("lng");
-  const requestedLat = requestedLatValue === null ? null : Number(requestedLatValue);
-  const requestedLng = requestedLngValue === null ? null : Number(requestedLngValue);
-  const hasRequestedCenter = Number.isFinite(requestedLat)
-    && Number.isFinite(requestedLng)
-    && requestedLat >= -90 && requestedLat <= 90
-    && requestedLng >= -180 && requestedLng <= 180;
+  const requestedMapView = readMapUrlState();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {
@@ -40,11 +31,6 @@
 
   let selectedPolygonLayer = null;
   let selectedDwellingMarker = null;
-  let userMarker = null;
-  let userAccuracy = null;
-  let locationWatchId = null;
-  let lastKnownLatLng = null;
-  let currentBaseMode = "satellite";
   let badgesReady = false;
   let editorMode = "editing";
   let specialLocationPlacementPending = false;
@@ -60,37 +46,6 @@
   const geometryEditorLink = document.getElementById("geometry-editor-link");
   const syncStatusEl = document.getElementById("editor-sync-status");
   const tileCacheStatus = document.getElementById("tile-cache-status");
-
-  let tileCacheRefreshTimer = null;
-  async function refreshTileCacheStatus() {
-    if (!tileCacheStatus) return;
-    if (!("caches" in window)) {
-      tileCacheStatus.textContent = "Tiles: unavailable";
-      return;
-    }
-    try {
-      const cache = await caches.open("cmp-map-tiles-v1");
-      const requests = await cache.keys();
-      let bytes = 0;
-      for (const request of requests) {
-        const response = await cache.match(request);
-        if (!response) continue;
-        const length = Number(response.headers.get("x-censusmap-size") || response.headers.get("content-length"));
-        bytes += Number.isFinite(length) && length >= 0 ? length : (await response.blob()).size;
-      }
-      const megabytes = bytes / (1024 * 1024);
-      tileCacheStatus.textContent = `Tiles: ${megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes)} MB · ${requests.length}`;
-    } catch {
-      tileCacheStatus.textContent = "Tiles: unavailable";
-    }
-  }
-
-  function scheduleTileCacheStatusRefresh() {
-    window.clearTimeout(tileCacheRefreshTimer);
-    tileCacheRefreshTimer = window.setTimeout(() => {
-      void refreshTileCacheStatus();
-    }, 1200);
-  }
 
   const collapseBtn = document.getElementById("dwellings-collapse-btn");
   const formWrap = document.getElementById("dwellings-form-wrap");
@@ -329,28 +284,9 @@
     inertia: false
   }).setView([56.0, -96.0], 4);
 
-  function syncMapUrl() {
-    const center = map.getCenter();
-    const params = new URLSearchParams(window.location.search);
-    params.set("zoom", String(Math.round(map.getZoom())));
-    params.set("lat", center.lat.toFixed(6));
-    params.set("lng", center.lng.toFixed(6));
-    const query = params.toString();
-    window.history.replaceState(null, "", `${window.location.pathname}?${query}${window.location.hash}`);
+  const mapUrlState = bindMapUrlState(map, requestedMapView, (query) => {
     if (editorViewLink) editorViewLink.href = `/${cld}?${query}`;
-  }
-
-  function applyRequestedMapView() {
-    if (hasRequestedCenter) {
-      const zoom = Number.isFinite(requestedZoom) ? Math.max(0, Math.min(22, requestedZoom)) : map.getZoom();
-      map.setView([requestedLat, requestedLng], zoom);
-    } else if (Number.isFinite(requestedZoom)) {
-      map.setZoom(Math.max(0, Math.min(22, requestedZoom)));
-    }
-    syncMapUrl();
-  }
-
-  map.on("zoomend moveend", syncMapUrl);
+  });
   const userLocationPane = map.createPane("user-location-pane");
   userLocationPane.style.zIndex = "650";
   userLocationPane.style.pointerEvents = "none";
@@ -364,56 +300,9 @@
   }
   map.on("zoomend", syncZoomUiMode);
   syncZoomUiMode();
-  const satelliteLayer = L.tileLayer(
-    "/tiles/satellite/{z}/{y}/{x}",
-    {
-      maxZoom: 22,
-      maxNativeZoom: 17,
-      attribution: "Tiles &copy; Esri"
-    }
-  );
-  const schematicLayer = L.tileLayer("/tiles/schematic/{z}/{y}/{x}", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors"
-  });
-  satelliteLayer.addTo(map);
-  satelliteLayer.on("load", scheduleTileCacheStatusRefresh);
-  schematicLayer.on("load", scheduleTileCacheStatusRefresh);
-  void refreshTileCacheStatus();
-  window.setInterval(() => void refreshTileCacheStatus(), 120000);
-
-  function setBaseMode(mode) {
-    if (mode === currentBaseMode) return;
-    if (mode === "satellite") {
-      map.removeLayer(schematicLayer);
-      map.addLayer(satelliteLayer);
-      currentBaseMode = "satellite";
-      return;
-    }
-    map.removeLayer(satelliteLayer);
-    map.addLayer(schematicLayer);
-    currentBaseMode = "schematic";
-  }
-
-  function toggleBaseMode() {
-    setBaseMode(currentBaseMode === "satellite" ? "schematic" : "satellite");
-    const modeLabel = currentBaseMode === "satellite" ? "Satellite" : "Schematic";
-    baseMapBtn?.setAttribute("title", `Switch base map (current: ${modeLabel})`);
-    baseMapBtn?.setAttribute("aria-label", `Switch base map (current: ${modeLabel})`);
-  }
-
-  async function focusUserLocation() {
-    if (lastKnownLatLng) {
-      map.flyTo(lastKnownLatLng, Math.max(map.getZoom(), 15), { duration: 0.6 });
-      return;
-    }
-    const position = await requestCurrentLocation();
-    if (position) {
-      const latlng = L.latLng(position.coords.latitude, position.coords.longitude);
-      upsertUserLocation(latlng, position.coords.accuracy || 0);
-      map.flyTo(latlng, Math.max(map.getZoom(), 15), { duration: 0.6 });
-    }
-  }
+  const baseMap = setupBaseMap(map, baseMapBtn);
+  setupTileCacheStatus(tileCacheStatus, [baseMap.satelliteLayer, baseMap.schematicLayer]);
+  const userLocationTracker = createUserLocationTracker(map, { pane: "user-location-pane", zIndexOffset: 1000 });
 
   const locateBtn = document.getElementById("locate-btn");
   const baseMapBtn = document.getElementById("basemap-btn");
@@ -422,15 +311,7 @@
     locateBtn.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      await focusUserLocation();
-    });
-  }
-  if (baseMapBtn) {
-    baseMapBtn.textContent = "🗺️";
-    baseMapBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      toggleBaseMode();
+      await userLocationTracker.focus();
     });
   }
 
@@ -1333,7 +1214,7 @@
       true
     );
   }
-  applyRequestedMapView();
+  mapUrlState.applyRequestedMapView();
 
   function clearDwellingForm() {
     dwellingFields.cu.value = "";
@@ -1997,5 +1878,6 @@
     }
   }
 
-  await startLocationTracking();
+  await userLocationTracker.start();
+  window.addEventListener("beforeunload", () => userLocationTracker.stop());
 })();
