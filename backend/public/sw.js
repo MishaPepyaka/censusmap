@@ -1,4 +1,4 @@
-const SHELL_CACHE = "cmp-shell-v18";
+const SHELL_CACHE = "cmp-shell-v19";
 const SHELL_CACHE_PREFIX = "cmp-shell-";
 const TILE_CACHE = "cmp-map-tiles-v1";
 const TILE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -14,6 +14,7 @@ const APP_SHELL = [
   "/app-auth.js",
   "/offline-data.js",
   "/map-data-helpers.js",
+  "/map-actions.js",
   "/app-landing.js",
   "/app.js",
   "/app-edit.js",

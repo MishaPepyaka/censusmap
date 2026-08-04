@@ -11,7 +11,7 @@
   - Centralise JSON response parsing, HTTP errors, and timeout handling.
   - Keep editor queue retry policy separate from simple viewer reads.
 
-- [ ] R003 Extract map action popups
+- [x] R003 Extract map action popups
   - Share Google Maps, Apple Maps, Share Link markup and copy feedback.
   - Preserve each page's popup-specific content and edit controls.
 
