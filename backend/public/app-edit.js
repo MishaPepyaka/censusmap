@@ -278,12 +278,12 @@
   }
   map.on("zoomend", syncZoomUiMode);
   syncZoomUiMode();
+  const locateBtn = document.getElementById("locate-btn");
+  const baseMapBtn = document.getElementById("basemap-btn");
   const baseMap = setupBaseMap(map, baseMapBtn);
   setupTileCacheStatus(tileCacheStatus, [baseMap.satelliteLayer, baseMap.schematicLayer]);
   const userLocationTracker = createUserLocationTracker(map, { pane: "user-location-pane", zIndexOffset: 1000 });
 
-  const locateBtn = document.getElementById("locate-btn");
-  const baseMapBtn = document.getElementById("basemap-btn");
   if (locateBtn) {
     locateBtn.textContent = "🧍";
     locateBtn.addEventListener("click", async (event) => {
