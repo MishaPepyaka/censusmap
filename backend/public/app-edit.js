@@ -1281,52 +1281,17 @@
       }
       localStorage.setItem(offlineQueueKey, JSON.stringify(remaining));
       setSyncStatus(remaining.length ? "Waiting to send" : "Saved", remaining.length ? "pending" : "saved");
-      if (!remaining.length) void refreshMapChanges();
     } finally {
       offlineQueueFlushInProgress = false;
     }
   }
 
-  async function refreshMapChanges() {
-    if (!navigator.onLine) return;
-    try {
-      const data = await getJsonWithTimeout(`/api/cld/${cld}/features`);
-      const features = applyPendingMutations((data.features || []).filter((feature) => !isExcludedCuFeature(feature)));
-      window.CldOfflineStore?.saveCachedFeatures(cld, features);
-      let added = 0;
-      let addedSpecialLocations = 0;
-      for (const feature of features) {
-        if (isSpecialLocationFeature(feature.properties || {}, feature.geometry || {})) {
-          const id = getFeatureId(feature);
-          if (id !== null && specialLocationMarkersById.has(id)) continue;
-          if (createSpecialLocationMarker(feature)) addedSpecialLocations += 1;
-          continue;
-        }
-        if (!isDwellingFeature(feature.properties || {}, feature.geometry || {})) continue;
-        const id = getFeatureId(feature);
-        if (id !== null && dwellingMarkersById.has(id)) continue;
-        if (createDwellingMarker(feature)) added += 1;
-      }
-      if (added > 0 || addedSpecialLocations > 0) {
-        syncDwellingDisplay();
-        const messages = [];
-        if (added) messages.push(`${added} new house${added === 1 ? "" : "s"}`);
-        if (addedSpecialLocations) messages.push(`${addedSpecialLocations} special location${addedSpecialLocations === 1 ? "" : "s"}`);
-        setStatus(`${messages.join(" and ")} added from the map.`, false);
-      }
-    } catch {
-      // Keep the current map and retry at the next interval.
-    }
-  }
-
   window.addEventListener("online", () => {
     void flushOfflineQueue();
-    void refreshMapChanges();
   });
   void flushOfflineQueue();
   window.setInterval(() => {
     void flushOfflineQueue();
-    void refreshMapChanges();
   }, 120000);
 
   function buildNewDwellingFeature(extraProperties = {}, preferredLatLng = null) {
