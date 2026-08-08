@@ -742,8 +742,10 @@ body {
 
 .dwelling-marker.dwelling-status-312,
 .dwelling-marker.dwelling-status-324,
+.dwelling-marker.dwelling-status-000,
 .dwelling-square-dot.dwelling-status-312,
-.dwelling-square-dot.dwelling-status-324 {
+.dwelling-square-dot.dwelling-status-324,
+.dwelling-square-dot.dwelling-status-000 {
   background: #9ca3af;
 }
 
