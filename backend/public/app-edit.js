@@ -1616,6 +1616,8 @@
     return Boolean(src && (src.ctrlKey || src.metaKey || src.button === 2));
   }
 
+  let lastDwellingAddGesture = null;
+
   function addDwellingAt(latlng, preferredZoneLayer = null) {
     if (!isAddingMode()) return;
     if (!canPersistEdits) {
@@ -1630,6 +1632,14 @@
       setStatus("Use right-click, Ctrl/Cmd+click, or a long tap inside a block polygon to create a dwelling.", true);
       return;
     }
+
+    const now = Date.now();
+    const isDuplicateGesture = lastDwellingAddGesture
+      && now - lastDwellingAddGesture.at < 250
+      && Math.abs(latlng.lat - lastDwellingAddGesture.lat) < 0.000001
+      && Math.abs(latlng.lng - lastDwellingAddGesture.lng) < 0.000001;
+    if (isDuplicateGesture) return;
+    lastDwellingAddGesture = { at: now, lat: latlng.lat, lng: latlng.lng };
 
     selectZone(zoneLayer, { showPopup: false });
 
