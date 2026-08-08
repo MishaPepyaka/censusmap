@@ -210,7 +210,7 @@
     return String(raw || "").trim().replace(/\D/g, "").padStart(4, "0").slice(-4);
   }
 
-  const DWELLING_STATUSES = new Set(["429", "400", "402", "701", "500", "312", "324", "000"]);
+  const DWELLING_STATUSES = new Set(["429", "400", "402", "701", "500", "312", "324", "000", "001"]);
 
   function normalizeDwellingStatus(value) {
     const status = String(value ?? "").trim();
@@ -424,7 +424,7 @@
   }
 
   function isCompletedDwellingCluster(markers) {
-    const completedStatuses = new Set(["400", "402", "701", "312", "324", "000"]);
+    const completedStatuses = new Set(["400", "402", "701", "312", "324", "000", "001"]);
     return markers.length > 0 && markers.every((marker) =>
       completedStatuses.has(normalizeDwellingStatus(marker.feature?.properties?.status))
     );
