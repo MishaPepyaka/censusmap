@@ -5,6 +5,12 @@
   const cld = match ? match[1] : "";
   if (!cld) return window.location.replace("/");
 
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // Geometry editing remains available online if a browser blocks service workers.
+    });
+  }
+
   const status = document.getElementById("geometry-status");
   const saveButton = document.getElementById("geometry-save-btn");
   document.getElementById("geometry-route-label").textContent = `CLD ${cld} geometry editor`;

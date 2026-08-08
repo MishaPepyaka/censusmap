@@ -1,9 +1,11 @@
-const SHELL_CACHE = "cmp-shell-v20";
+const SHELL_CACHE = "cmp-shell-v21";
 const SHELL_CACHE_PREFIX = "cmp-shell-";
 const TILE_CACHE = "cmp-map-tiles-v1";
 const TILE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const TILE_CACHE_MAX_BYTES = 1024 * 1024 * 1024;
+const TILE_CACHE_TRIM_BATCH = 48;
 let tileCacheTrimTask = Promise.resolve();
+let cachedTilesSinceTrim = 0;
 const APP_SHELL = [
   "/landing.html",
   "/index.html",
@@ -66,6 +68,9 @@ async function cacheTileResponse(cache, request, response) {
     statusText: response.statusText,
     headers
   }));
+  cachedTilesSinceTrim += 1;
+  if (cachedTilesSinceTrim < TILE_CACHE_TRIM_BATCH) return;
+  cachedTilesSinceTrim = 0;
   tileCacheTrimTask = tileCacheTrimTask
     .catch(() => {})
     .then(() => trimTileCache(cache));
@@ -95,7 +100,7 @@ async function trimTileCache(cache) {
   }
 }
 
-async function bufferedTileResponse(request) {
+async function bufferedTileResponse(request, event) {
   const cache = await caches.open(TILE_CACHE);
   const cached = await cache.match(request);
   const cachedAt = cached?.headers.get("x-censusmap-cached-at");
@@ -103,7 +108,11 @@ async function bufferedTileResponse(request) {
   if (cached && Number.isFinite(age) && age < TILE_CACHE_MAX_AGE_MS) return cached;
   try {
     const response = await fetch(request);
-    if (response.ok) await cacheTileResponse(cache, request, response);
+    if (response.ok) {
+      event.waitUntil(cacheTileResponse(cache, request, response).catch(() => {
+        // A full or unavailable Cache Storage must not delay visible map tiles.
+      }));
+    }
     return response;
   } catch (error) {
     if (cached) return cached;
@@ -146,7 +155,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isBufferedTile(url.pathname)) {
-    event.respondWith(bufferedTileResponse(event.request));
+    event.respondWith(bufferedTileResponse(event.request, event));
     return;
   }
 
