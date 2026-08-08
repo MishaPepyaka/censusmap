@@ -87,6 +87,10 @@
     geometryEditorLink.href = `/${cld}/edit_geometry`;
   }
 
+  function getViewerShareUrl() {
+    return `/${cld}${window.location.search}${window.location.hash}`;
+  }
+
   function setSyncStatus(message, state = "saved") {
     if (!syncStatusEl) return;
     syncStatusEl.textContent = message;
@@ -535,10 +539,10 @@
         `<div class="dw-popup">`,
         `<div class="dw-popup-code">${escapeHtml(shareTitle)}</div>`,
         `<div class="dw-popup-meta">CU: ${escapeHtml(cu)}<br>${escapeHtml(details)}</div>`,
-        buildMapActionButtons(point.lat, point.lng, shareTitle),
+        buildMapActionButtons(point.lat, point.lng, shareTitle, false, getViewerShareUrl()),
         `</div>`
       ].join(""), { autoPan: false });
-      layer.once("popupopen", (event) => attachMapActionHandlers(event?.popup?.getElement?.()));
+      layer.on("popupopen", (event) => attachMapActionHandlers(event?.popup?.getElement?.()));
       if (popupLatLng) {
         layer.openPopup(popupLatLng);
       } else {
@@ -722,7 +726,7 @@
       `<div class="dw-popup-code">${escapeHtml(name)}</div>`,
       `<div class="dw-popup-meta">${escapeHtml(type.replaceAll("_", " "))}</div>`,
       notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
-      buildMapActionButtons(lat, lng, name),
+      buildMapActionButtons(lat, lng, name, false, getViewerShareUrl()),
       `</div>`
     ].join("");
   }
@@ -921,7 +925,7 @@
       notes ? `<div class="dw-popup-notes"><strong>Notes:</strong> ${escapeHtml(notes)}</div>` : "",
       `<div class="dw-popup-status-row">`,
       `<label class="dw-popup-status">Status <select class="dw-status-select">${statusOptions}</select></label>`,
-      buildMapActionButtons(lat, lng, `Dwelling ${code}`, true),
+      buildMapActionButtons(lat, lng, `Dwelling ${code}`, true, getViewerShareUrl()),
       `</div>`,
       `</div>`
     ].join("");
