@@ -1229,7 +1229,8 @@
       url,
       payload,
       dedupeKey,
-      queuedAt: existing >= 0 ? queue[existing].queuedAt : Date.now()
+      queuedAt: existing >= 0 ? queue[existing].queuedAt : Date.now(),
+      revision: existing >= 0 ? Number(queue[existing].revision || 0) + 1 : 1
     };
     if (existing >= 0) queue.splice(existing, 1, item);
     else queue.push(item);
@@ -1270,6 +1271,7 @@
     offlineQueueFlushInProgress = true;
     setSyncStatus(`Sending ${queue.length} change${queue.length === 1 ? "" : "s"}…`, "pending");
     const remaining = [];
+    let queuedDuringFlush = false;
     try {
       for (const item of queue) {
         try {
@@ -1283,10 +1285,21 @@
           remaining.push(item);
         }
       }
-      localStorage.setItem(offlineQueueKey, JSON.stringify(remaining));
-      setSyncStatus(remaining.length ? "Waiting to send" : "Saved", remaining.length ? "pending" : "saved");
+      // Do not overwrite changes queued while this older snapshot was sent.
+      const latestQueue = readOfflineQueue();
+      const batchById = new Map(queue.map((item) => [item.id, item]));
+      const newerItems = latestQueue.filter((item) => {
+        const batchItem = batchById.get(item.id);
+        return !batchItem || Number(item.revision || 0) !== Number(batchItem.revision || 0);
+      });
+      const newerIds = new Set(newerItems.map((item) => item.id));
+      const nextQueue = [...remaining.filter((item) => !newerIds.has(item.id)), ...newerItems];
+      queuedDuringFlush = newerItems.length > 0;
+      localStorage.setItem(offlineQueueKey, JSON.stringify(nextQueue));
+      setSyncStatus(nextQueue.length ? "Waiting to send" : "Saved", nextQueue.length ? "pending" : "saved");
     } finally {
       offlineQueueFlushInProgress = false;
+      if (queuedDuringFlush) void flushOfflineQueue();
     }
   }
 
