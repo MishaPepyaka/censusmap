@@ -1,5 +1,6 @@
 (async function initStatcanViewer() {
   const { getJson } = window.CensusMapApi;
+  const { buildMapActionButtons } = window.CensusMapActions;
   const searchInput = document.getElementById("dwelling-search-input");
   const searchBtn = document.getElementById("dwelling-search-btn");
   const searchStatus = document.getElementById("dwelling-search-status");
@@ -71,10 +72,6 @@
     if (!searchStatus) return;
     searchStatus.textContent = message || "";
     searchStatus.classList.toggle("search-status-error", Boolean(isError));
-  }
-
-  function getGoogleMapsLink(lat, lng) {
-    return `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
   }
 
   function dwellingIcon(no, selected) {
@@ -262,9 +259,8 @@
     const block = extractBlockCode(props);
     const no = extractDwellingNo(props);
     const code = `${cu}${no}`;
-    const gmapsUrl = getGoogleMapsLink(lat, lng);
     const key = `${cu}:${block}:${no}:${lat.toFixed(6)}:${lng.toFixed(6)}:${i}`;
-    const record = { key, cu, block, no, code, lat, lng, gmapsUrl };
+    const record = { key, cu, block, no, code, lat, lng };
 
     addToIndex(record);
 
@@ -278,9 +274,7 @@
         `<div class="dw-popup">`,
         `<div class="dw-popup-code">${escapeHtml(code)}</div>`,
         `<div class="dw-popup-meta">CU ${escapeHtml(cu)} · Block ${escapeHtml(block)} · Dwelling ${escapeHtml(no)}</div>`,
-        `<div class="dw-popup-actions">`,
-        `<a class="dw-action-btn dw-action-open" href="${escapeHtml(gmapsUrl)}" target="_blank" rel="noreferrer">Google Maps</a>`,
-        `</div>`,
+        buildMapActionButtons(lat, lng, `Dwelling ${code}`, true),
         `</div>`
       ].join(""),
       { autoPan: true }

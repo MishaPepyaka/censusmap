@@ -13,7 +13,7 @@
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
-  const { buildMapActionButtons, attachMapActionHandlers } = window.CensusMapActions;
+  const { buildMapActionButtons } = window.CensusMapActions;
   const { readMapUrlState, bindMapUrlState, setupBaseMap, setupTileCacheStatus, createUserLocationTracker } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
@@ -542,7 +542,6 @@
         buildMapActionButtons(point.lat, point.lng, shareTitle, false, getViewerShareUrl()),
         `</div>`
       ].join(""), { autoPan: false });
-      layer.on("popupopen", (event) => attachMapActionHandlers(event?.popup?.getElement?.()));
       if (popupLatLng) {
         layer.openPopup(popupLatLng);
       } else {
@@ -733,10 +732,6 @@
 
   function attachSpecialLocationPopupHandlers(marker) {
     marker.bindPopup(buildSpecialLocationPopupHtml(marker.feature), { autoPan: true });
-    marker.off("popupopen");
-    marker.on("popupopen", (event) => {
-      attachMapActionHandlers(event?.popup?.getElement?.());
-    });
   }
 
   function createSpecialLocationMarker(feature) {
@@ -933,10 +928,9 @@
 
   function attachDwellingPopupHandlers(marker) {
     marker.bindPopup(buildDwellingPopupHtml(marker.feature), { autoPan: true });
+    marker.off("popupopen");
     marker.on("popupopen", (event) => {
       const root = event?.popup?.getElement?.();
-      attachMapActionHandlers(root);
-
       const statusSelect = root?.querySelector(".dw-status-select");
       statusSelect?.addEventListener("change", async () => {
         const previousStatus = normalizeDwellingStatus(marker.feature?.properties?.status);

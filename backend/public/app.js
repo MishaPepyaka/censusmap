@@ -13,7 +13,7 @@
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
-  const { getGoogleMapsLink, buildMapActionButtons, attachMapActionHandlers } = window.CensusMapActions;
+  const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
   const { readMapUrlState, bindMapUrlState, setupBaseMap, setupTileCacheStatus, createUserLocationTracker } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
@@ -329,10 +329,6 @@
   polygonLayer.eachLayer((layer) => {
     layer.on("click", (event) => selectZone(layer, event?.latlng || null));
     layer.on("tap", (event) => selectZone(layer, event?.latlng || null));
-    layer.on("popupopen", (event) => {
-      const root = event?.popup?.getElement?.();
-      attachMapActionHandlers(root);
-    });
   });
   badgesReady = true;
   rebuildBadges();
@@ -465,8 +461,6 @@
     marker.on("click", () => setSelectedDwelling(marker));
     marker.on("popupopen", (event) => {
       const root = event?.popup?.getElement?.();
-      attachMapActionHandlers(root);
-
       const statusSelect = root?.querySelector(".dw-status-select");
       statusSelect?.addEventListener("change", async () => {
         const previousStatus = record.status;
@@ -563,9 +557,6 @@
         `</div>`
       ].join(""), { autoPan: true })
       .addTo(specialLocationsLayer);
-    marker.on("popupopen", (event) => {
-      attachMapActionHandlers(event?.popup?.getElement?.());
-    });
   }
 
   const DWELLINGS_MIN_VISIBLE_ZOOM = 10;
