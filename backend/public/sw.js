@@ -1,4 +1,4 @@
-const SHELL_CACHE = "cmp-shell-v21";
+const SHELL_CACHE = "cmp-shell-v22";
 const SHELL_CACHE_PREFIX = "cmp-shell-";
 const TILE_CACHE = "cmp-map-tiles-v1";
 const TILE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -24,6 +24,7 @@ const APP_SHELL = [
   "/app-edit-geometry.js",
   "/vendor/leaflet/leaflet.css",
   "/vendor/leaflet/leaflet.js",
+  "/vendor/xlsx/xlsx.full.min.js",
   "/person-marker.svg",
   "/map-action-icons/google-maps.png",
   "/map-action-icons/apple-maps.png",

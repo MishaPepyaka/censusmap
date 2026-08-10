@@ -66,6 +66,8 @@
   const bulkStatusSsidsInput = document.getElementById("bulk-status-ssids");
   const bulkStatusCodeInput = document.getElementById("bulk-status-code");
   const bulkStatusApplyBtn = document.getElementById("bulk-status-apply-btn");
+  const bulkNotesFileInput = document.getElementById("bulk-notes-file");
+  const bulkNotesApplyBtn = document.getElementById("bulk-notes-apply-btn");
   const specialLocationTypeInput = document.getElementById("special-location-type");
   const specialLocationNameInput = document.getElementById("special-location-name");
   const specialLocationNotesInput = document.getElementById("special-location-notes");
@@ -1549,6 +1551,94 @@
 
   bulkStatusApplyBtn?.addEventListener("click", () => {
     void applyBulkStatusChange();
+  });
+
+  async function applyBulkNotesUpdate() {
+    if (!canPersistEdits) {
+      setStatus("Cannot update notes: API source unavailable.", true);
+      return;
+    }
+    const file = bulkNotesFileInput?.files?.[0];
+    if (!file) {
+      setStatus("Choose an XLS or XLSX file first.", true);
+      return;
+    }
+    if (!window.XLSX) {
+      setStatus("Excel reader is not available yet. Reload the page and try again.", true);
+      return;
+    }
+
+    let rows;
+    try {
+      const workbook = window.XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      rows = window.XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false, defval: "" });
+    } catch (error) {
+      setStatus(`Could not read spreadsheet: ${error.message}`, true);
+      return;
+    }
+
+    const notesBySsid = new Map();
+    for (const row of rows) {
+      const ssid = String(row?.[0] ?? "").replace(/\D/g, "");
+      if (!ssid) continue; // Empty rows and a textual header are ignored.
+      notesBySsid.set(ssid, String(row?.[1] ?? "").trim());
+    }
+    if (notesBySsid.size === 0) {
+      setStatus("The spreadsheet has no SSID values in its first column.", true);
+      return;
+    }
+
+    const markersBySsid = new Map(
+      [...allDwellingMarkers].map((marker) => {
+        const props = marker.feature?.properties || {};
+        return [`${extractCuCode(props)}${extractDwellingNo(props)}`, marker];
+      })
+    );
+    const matches = [];
+    const missing = [];
+    for (const [ssid, note] of notesBySsid) {
+      const marker = markersBySsid.get(ssid);
+      if (marker) matches.push({ marker, note });
+      else missing.push(ssid);
+    }
+    if (matches.length === 0) {
+      setStatus("No SSIDs from the spreadsheet were found in this CLD.", true);
+      return;
+    }
+
+    bulkNotesApplyBtn.disabled = true;
+    setStatus(`Applying notes to ${matches.length} dwelling(s)…`, false);
+    let updated = 0;
+    let cleared = 0;
+    let failed = 0;
+    for (const { marker, note } of matches) {
+      const currentNotes = String(marker.feature?.properties?.notes || "").trim();
+      const nextNotes = note ? [currentNotes, note].filter(Boolean).join("\n") : "";
+      if (nextNotes === currentNotes) continue;
+      marker.feature.properties.notes = nextNotes;
+      if (marker === selectedDwellingMarker && dwellingFields.notes) {
+        dwellingFields.notes.value = nextNotes;
+      }
+      markDwellingDirty(marker);
+      const saved = await persistDwellingMarker(marker, {
+        selectAfterSave: marker === selectedDwellingMarker,
+        useMarkerProperties: true
+      });
+      if (saved) {
+        updated += 1;
+        if (!note) cleared += 1;
+      } else {
+        failed += 1;
+      }
+    }
+    bulkNotesApplyBtn.disabled = false;
+    const summary = `${updated} updated${cleared ? `, ${cleared} cleared` : ""}${missing.length ? `, ${missing.length} SSID(s) not found` : ""}`;
+    setStatus(failed ? `Bulk notes finished: ${summary}, ${failed} failed.` : `Bulk notes queued: ${summary}.`, failed > 0);
+  }
+
+  bulkNotesApplyBtn?.addEventListener("click", () => {
+    void applyBulkNotesUpdate();
   });
 
   async function saveAllDirtyDwellings() {

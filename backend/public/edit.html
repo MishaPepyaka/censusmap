@@ -163,6 +163,17 @@
           </div>
         </details>
 
+        <details class="editor-group">
+          <summary class="editor-group-title">Bulk notes update</summary>
+          <div class="editor-group-body">
+            <div class="editor-help">Upload XLS/XLSX: column 1 is SSID, column 2 is a note. A note is appended to the current note; an empty second cell clears it.</div>
+            <label class="editor-label">XLS/XLSX file
+              <input id="bulk-notes-file" class="editor-input" type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            </label>
+            <button id="bulk-notes-apply-btn" type="button" class="editor-save-btn">Apply Notes from File</button>
+          </div>
+        </details>
+
       </div>
     </section>
 
@@ -173,6 +184,7 @@
     <script src="/map-data-helpers.js?v=20260804a"></script>
     <script src="/map-actions.js?v=20260809a"></script>
     <script src="/map-runtime.js?v=20260804a"></script>
-    <script src="/app-edit.js?v=20260809b"></script>
+    <script src="/vendor/xlsx/xlsx.full.min.js"></script>
+    <script src="/app-edit.js?v=20260810a"></script>
   </body>
 </html>

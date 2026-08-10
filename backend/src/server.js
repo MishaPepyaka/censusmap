@@ -68,6 +68,7 @@ app.use(cookieParser());
 app.use("/vendor/leaflet", express.static(path.join(__dirname, "..", "node_modules", "leaflet", "dist")));
 app.use("/vendor/leaflet-draw", express.static(path.join(__dirname, "..", "node_modules", "leaflet-draw", "dist")));
 app.use("/vendor/esri-leaflet", express.static(path.join(__dirname, "..", "node_modules", "esri-leaflet", "dist")));
+app.use("/vendor/xlsx", express.static(path.join(__dirname, "..", "node_modules", "xlsx", "dist")));
 app.use("/media/cld", express.static(cldRootDir));
 
 const AUTH_COOKIE = "census_session";
