@@ -61,7 +61,8 @@
   const dwellingSaveAllBtn = document.getElementById("dwelling-save-all-btn");
   const dwellingDeleteBtn = document.getElementById("dwelling-delete-btn");
   const dwellingExportBtn = document.getElementById("dwelling-export-btn");
-  const copyOpenedSsidsBtn = document.getElementById("copy-opened-ssids-btn");
+  const copySsidsBtn = document.getElementById("copy-ssids-btn");
+  const copySsidStatusInput = document.getElementById("copy-ssid-status");
   const bulkStatusSsidsInput = document.getElementById("bulk-status-ssids");
   const bulkStatusCodeInput = document.getElementById("bulk-status-code");
   const bulkStatusApplyBtn = document.getElementById("bulk-status-apply-btn");
@@ -1464,9 +1465,10 @@
     setStatus(`Exported ${rows.length} dwelling(s).`, false);
   }
 
-  async function copyOpenedSsids() {
+  async function copySsidsByStatus() {
+    const selectedStatus = normalizeDwellingStatus(copySsidStatusInput?.value || "429");
     const ssids = getDwellingBulkRows()
-      .filter((row) => row.status === "429")
+      .filter((row) => row.status === selectedStatus)
       .map((row) => row.ssid)
       .join("\n");
     try {
@@ -1480,15 +1482,15 @@
         document.execCommand("copy");
         fallback.remove();
       }
-      setStatus(`${ssids ? ssids.split("\n").length : 0} opened SSID(s) copied.`, false);
+      setStatus(`${ssids ? ssids.split("\n").length : 0} SSID(s) with status ${selectedStatus} copied.`, false);
     } catch (error) {
-      setStatus(`Could not copy opened SSIDs: ${error.message}`, true);
+      setStatus(`Could not copy SSIDs: ${error.message}`, true);
     }
   }
 
   dwellingExportBtn?.addEventListener("click", exportDwellingsXls);
-  copyOpenedSsidsBtn?.addEventListener("click", () => {
-    void copyOpenedSsids();
+  copySsidsBtn?.addEventListener("click", () => {
+    void copySsidsByStatus();
   });
 
   async function applyBulkStatusChange() {
