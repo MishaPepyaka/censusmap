@@ -146,9 +146,10 @@
   async function getMapData(forceNetwork = false) {
     try {
       if (!navigator.onLine) throw new Error("Offline");
-      const apiData = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`);
+      const apiData = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`, {}, 15000);
       const features = Array.isArray(apiData.features) ? apiData.features : [];
-      window.CldOfflineStore?.saveCachedFeatures(cld, features);
+      // Never let a transient empty response replace a usable offline map.
+      if (features.length > 0) window.CldOfflineStore?.saveCachedFeatures(cld, features);
       return { ...parseFeatures(apiData), loadError: "" };
     } catch (error) {
       const snapshot = await window.CldOfflineStore?.readCachedFeatures(cld);
@@ -793,7 +794,10 @@
       map.fitBounds(bounds, { padding: [20, 20] });
     }
   } else {
-    setSearchStatus("No geometry or dwellings found for this CLD.", true);
+    setSearchStatus(
+      mapData.loadError || "No geometry or dwellings found for this CLD.",
+      true
+    );
   }
   mapUrlState.applyRequestedMapView();
 

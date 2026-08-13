@@ -174,9 +174,10 @@
   async function getMapData(forceNetwork = false) {
     try {
       if (!navigator.onLine) throw new Error("Offline");
-      const data = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`);
+      const data = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`, {}, 15000);
       const features = applyPendingMutations((data.features || []).filter((f) => !isExcludedCuFeature(f)));
-      window.CldOfflineStore?.saveCachedFeatures(cld, features);
+      // Never let a transient empty response replace a usable offline map.
+      if (features.length > 0) window.CldOfflineStore?.saveCachedFeatures(cld, features);
       return {
         source: "api",
         loadError: "",
@@ -1221,10 +1222,7 @@
       map.fitBounds(dwellingBounds, { padding: [20, 20] });
     }
   } else {
-    setStatus(
-      `No region geometry loaded for CLD ${cld}.`,
-      true
-    );
+    setStatus(data.loadError || `No region geometry loaded for CLD ${cld}.`, true);
   }
   mapUrlState.applyRequestedMapView();
 
