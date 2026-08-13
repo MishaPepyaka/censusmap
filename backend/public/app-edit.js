@@ -176,6 +176,7 @@
       if (!navigator.onLine) throw new Error("Offline");
       const data = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`, {}, 15000);
       const features = applyPendingMutations((data.features || []).filter((f) => !isExcludedCuFeature(f)));
+      if (features.length === 0) throw new Error("The map server returned an empty feature list");
       // Never let a transient empty response replace a usable offline map.
       if (features.length > 0) window.CldOfflineStore?.saveCachedFeatures(cld, features);
       return {
@@ -187,7 +188,7 @@
       };
     } catch (apiError) {
       const snapshot = await window.CldOfflineStore?.readCachedFeatures(cld);
-      if (Array.isArray(snapshot?.features)) {
+      if (Array.isArray(snapshot?.features) && snapshot.features.length > 0) {
         const features = applyPendingMutations(snapshot.features.filter((f) => !isExcludedCuFeature(f)));
         return {
           source: "cache",

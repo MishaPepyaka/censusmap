@@ -148,12 +148,13 @@
       if (!navigator.onLine) throw new Error("Offline");
       const apiData = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`, {}, 15000);
       const features = Array.isArray(apiData.features) ? apiData.features : [];
+      if (features.length === 0) throw new Error("The map server returned an empty feature list");
       // Never let a transient empty response replace a usable offline map.
       if (features.length > 0) window.CldOfflineStore?.saveCachedFeatures(cld, features);
       return { ...parseFeatures(apiData), loadError: "" };
     } catch (error) {
       const snapshot = await window.CldOfflineStore?.readCachedFeatures(cld);
-      if (Array.isArray(snapshot?.features)) {
+      if (Array.isArray(snapshot?.features) && snapshot.features.length > 0) {
         return {
           ...parseFeatures({ features: snapshot.features }),
           loadError: "Offline: showing the last map saved on this device."
