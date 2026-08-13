@@ -102,6 +102,15 @@
     syncStatusEl.classList.toggle("error", state === "error");
   }
 
+  function updateUploadRefreshAvailability() {
+    if (!uploadRefreshBtn) return;
+    uploadRefreshBtn.disabled = !navigator.onLine;
+    uploadRefreshBtn.title = navigator.onLine ? "Upload local changes and download current map changes" : "Unavailable while offline";
+  }
+  updateUploadRefreshAvailability();
+  window.addEventListener("online", updateUploadRefreshAvailability);
+  window.addEventListener("offline", updateUploadRefreshAvailability);
+
   function wait(milliseconds) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
@@ -162,10 +171,10 @@
     return nextFeatures;
   }
 
-  async function getMapData() {
+  async function getMapData(forceNetwork = false) {
     try {
       if (!navigator.onLine) throw new Error("Offline");
-      const data = await getJsonWithTimeout(`/api/cld/${cld}/features`);
+      const data = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`);
       const features = applyPendingMutations((data.features || []).filter((f) => !isExcludedCuFeature(f)));
       window.CldOfflineStore?.saveCachedFeatures(cld, features);
       return {
@@ -1185,6 +1194,25 @@
   setEditorMode("editing");
   updateDwellingSaveAllState();
 
+  function replacePointFeatures(nextDwellings, nextSpecialLocations) {
+    clearSelectedSpecialLocation();
+    selectedDwellingMarker = null;
+    dwellingsLayer.clearLayers();
+    specialLocationsLayer.clearLayers();
+    dwellingClusterLayer.clearLayers();
+    allDwellingMarkers.clear();
+    allSpecialLocationMarkers.clear();
+    dwellingMarkersById.clear();
+    specialLocationMarkersById.clear();
+    dirtyDwellingMarkers.clear();
+    clearDwellingForm();
+    for (const feature of nextDwellings) createDwellingMarker(feature);
+    for (const feature of nextSpecialLocations) createSpecialLocationMarker(feature);
+    setEditorMode(editorMode);
+    syncDwellingDisplay();
+    updateDwellingSaveAllState();
+  }
+
   if (editableLayer.getLayers().length > 0) {
     map.fitBounds(editableLayer.getBounds(), { padding: [20, 20] });
   } else if (dwellingsLayer.getLayers().length > 0) {
@@ -1335,9 +1363,14 @@
         return;
       }
       setSyncStatus("Saved", "saved");
-      window.location.reload();
+      const freshMapData = await getMapData(true);
+      if (freshMapData.loadError) throw new Error(freshMapData.loadError);
+      replacePointFeatures(freshMapData.dwellings, freshMapData.specialLocations);
+      setStatus("Map markers refreshed.", false);
+    } catch (error) {
+      setStatus(`Could not refresh map: ${error.message}`, true);
     } finally {
-      uploadRefreshBtn.disabled = false;
+      updateUploadRefreshAvailability();
     }
   }
 

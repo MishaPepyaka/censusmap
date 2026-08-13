@@ -54,11 +54,14 @@
   const tileCacheStatus = document.getElementById("tile-cache-status");
   let currentUser = null;
 
-  uploadRefreshBtn?.addEventListener("click", () => {
-    uploadRefreshBtn.disabled = true;
-    uploadRefreshBtn.textContent = "Refreshing…";
-    window.location.reload();
-  });
+  function updateUploadRefreshAvailability() {
+    if (!uploadRefreshBtn) return;
+    uploadRefreshBtn.disabled = !navigator.onLine;
+    uploadRefreshBtn.title = navigator.onLine ? "Download current map changes" : "Unavailable while offline";
+  }
+  updateUploadRefreshAvailability();
+  window.addEventListener("online", updateUploadRefreshAvailability);
+  window.addEventListener("offline", updateUploadRefreshAvailability);
 
   async function loadCurrentUser() {
     if (!navigator.onLine) return;
@@ -140,10 +143,10 @@
     }
   }
 
-  async function getMapData() {
+  async function getMapData(forceNetwork = false) {
     try {
       if (!navigator.onLine) throw new Error("Offline");
-      const apiData = await getJsonWithTimeout(`/api/cld/${cld}/features`);
+      const apiData = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`);
       const features = Array.isArray(apiData.features) ? apiData.features : [];
       window.CldOfflineStore?.saveCachedFeatures(cld, features);
       return { ...parseFeatures(apiData), loadError: "" };
@@ -658,6 +661,47 @@
   renderVisibleDwellingMarkers();
   map.on("zoomend", renderVisibleDwellingMarkers);
   map.on("zoomend", syncSpecialLocationVisibility);
+
+  function replacePointFeatures(nextDwellings, nextSpecialLocations) {
+    dwellingsLayer.clearLayers();
+    dwellingClusterLayer.clearLayers();
+    specialLocationsLayer.clearLayers();
+    dwellingByCode.clear();
+    dwellingByCu.clear();
+    dwellingByNo.clear();
+    dwellingRecords.length = 0;
+    dwellingMarkerByKey.clear();
+    selectedDwellingMarker = null;
+    lastDwellingSearchValue = null;
+    dwellingSearchMatchIndex = 0;
+    for (let index = 0; index < nextDwellings.length; index += 1) {
+      const record = buildDwellingRecord(nextDwellings[index], index);
+      if (!record) continue;
+      dwellingRecords.push(record);
+      registerDwellingRecord(record);
+    }
+    for (const feature of nextSpecialLocations) createSpecialLocationMarker(feature);
+    syncSpecialLocationVisibility();
+    renderVisibleDwellingMarkers();
+  }
+
+  uploadRefreshBtn?.addEventListener("click", async () => {
+    if (!navigator.onLine) return;
+    uploadRefreshBtn.disabled = true;
+    uploadRefreshBtn.textContent = "Refreshing…";
+    try {
+      const freshMapData = await getMapData(true);
+      if (freshMapData.loadError) throw new Error(freshMapData.loadError);
+      replacePointFeatures(freshMapData.dwellings, freshMapData.specialLocations);
+      updateRouteSubtitle();
+      setSearchStatus("Map markers refreshed.", false);
+    } catch (error) {
+      setSearchStatus(`Could not refresh map: ${error.message}`, true);
+    } finally {
+      uploadRefreshBtn.textContent = "Upload and refresh";
+      updateUploadRefreshAvailability();
+    }
+  });
 
   function focusDwelling(record, setStatusText = true) {
     if (!record) return;
