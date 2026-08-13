@@ -44,6 +44,7 @@
   const editorRouteLabel = document.getElementById("editor-route-label");
   const editorViewLink = document.getElementById("editor-view-link");
   const geometryEditorLink = document.getElementById("geometry-editor-link");
+  const uploadRefreshBtn = document.getElementById("upload-refresh-btn");
   const syncStatusEl = document.getElementById("editor-sync-status");
   const tileCacheStatus = document.getElementById("tile-cache-status");
 
@@ -99,6 +100,10 @@
     syncStatusEl.textContent = message;
     syncStatusEl.classList.toggle("pending", state === "pending");
     syncStatusEl.classList.toggle("error", state === "error");
+  }
+
+  function wait(milliseconds) {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
 
   function setStatus(message, isError) {
@@ -1307,6 +1312,38 @@
   window.setInterval(() => {
     void flushOfflineQueue();
   }, 120000);
+
+  async function uploadAndRefresh() {
+    if (!navigator.onLine) {
+      setStatus("You are offline. Changes remain queued on this device.", true);
+      return;
+    }
+    uploadRefreshBtn.disabled = true;
+    setStatus("Uploading changes…", false);
+    try {
+      await saveAllDirtyDwellings();
+      // Wait for an already-running request, then drain every queued batch.
+      while (offlineQueueFlushInProgress) await wait(40);
+      let attempts = 0;
+      while (readOfflineQueue().length > 0 && attempts < 20) {
+        await flushOfflineQueue();
+        while (offlineQueueFlushInProgress) await wait(40);
+        attempts += 1;
+      }
+      if (readOfflineQueue().length > 0) {
+        setStatus("Some changes could not be uploaded. They remain queued.", true);
+        return;
+      }
+      setSyncStatus("Saved", "saved");
+      window.location.reload();
+    } finally {
+      uploadRefreshBtn.disabled = false;
+    }
+  }
+
+  uploadRefreshBtn?.addEventListener("click", () => {
+    void uploadAndRefresh();
+  });
 
   function buildNewDwellingFeature(extraProperties = {}, preferredLatLng = null) {
     if (selectedDwellingMarker) {

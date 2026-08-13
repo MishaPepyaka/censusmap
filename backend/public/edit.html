@@ -32,6 +32,7 @@
         </div>
         <div class="editor-route-links">
           <a id="editor-view-link" class="route-link-btn" href="#">Viewer</a>
+          <button id="upload-refresh-btn" type="button" class="route-link-btn route-link-btn-accent">Upload and refresh</button>
           <button id="dwelling-move-toggle" type="button" class="route-link-btn dwelling-move-toggle" aria-label="Switch editor mode" title="Switch editor mode">Editing mode</button>
           <a id="geometry-editor-link" class="route-link-btn" href="#" hidden>Edit geometry</a>
           <a class="route-link-btn" href="/">Find CLD</a>
@@ -115,14 +116,6 @@
           </div>
         </details>
 
-        <details class="editor-group" open>
-          <summary class="editor-group-title">Pending Changes</summary>
-          <div class="editor-group-body">
-            <div class="editor-help">Save all dwelling edits currently waiting to be sent.</div>
-            <button id="dwelling-save-all-btn" type="button" class="editor-save-btn" disabled>Save All Dwellings</button>
-          </div>
-        </details>
-
         <details class="editor-group">
           <summary class="editor-group-title">Export / Import</summary>
           <div class="editor-group-body">
@@ -188,6 +181,6 @@
     <script src="/map-actions.js?v=20260809a"></script>
     <script src="/map-runtime.js?v=20260804a"></script>
     <script src="/vendor/xlsx/xlsx.full.min.js"></script>
-    <script src="/app-edit.js?v=20260812a"></script>
+    <script src="/app-edit.js?v=20260813a"></script>
   </body>
 </html>

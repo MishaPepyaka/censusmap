@@ -45,6 +45,7 @@
   const routeLabel = document.getElementById("route-label");
   const routeSubtitle = document.getElementById("route-subtitle");
   const editRouteLink = document.getElementById("edit-route-link");
+  const uploadRefreshBtn = document.getElementById("upload-refresh-btn");
   const locateBtn = document.getElementById("locate-btn");
   const baseMapBtn = document.getElementById("basemap-btn");
   const searchInput = document.getElementById("dwelling-search-input");
@@ -52,6 +53,12 @@
   const searchStatus = document.getElementById("dwelling-search-status");
   const tileCacheStatus = document.getElementById("tile-cache-status");
   let currentUser = null;
+
+  uploadRefreshBtn?.addEventListener("click", () => {
+    uploadRefreshBtn.disabled = true;
+    uploadRefreshBtn.textContent = "Refreshing…";
+    window.location.reload();
+  });
 
   async function loadCurrentUser() {
     if (!navigator.onLine) return;
