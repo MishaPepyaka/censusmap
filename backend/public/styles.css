@@ -740,6 +740,11 @@ body {
   background: #ef4444;
 }
 
+.dwelling-marker.dwelling-status-601,
+.dwelling-square-dot.dwelling-status-601 {
+  background: #38bdf8;
+}
+
 .dwelling-marker.dwelling-status-312,
 .dwelling-marker.dwelling-status-324,
 .dwelling-marker.dwelling-status-000,

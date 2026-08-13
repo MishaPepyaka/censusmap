@@ -85,7 +85,7 @@
 
   function normalizeDwellingStatus(value) {
     const status = String(value ?? "").trim();
-    return ["429", "400", "402", "701", "500", "312", "324", "000", "001"].includes(status) ? status : "429";
+    return ["429", "400", "402", "701", "500", "312", "324", "000", "001", "601"].includes(status) ? status : "429";
   }
 
   function formatSsidDisplay(value) {
@@ -390,7 +390,7 @@
 
   function buildDwellingPopupHtml(info) {
     const notes = String(info.notes || "").trim();
-    const statusOptions = ["429", "400", "402", "701", "500", "312", "324", "000", "001"]
+    const statusOptions = ["429", "400", "402", "701", "500", "312", "324", "000", "001", "601"]
       .map((status) => `<option value="${status}"${status === info.status ? " selected" : ""}>${status}</option>`)
       .join("");
     return [
@@ -569,7 +569,7 @@
   }
 
   function isCompletedDwellingCluster(records) {
-    const completedStatuses = new Set(["400", "402", "701", "312", "324", "000", "001"]);
+    const completedStatuses = new Set(["400", "402", "701", "312", "324", "000", "001", "601"]);
     return records.length > 0 && records.every((record) => completedStatuses.has(normalizeDwellingStatus(record.status)));
   }
 
