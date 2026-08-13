@@ -1551,6 +1551,44 @@ app.get("/api/cld/:cld/features", requireAuth, requireClDAccess, async (req, res
   }
 });
 
+app.get("/api/cld/:cld/updates/today", requireAuth, requireClDAccess, async (req, res) => {
+  const cld = normalizeClD(req.params.cld);
+  if (!cld) return res.status(400).json({ error: "Invalid CLD" });
+  if (useFileStore) {
+    return res.json({ timezone: "America/Winnipeg", updates: [] });
+  }
+  try {
+    const { rows } = await pool.query(
+      `
+        SELECT properties, updated_at
+        FROM region_features
+        WHERE cld = $1
+          AND feature_type = 'dwellings'
+          AND COALESCE(properties->>'_group', '') <> 'special_locations'
+          AND updated_at >= (date_trunc('day', NOW() AT TIME ZONE 'America/Winnipeg') AT TIME ZONE 'America/Winnipeg')
+          AND updated_at < ((date_trunc('day', NOW() AT TIME ZONE 'America/Winnipeg') + INTERVAL '1 day') AT TIME ZONE 'America/Winnipeg')
+        ORDER BY updated_at, id;
+      `,
+      [cld]
+    );
+    const updates = rows.map((row) => {
+      const properties = row.properties || {};
+      const cu = extractCuCode(properties);
+      const dwellingNo = normalizeDwellingNo(properties.dwellingNo ?? properties.DWELLING_NO ?? properties.vrNumber ?? properties.VR_NUMBER);
+      return {
+        ssid: cu && dwellingNo ? `${cu}${dwellingNo}` : "",
+        newCode: String(properties.status ?? ""),
+        note: String(properties.notes ?? ""),
+        updatedAt: row.updated_at
+      };
+    }).filter((update) => Boolean(update.ssid));
+    res.set("cache-control", "no-store");
+    return res.json({ timezone: "America/Winnipeg", updates });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 app.post("/api/cld/:cld/features", requireAuth, requireClDAccess, async (req, res) => {
   const cld = normalizeClD(req.params.cld);
   if (!cld) {

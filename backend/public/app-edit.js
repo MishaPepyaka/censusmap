@@ -69,6 +69,7 @@
   const bulkStatusApplyBtn = document.getElementById("bulk-status-apply-btn");
   const bulkNotesFileInput = document.getElementById("bulk-notes-file");
   const bulkNotesApplyBtn = document.getElementById("bulk-notes-apply-btn");
+  const todayUpdatesExportBtn = document.getElementById("today-updates-export-btn");
   const specialLocationTypeInput = document.getElementById("special-location-type");
   const specialLocationNameInput = document.getElementById("special-location-name");
   const specialLocationNotesInput = document.getElementById("special-location-notes");
@@ -1560,6 +1561,58 @@
   }
 
   dwellingExportBtn?.addEventListener("click", exportDwellingsXls);
+
+  function spreadsheetCell(value) {
+    const text = String(value ?? "");
+    return /^[=+\-@]/.test(text) ? `'${text}` : text;
+  }
+
+  async function exportTodayUpdatesXls() {
+    if (!navigator.onLine) {
+      setStatus("Connect to the internet to download today's updates.", true);
+      return;
+    }
+    if (!window.XLSX) {
+      setStatus("Excel exporter is not available yet. Reload the page and try again.", true);
+      return;
+    }
+    todayUpdatesExportBtn.disabled = true;
+    try {
+      const result = await getJsonWithTimeout(`/api/cld/${cld}/updates/today`, {}, 15000);
+      const rows = [
+        ["SSID", "NEW CODE", "NOTE"],
+        ...(result.updates || []).map((update) => [
+          spreadsheetCell(update.ssid),
+          spreadsheetCell(update.newCode),
+          spreadsheetCell(update.note)
+        ])
+      ];
+      const workbook = window.XLSX.utils.book_new();
+      const worksheet = window.XLSX.utils.aoa_to_sheet(rows);
+      worksheet["!cols"] = [{ wch: 18 }, { wch: 12 }, { wch: 60 }];
+      window.XLSX.utils.book_append_sheet(workbook, worksheet, "Today's updates");
+      const dateParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: result.timezone || "America/Winnipeg",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(new Date());
+      const today = ["year", "month", "day"]
+        .map((part) => dateParts.find((entry) => entry.type === part)?.value || "00")
+        .join("-");
+      window.XLSX.writeFile(workbook, `cld-${cld}-updates-${today}.xls`, { bookType: "xls" });
+      setStatus(`${Math.max(rows.length - 1, 0)} update(s) exported for today.`, false);
+    } catch (error) {
+      setStatus(`Could not export today's updates: ${error.message}`, true);
+    } finally {
+      todayUpdatesExportBtn.disabled = false;
+    }
+  }
+
+  todayUpdatesExportBtn?.addEventListener("click", () => {
+    void exportTodayUpdatesXls();
+  });
+
   copySsidsBtn?.addEventListener("click", () => {
     void copySsidsByStatus();
   });
