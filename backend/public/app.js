@@ -322,7 +322,6 @@
 
   const badgeLayer = L.layerGroup().addTo(map);
   const dwellingsLayer = L.layerGroup().addTo(map);
-  const dwellingBuildingLayer = L.layerGroup().addTo(map);
   const specialLocationsLayer = L.layerGroup().addTo(map);
   const dwellingClusterLayer = L.layerGroup().addTo(map);
   polygonLayer.addData(buildFeatureCollection(zones));
@@ -496,8 +495,8 @@
     };
   }
 
-  function createDwellingMarker(record, forceSquareIcon = false, displayLatLng = null) {
-    const marker = L.marker(displayLatLng || [record.lat, record.lng], {
+  function createDwellingMarker(record, forceSquareIcon = false) {
+    const marker = L.marker([record.lat, record.lng], {
       icon: forceSquareIcon
         ? dwellingSquareIcon(record.displayNo, record.status, false)
         : getDwellingIconForZoom(record.displayNo, record.status, false),
@@ -609,8 +608,6 @@
 
   const DWELLINGS_MIN_VISIBLE_ZOOM = 10;
   const DWELLINGS_INDIVIDUAL_ZOOM = 15;
-  const DWELLINGS_MULTIPLEX_ZOOM = 17;
-  const MULTIPLEX_JOIN_DISTANCE_METERS = 10;
 
   function dwellingClusterLabel(records) {
     const numbers = records.map((record) => Number(record.no)).filter(Number.isFinite).sort((a, b) => a - b);
@@ -665,66 +662,10 @@
     }
   }
 
-  function groupNearbyDwellings(records) {
-    const groups = [];
-    const remaining = new Set(records);
-    while (remaining.size > 0) {
-      const first = remaining.values().next().value;
-      const group = [first];
-      remaining.delete(first);
-      // A connected group keeps apartments in one building together even when
-      // their points were recorded a few metres apart.
-      for (let index = 0; index < group.length; index += 1) {
-        const current = group[index];
-        for (const candidate of [...remaining]) {
-          if (candidate.cu !== current.cu || candidate.block !== current.block) continue;
-          const distance = L.latLng(current.lat, current.lng).distanceTo([candidate.lat, candidate.lng]);
-          if (distance > MULTIPLEX_JOIN_DISTANCE_METERS) continue;
-          remaining.delete(candidate);
-          group.push(candidate);
-        }
-      }
-      groups.push(group);
-    }
-    return groups;
-  }
-
-  function multiplexOffset(index, count) {
-    const columns = Math.min(4, Math.ceil(Math.sqrt(count)));
-    const rows = Math.ceil(count / columns);
-    const column = index % columns;
-    const row = Math.floor(index / columns);
-    return {
-      x: (column - (columns - 1) / 2) * 27,
-      y: (row - (rows - 1) / 2) * 27
-    };
-  }
-
-  function renderMultiplexMarkers() {
-    for (const group of groupNearbyDwellings(dwellingRecords)) {
-      if (group.length === 1) {
-        createDwellingMarker(group[0]);
-        continue;
-      }
-      for (let index = 0; index < group.length; index += 1) {
-        const record = group[index];
-        const offset = multiplexOffset(index, group.length);
-        const actualLatLng = L.latLng(record.lat, record.lng);
-        const displayPoint = map.project(actualLatLng, map.getZoom()).add([offset.x, offset.y]);
-        const displayLatLng = map.unproject(displayPoint, map.getZoom());
-        L.polyline([actualLatLng, displayLatLng], {
-          color: "#334155", weight: 1.5, opacity: 0.7, interactive: false
-        }).addTo(dwellingBuildingLayer);
-        createDwellingMarker(record, true, displayLatLng);
-      }
-    }
-  }
-
   function renderVisibleDwellingMarkers() {
     const selectedKey = selectedDwellingMarker?.__dwellingInfo?.key || null;
     dwellingsLayer.clearLayers();
     dwellingClusterLayer.clearLayers();
-    dwellingBuildingLayer.clearLayers();
     dwellingMarkerByKey.clear();
     selectedDwellingMarker = null;
 
@@ -734,14 +675,6 @@
 
     if (map.getZoom() < DWELLINGS_INDIVIDUAL_ZOOM) {
       renderDwellingClusters();
-      return;
-    }
-
-    if (map.getZoom() >= DWELLINGS_MULTIPLEX_ZOOM) {
-      renderMultiplexMarkers();
-      for (const marker of dwellingMarkerByKey.values()) {
-        if (marker.__dwellingInfo?.key === selectedKey) setSelectedDwelling(marker);
-      }
       return;
     }
 
