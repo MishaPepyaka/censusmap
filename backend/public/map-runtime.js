@@ -54,30 +54,24 @@
       maxZoom: 19,
       attribution: "&copy; OpenStreetMap contributors"
     });
-    const stadiaBrightLayer = L.tileLayer("https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png", {
-      maxZoom: 22,
-      maxNativeZoom: 20,
-      attribution: '&copy; <a href="https://stadiamaps.com/" target="_blank" rel="noreferrer">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>'
-    });
     let currentMode = "satellite";
     satelliteLayer.addTo(map);
 
     function updateButton() {
-      const modeLabel = currentMode === "satellite"
-        ? "Satellite"
-        : (currentMode === "schematic" ? "Schematic" : "Stadia OSM Bright");
+      const modeLabel = currentMode === "satellite" ? "Satellite" : "Schematic";
       button?.setAttribute("title", `Switch base map (current: ${modeLabel})`);
       button?.setAttribute("aria-label", `Switch base map (current: ${modeLabel})`);
     }
 
     function setMode(mode) {
       if (mode === currentMode) return;
-      map.removeLayer(satelliteLayer);
-      map.removeLayer(schematicLayer);
-      map.removeLayer(stadiaBrightLayer);
-      if (mode === "satellite") map.addLayer(satelliteLayer);
-      else if (mode === "schematic") map.addLayer(schematicLayer);
-      else map.addLayer(stadiaBrightLayer);
+      if (mode === "satellite") {
+        map.removeLayer(schematicLayer);
+        map.addLayer(satelliteLayer);
+      } else {
+        map.removeLayer(satelliteLayer);
+        map.addLayer(schematicLayer);
+      }
       currentMode = mode;
       updateButton();
     }
@@ -87,11 +81,11 @@
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        setMode(currentMode === "satellite" ? "schematic" : (currentMode === "schematic" ? "stadia_bright" : "satellite"));
+        setMode(currentMode === "satellite" ? "schematic" : "satellite");
       });
     }
     updateButton();
-    return { satelliteLayer, schematicLayer, stadiaBrightLayer, setMode };
+    return { satelliteLayer, schematicLayer, setMode };
   }
 
   function setupTileCacheStatus(statusElement, layers) {
