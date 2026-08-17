@@ -42,6 +42,7 @@
 
   const statusEl = document.getElementById("editor-status");
   const editorRouteLabel = document.getElementById("editor-route-label");
+  const editorRouteSummary = document.getElementById("editor-route-summary");
   const editorViewLink = document.getElementById("editor-view-link");
   const geometryEditorLink = document.getElementById("geometry-editor-link");
   const uploadRefreshBtn = document.getElementById("upload-refresh-btn");
@@ -322,6 +323,25 @@
   const dwellings = data.dwellings;
   const specialLocations = data.specialLocations;
   const canPersistEdits = data.source === "api" || data.source === "cache";
+
+  function updateEditorRouteSummary() {
+    if (!editorRouteSummary) return;
+    const cuCodes = new Set();
+    let blockCount = 0;
+    for (const feature of blocks) {
+      const props = feature?.properties || {};
+      const cu = extractCuCode(props);
+      if (cu) cuCodes.add(cu);
+      if (getZoneKind(props) === "block") blockCount += 1;
+    }
+    const markers = [...allDwellingMarkers];
+    const completedStatuses = new Set(["400", "402", "701", "312", "324", "000", "001", "601"]);
+    const completed = markers.filter((marker) =>
+      completedStatuses.has(normalizeDwellingStatus(marker.feature?.properties?.status))
+    ).length;
+    const percent = markers.length ? ((completed / markers.length) * 100).toFixed(1) : "0.0";
+    editorRouteSummary.textContent = `${cuCodes.size} CU · ${blockCount} blocks · ${markers.length} dwellings · ${completed} completed (${percent}%)`;
+  }
 
   if (data.loadError) {
     setStatus(data.loadError, true);
@@ -1027,6 +1047,7 @@
     dwellingsLayer.removeLayer(marker);
     allDwellingMarkers.delete(marker);
     if (id !== null) dwellingMarkersById.delete(id);
+    updateEditorRouteSummary();
 
   }
 
@@ -1172,6 +1193,7 @@
     marker._offlineMutationKey = feature._offlineMutationKey || null;
     marker._temporary = temporary;
     allDwellingMarkers.add(marker);
+    updateEditorRouteSummary();
     if (temporary) {
       markDwellingDirty(marker);
     }
@@ -1233,6 +1255,7 @@
   }
   setEditorMode("editing");
   updateDwellingSaveAllState();
+  updateEditorRouteSummary();
 
   function replacePointFeatures(nextDwellings, nextSpecialLocations) {
     clearSelectedSpecialLocation();
@@ -1251,6 +1274,7 @@
     setEditorMode(editorMode);
     syncDwellingDisplay();
     updateDwellingSaveAllState();
+    updateEditorRouteSummary();
   }
 
   if (editableLayer.getLayers().length > 0) {
@@ -1517,6 +1541,7 @@
     marker._offlineMutationId = id === null ? queued.id : null;
     marker.feature = payload;
     attachDwellingPopupHandlers(marker);
+    updateEditorRouteSummary();
     if (selectAfterSave) {
       selectedDwellingMarker = marker;
       applyMarkerIcon(marker, true);

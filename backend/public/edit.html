@@ -6,7 +6,7 @@
     <title>CLD Region Editor</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
     <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260720a" />
-    <link rel="stylesheet" href="/styles.css?v=20260812a" />
+    <link rel="stylesheet" href="/styles.css?v=20260817a" />
   </head>
   <body>
     <main id="map"></main>
@@ -28,6 +28,7 @@
       <div class="editor-route-head">
         <div>
           <div id="editor-route-label">Loading editor...</div>
+          <div id="editor-route-summary" class="editor-route-summary" aria-live="polite"></div>
           <div id="editor-sync-status" class="editor-sync-status" aria-live="polite">Saved</div>
         </div>
         <div class="editor-route-links">
@@ -189,6 +190,6 @@
     <script src="/map-actions.js?v=20260809a"></script>
     <script src="/map-runtime.js?v=20260804a"></script>
     <script src="/vendor/xlsx/xlsx.full.min.js"></script>
-    <script src="/app-edit.js?v=20260816d"></script>
+    <script src="/app-edit.js?v=20260817a"></script>
   </body>
 </html>

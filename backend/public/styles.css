@@ -223,6 +223,12 @@ body {
   color: var(--ui-muted);
 }
 
+.editor-route-summary {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ui-muted);
+}
+
 .route-ui-actions,
 .editor-route-links {
   display: flex;
