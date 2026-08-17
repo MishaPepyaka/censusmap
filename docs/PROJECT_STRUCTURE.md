@@ -32,10 +32,6 @@ selfhost-map-cmp/
 │   └── backups/                      # Snapshot exports or scheduled backups
 ├── deploy/                           # Nginx, systemd, container, and backup configs
 ├── docs/                             # Architecture, tasks, and operating notes
-├── ios-safari-web/                   # Optional Safari-specific release assets
-├── mobile-app/                       # Optional Android wrapper
-├── mobile-app-iossafari/             # Optional mobile packaging experiments
-├── releases/                         # Versioned build outputs only
 ├── scripts/                          # Import, migration, backup, and maintenance utilities
 ├── docker-compose.yml                # Local/dev stack
 ├── README.md                         # Product and architecture summary
