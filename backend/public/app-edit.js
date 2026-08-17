@@ -1277,9 +1277,11 @@
     updateEditorRouteSummary();
   }
 
-  if (editableLayer.getLayers().length > 0) {
+  // Preserve an explicit ?zoom= from a shared link.  Without it, retain the
+  // existing behaviour of fitting the region or its dwelling markers.
+  if (!Number.isFinite(requestedMapView.zoom) && editableLayer.getLayers().length > 0) {
     map.fitBounds(editableLayer.getBounds(), { padding: [20, 20] });
-  } else if (dwellingsLayer.getLayers().length > 0) {
+  } else if (!Number.isFinite(requestedMapView.zoom) && dwellingsLayer.getLayers().length > 0) {
     const dwellingBounds = dwellingsLayer.getBounds();
     if (dwellingBounds.isValid()) {
       map.fitBounds(dwellingBounds, { padding: [20, 20] });

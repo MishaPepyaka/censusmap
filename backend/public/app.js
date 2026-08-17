@@ -853,9 +853,11 @@
     dwellingSearchMatchIndex = 0;
   });
 
-  if (polygonLayer.getLayers().length > 0) {
+  // A shared link with ?zoom= is intentional.  Do not let the automatic
+  // fit-to-data step schedule an animation that later overwrites that zoom.
+  if (!Number.isFinite(requestedMapView.zoom) && polygonLayer.getLayers().length > 0) {
     map.fitBounds(polygonLayer.getBounds(), { padding: [20, 20] });
-  } else if (dwellingRecords.length > 0) {
+  } else if (!Number.isFinite(requestedMapView.zoom) && dwellingRecords.length > 0) {
     const bounds = L.latLngBounds(dwellingRecords.map((record) => [record.lat, record.lng]));
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [20, 20] });
