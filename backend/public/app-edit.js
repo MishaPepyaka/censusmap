@@ -751,7 +751,9 @@
   }
 
   function attachSpecialLocationPopupHandlers(marker) {
-    marker.bindPopup(buildSpecialLocationPopupHtml(marker.feature), { autoPan: true });
+    const html = buildSpecialLocationPopupHtml(marker.feature);
+    if (marker.getPopup()) marker.setPopupContent(html);
+    else marker.bindPopup(html, { autoPan: true });
   }
 
   function createSpecialLocationMarker(feature) {
@@ -850,6 +852,30 @@
     };
   }
 
+  function reflectSpecialLocationFormOnMap(marker) {
+    if (!marker?.feature) return;
+    const props = marker.feature.properties || (marker.feature.properties = {});
+    const type = String(specialLocationTypeInput?.value || "other").trim();
+    const name = String(specialLocationNameInput?.value || "").trim() || type.replaceAll("_", " ");
+    props._group = "special_locations";
+    props.locationType = type;
+    props.name = name;
+    props.label = name;
+    props.notes = String(specialLocationNotesInput?.value || "");
+    applySpecialLocationMarkerIcon(marker, marker === selectedSpecialLocationMarker);
+    attachSpecialLocationPopupHandlers(marker);
+  }
+
+  for (const field of [specialLocationTypeInput, specialLocationNameInput, specialLocationNotesInput]) {
+    const reflect = () => {
+      if (!selectedSpecialLocationMarker) return;
+      reflectSpecialLocationFormOnMap(selectedSpecialLocationMarker);
+      setStatus("Special-location fields changed. Press Save to queue them.", false);
+    };
+    field?.addEventListener("input", reflect);
+    field?.addEventListener("change", reflect);
+  }
+
   async function persistSpecialLocationMarker(marker, { useMarkerProperties = false } = {}) {
     if (!canPersistEdits) {
       setStatus("Cannot save special location: API source unavailable.", true);
@@ -902,6 +928,7 @@
     }
     const id = getFeatureId(marker.feature);
     if (id === null) {
+      discardQueuedMutation(marker._offlineMutationId);
       removeSpecialLocationMarkerLocally(marker);
       setStatus("Unsaved special location removed", false);
       return;
@@ -910,13 +937,9 @@
       setStatus("Cannot delete special location: API source unavailable.", true);
       return;
     }
-    try {
-      await getJson(`/api/cld/${cld}/features/${id}`, { method: "DELETE" });
-      removeSpecialLocationMarkerLocally(marker);
-      setStatus("Special location deleted", false);
-    } catch (error) {
-      setStatus(`Special-location delete failed: ${error.message}`, true);
-    }
+    queueMutation("DELETE", `/api/cld/${cld}/features/${id}`, undefined, `special:${id}`);
+    removeSpecialLocationMarkerLocally(marker);
+    setStatus("Special location removed; queued for sending", false);
   });
 
   function buildDwellingPopupHtml(feature) {
@@ -947,7 +970,9 @@
   }
 
   function attachDwellingPopupHandlers(marker) {
-    marker.bindPopup(buildDwellingPopupHtml(marker.feature), { autoPan: true });
+    const html = buildDwellingPopupHtml(marker.feature);
+    if (marker.getPopup()) marker.setPopupContent(html);
+    else marker.bindPopup(html, { autoPan: true });
     marker.off("popupopen");
     marker.on("popupopen", (event) => {
       const root = event?.popup?.getElement?.();
@@ -1012,6 +1037,18 @@
     dwellingFields.no.value = extractDwellingNo(props);
     dwellingFields.status.value = normalizeDwellingStatus(props.status);
     dwellingFields.notes.value = props.notes || "";
+  }
+
+  function reflectDwellingFormOnMap(marker) {
+    if (!marker?.feature) return;
+    const props = marker.feature.properties || (marker.feature.properties = {});
+    props.CUID = String(dwellingFields.cu?.value || "").trim();
+    props.CB_COLCODE = String(dwellingFields.block?.value || "").trim();
+    props.dwellingNo = String(dwellingFields.no?.value || "").trim();
+    props.status = normalizeDwellingStatus(dwellingFields.status?.value);
+    props.notes = String(dwellingFields.notes?.value || "");
+    applyMarkerIcon(marker, marker === selectedDwellingMarker);
+    attachDwellingPopupHandlers(marker);
   }
 
   function featureFromForm(existingId, latlng) {
@@ -1265,9 +1302,17 @@
     if (existing >= 0) queue.splice(existing, 1, item);
     else queue.push(item);
     localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
+    window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
     setSyncStatus("Waiting to send", "pending");
     void flushOfflineQueue();
     return item;
+  }
+
+  function discardQueuedMutation(mutationId) {
+    if (!mutationId) return;
+    const queue = readOfflineQueue().filter((item) => item.id !== mutationId);
+    localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
+    window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
   }
 
   function applyQueuedCreateResult(item, result) {
@@ -1326,6 +1371,7 @@
       const nextQueue = [...remaining.filter((item) => !newerIds.has(item.id)), ...newerItems];
       queuedDuringFlush = newerItems.length > 0;
       localStorage.setItem(offlineQueueKey, JSON.stringify(nextQueue));
+      window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
       setSyncStatus(nextQueue.length ? "Waiting to send" : "Saved", nextQueue.length ? "pending" : "saved");
     } finally {
       offlineQueueFlushInProgress = false;
@@ -1470,6 +1516,7 @@
     const queued = queueMutation(id === null ? "POST" : "PUT", url, payload, marker._offlineMutationKey);
     marker._offlineMutationId = id === null ? queued.id : null;
     marker.feature = payload;
+    attachDwellingPopupHandlers(marker);
     if (selectAfterSave) {
       selectedDwellingMarker = marker;
       applyMarkerIcon(marker, true);
@@ -1490,9 +1537,8 @@
     const eventName = field.type === "checkbox" ? "change" : "input";
     field.addEventListener(eventName, () => {
       if (!selectedDwellingMarker) return;
+      reflectDwellingFormOnMap(selectedDwellingMarker);
       if (field === dwellingFields.status) {
-        const no = displayDwellingNo(selectedDwellingMarker.feature?.properties || {});
-        selectedDwellingMarker.setIcon(dwellingMarkerIcon(no, field.value, true));
         setStatus("Saving status...", false);
         markDwellingDirty(selectedDwellingMarker);
         void persistDwellingMarker(selectedDwellingMarker, { selectAfterSave: true });
@@ -1908,6 +1954,7 @@
 
     const id = getFeatureId(selectedDwellingMarker.feature);
     if (id === null) {
+      discardQueuedMutation(selectedDwellingMarker._offlineMutationId);
       removeDwellingMarkerLocally(selectedDwellingMarker);
       setStatus("Unsaved dwelling removed", false);
       return;
@@ -1918,13 +1965,9 @@
       return;
     }
 
-    try {
-      await getJson(`/api/cld/${cld}/features/${id}`, { method: "DELETE" });
-      removeDwellingMarkerLocally(selectedDwellingMarker);
-      setStatus("Dwelling deleted", false);
-    } catch (error) {
-      setStatus(`Delete failed: ${error.message}`, true);
-    }
+    queueMutation("DELETE", `/api/cld/${cld}/features/${id}`, undefined, `dwelling:${id}`);
+    removeDwellingMarkerLocally(selectedDwellingMarker);
+    setStatus("Dwelling removed; queued for sending", false);
   });
 
   collapseBtn?.addEventListener("click", () => {

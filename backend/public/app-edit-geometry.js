@@ -33,6 +33,55 @@
   const handles = L.layerGroup().addTo(map);
   const dirty = new Set();
   let selected = null;
+  const offlineQueueKey = `cld-map-pending:${cld}`;
+
+  function readQueue() {
+    try {
+      const queue = JSON.parse(localStorage.getItem(offlineQueueKey) || "[]");
+      return Array.isArray(queue) ? queue : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function queueGeometryChange(id, payload) {
+    const queue = readQueue();
+    const dedupeKey = `geometry:${id}`;
+    const index = queue.findIndex((item) => item.dedupeKey === dedupeKey);
+    const previous = index >= 0 ? queue[index] : null;
+    const item = {
+      id: previous?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      method: "PUT",
+      url: `/api/cld/${cld}/features/${id}`,
+      payload,
+      dedupeKey,
+      queuedAt: previous?.queuedAt || Date.now(),
+      revision: Number(previous?.revision || 0) + 1
+    };
+    if (index >= 0) queue.splice(index, 1, item);
+    else queue.push(item);
+    localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
+    window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
+    return item;
+  }
+
+  async function flushGeometryQueue() {
+    if (!navigator.onLine) return;
+    for (const item of readQueue().filter((entry) => String(entry.dedupeKey || "").startsWith("geometry:"))) {
+      try {
+        await getJson(item.url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.payload) });
+        const queue = readQueue();
+        const index = queue.findIndex((entry) => entry.id === item.id && Number(entry.revision) === Number(item.revision));
+        if (index >= 0) {
+          queue.splice(index, 1);
+          localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
+          window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
+        }
+      } catch {
+        // The queued geometry stays on this device until connectivity returns.
+      }
+    }
+  }
 
   function zoneName(feature) {
     const props = feature.properties || {};
@@ -112,17 +161,18 @@
     const changed = [...dirty];
     if (!changed.length) return;
     saveButton.disabled = true;
-    setStatus(`Sending ${changed.length} boundary change${changed.length === 1 ? "" : "s"}…`, "pending");
+    setStatus(`Saving ${changed.length} boundary change${changed.length === 1 ? "" : "s"}…`, "pending");
     try {
       for (const layer of changed) {
         const id = Number(layer.feature?.id);
         if (!Number.isFinite(id)) throw new Error("A boundary is missing its feature id");
         const payload = { type: "Feature", id, properties: layer.feature.properties || {}, geometry: layer.toGeoJSON().geometry };
-        await getJson(`/api/cld/${cld}/features/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        queueGeometryChange(id, payload);
         layer.feature.geometry = payload.geometry;
         dirty.delete(layer);
       }
-      setStatus("Geometry saved");
+      await flushGeometryQueue();
+      setStatus(readQueue().some((item) => String(item.dedupeKey || "").startsWith("geometry:")) ? "Geometry changes queued for sending" : "Geometry saved");
     } catch (error) {
       setStatus(`Geometry save failed: ${error.message}`, "error");
     } finally {

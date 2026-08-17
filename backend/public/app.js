@@ -113,6 +113,37 @@
     };
   }
 
+  // Edits are queued locally before they reach the server.  The viewer must
+  // render that queue too, otherwise opening it immediately after an edit
+  // shows the old server copy of the map.
+  function getFeatureId(feature) {
+    return feature?.id ?? feature?.properties?._id ?? null;
+  }
+
+  function applyPendingMutations(features) {
+    const nextFeatures = Array.isArray(features) ? [...features] : [];
+    try {
+      const queue = JSON.parse(localStorage.getItem(`cld-map-pending:${cld}`) || "[]");
+      if (!Array.isArray(queue)) return nextFeatures;
+      for (const item of queue) {
+        if (item.method === "POST" && item.payload?.geometry) {
+          nextFeatures.push({ ...item.payload, _offlineQueueId: item.id, _offlineMutationKey: item.dedupeKey || item.id });
+          continue;
+        }
+        const id = String(item.payload?.id ?? item.url?.split("/").pop() ?? "");
+        const index = nextFeatures.findIndex((feature) => String(getFeatureId(feature) ?? "") === id);
+        if (item.method === "PUT" && index >= 0 && item.payload?.geometry) {
+          nextFeatures[index] = item.payload;
+        } else if (item.method === "DELETE" && index >= 0) {
+          nextFeatures.splice(index, 1);
+        }
+      }
+    } catch {
+      // A malformed local queue must not prevent the map from opening.
+    }
+    return nextFeatures;
+  }
+
   function buildFeatureCollection(features) {
     return {
       type: "FeatureCollection",
@@ -147,16 +178,17 @@
     try {
       if (!navigator.onLine) throw new Error("Offline");
       const apiData = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`, {}, 15000);
-      const features = Array.isArray(apiData.features) ? apiData.features : [];
+      const serverFeatures = Array.isArray(apiData.features) ? apiData.features : [];
+      const features = applyPendingMutations(serverFeatures);
       if (features.length === 0) throw new Error("The map server returned an empty feature list");
       // Never let a transient empty response replace a usable offline map.
-      if (features.length > 0) window.CldOfflineStore?.saveCachedFeatures(cld, features);
-      return { ...parseFeatures(apiData), loadError: "" };
+      if (serverFeatures.length > 0) window.CldOfflineStore?.saveCachedFeatures(cld, serverFeatures);
+      return { ...parseFeatures({ features }), loadError: "" };
     } catch (error) {
       const snapshot = await window.CldOfflineStore?.readCachedFeatures(cld);
       if (Array.isArray(snapshot?.features) && snapshot.features.length > 0) {
         return {
-          ...parseFeatures({ features: snapshot.features }),
+          ...parseFeatures({ features: applyPendingMutations(snapshot.features) }),
           loadError: "Offline: showing the last map saved on this device."
         };
       }
@@ -290,6 +322,7 @@
 
   const badgeLayer = L.layerGroup().addTo(map);
   const dwellingsLayer = L.layerGroup().addTo(map);
+  const dwellingBuildingLayer = L.layerGroup().addTo(map);
   const specialLocationsLayer = L.layerGroup().addTo(map);
   const dwellingClusterLayer = L.layerGroup().addTo(map);
   polygonLayer.addData(buildFeatureCollection(zones));
@@ -338,10 +371,13 @@
     });
   }
 
-  polygonLayer.eachLayer((layer) => {
-    layer.on("click", (event) => selectZone(layer, event?.latlng || null));
-    layer.on("tap", (event) => selectZone(layer, event?.latlng || null));
-  });
+  function bindPolygonInteractions() {
+    polygonLayer.eachLayer((layer) => {
+      layer.on("click", (event) => selectZone(layer, event?.latlng || null));
+      layer.on("tap", (event) => selectZone(layer, event?.latlng || null));
+    });
+  }
+  bindPolygonInteractions();
   badgesReady = true;
   rebuildBadges();
 
@@ -460,8 +496,8 @@
     };
   }
 
-  function createDwellingMarker(record, forceSquareIcon = false) {
-    const marker = L.marker([record.lat, record.lng], {
+  function createDwellingMarker(record, forceSquareIcon = false, displayLatLng = null) {
+    const marker = L.marker(displayLatLng || [record.lat, record.lng], {
       icon: forceSquareIcon
         ? dwellingSquareIcon(record.displayNo, record.status, false)
         : getDwellingIconForZoom(record.displayNo, record.status, false),
@@ -573,6 +609,8 @@
 
   const DWELLINGS_MIN_VISIBLE_ZOOM = 10;
   const DWELLINGS_INDIVIDUAL_ZOOM = 15;
+  const DWELLINGS_MULTIPLEX_ZOOM = 17;
+  const MULTIPLEX_JOIN_DISTANCE_METERS = 10;
 
   function dwellingClusterLabel(records) {
     const numbers = records.map((record) => Number(record.no)).filter(Number.isFinite).sort((a, b) => a - b);
@@ -627,10 +665,66 @@
     }
   }
 
+  function groupNearbyDwellings(records) {
+    const groups = [];
+    const remaining = new Set(records);
+    while (remaining.size > 0) {
+      const first = remaining.values().next().value;
+      const group = [first];
+      remaining.delete(first);
+      // A connected group keeps apartments in one building together even when
+      // their points were recorded a few metres apart.
+      for (let index = 0; index < group.length; index += 1) {
+        const current = group[index];
+        for (const candidate of [...remaining]) {
+          if (candidate.cu !== current.cu || candidate.block !== current.block) continue;
+          const distance = L.latLng(current.lat, current.lng).distanceTo([candidate.lat, candidate.lng]);
+          if (distance > MULTIPLEX_JOIN_DISTANCE_METERS) continue;
+          remaining.delete(candidate);
+          group.push(candidate);
+        }
+      }
+      groups.push(group);
+    }
+    return groups;
+  }
+
+  function multiplexOffset(index, count) {
+    const columns = Math.min(4, Math.ceil(Math.sqrt(count)));
+    const rows = Math.ceil(count / columns);
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    return {
+      x: (column - (columns - 1) / 2) * 27,
+      y: (row - (rows - 1) / 2) * 27
+    };
+  }
+
+  function renderMultiplexMarkers() {
+    for (const group of groupNearbyDwellings(dwellingRecords)) {
+      if (group.length === 1) {
+        createDwellingMarker(group[0]);
+        continue;
+      }
+      for (let index = 0; index < group.length; index += 1) {
+        const record = group[index];
+        const offset = multiplexOffset(index, group.length);
+        const actualLatLng = L.latLng(record.lat, record.lng);
+        const displayPoint = map.project(actualLatLng, map.getZoom()).add([offset.x, offset.y]);
+        const displayLatLng = map.unproject(displayPoint, map.getZoom());
+        L.polyline([actualLatLng, displayLatLng], {
+          color: "#334155", weight: 1.5, opacity: 0.7, interactive: false
+        }).addTo(dwellingBuildingLayer);
+        createDwellingMarker(record, true, displayLatLng);
+      }
+    }
+  }
+
   function renderVisibleDwellingMarkers() {
     const selectedKey = selectedDwellingMarker?.__dwellingInfo?.key || null;
     dwellingsLayer.clearLayers();
     dwellingClusterLayer.clearLayers();
+    dwellingBuildingLayer.clearLayers();
     dwellingMarkerByKey.clear();
     selectedDwellingMarker = null;
 
@@ -640,6 +734,14 @@
 
     if (map.getZoom() < DWELLINGS_INDIVIDUAL_ZOOM) {
       renderDwellingClusters();
+      return;
+    }
+
+    if (map.getZoom() >= DWELLINGS_MULTIPLEX_ZOOM) {
+      renderMultiplexMarkers();
+      for (const marker of dwellingMarkerByKey.values()) {
+        if (marker.__dwellingInfo?.key === selectedKey) setSelectedDwelling(marker);
+      }
       return;
     }
 
@@ -686,6 +788,37 @@
     syncSpecialLocationVisibility();
     renderVisibleDwellingMarkers();
   }
+
+  function replaceZoneFeatures(nextZones) {
+    selectedPolygonLayer = null;
+    polygonLayer.clearLayers();
+    polygonLayer.addData(buildFeatureCollection(nextZones));
+    bindPolygonInteractions();
+    redrawPolygonLayers();
+  }
+
+  let localChangeRefreshTimer = null;
+  function refreshLocalChanges() {
+    window.clearTimeout(localChangeRefreshTimer);
+    localChangeRefreshTimer = window.setTimeout(async () => {
+      const freshMapData = await getMapData(false);
+      const hasMapData = freshMapData.zones.length + freshMapData.dwellings.length + freshMapData.specialLocations.length > 0;
+      if (!hasMapData) return;
+      replaceZoneFeatures(freshMapData.zones);
+      replacePointFeatures(freshMapData.dwellings, freshMapData.specialLocations);
+      updateRouteSubtitle();
+      setSearchStatus("Local map changes displayed.", false);
+    }, 80);
+  }
+
+  // The storage event covers edits made in another tab.  The custom event is
+  // useful for code running in this same document.
+  window.addEventListener("storage", (event) => {
+    if (event.key === `cld-map-pending:${cld}`) refreshLocalChanges();
+  });
+  window.addEventListener("census-map-local-change", (event) => {
+    if (String(event.detail?.cld || "") === String(cld)) refreshLocalChanges();
+  });
 
   uploadRefreshBtn?.addEventListener("click", async () => {
     if (!navigator.onLine) return;
