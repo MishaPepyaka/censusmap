@@ -1,4 +1,4 @@
-const SHELL_CACHE = "cmp-shell-v34";
+const SHELL_CACHE = "cmp-shell-v35";
 const SHELL_CACHE_PREFIX = "cmp-shell-";
 const TILE_CACHE = "cmp-map-tiles-v1";
 const TILE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
