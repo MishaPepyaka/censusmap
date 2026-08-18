@@ -733,12 +733,15 @@ body {
 }
 
 .dwelling-marker.dwelling-status-400,
-.dwelling-marker.dwelling-status-402,
 .dwelling-marker.dwelling-status-701,
 .dwelling-square-dot.dwelling-status-400,
-.dwelling-square-dot.dwelling-status-402,
 .dwelling-square-dot.dwelling-status-701 {
   background: #bef264;
+}
+
+.dwelling-marker.dwelling-status-402,
+.dwelling-square-dot.dwelling-status-402 {
+  background: #86efac;
 }
 
 .dwelling-marker.dwelling-status-500,
