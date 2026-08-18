@@ -93,7 +93,7 @@
     let refreshTimer = null;
     async function refresh() {
       if (!("caches" in window)) {
-        statusElement.textContent = "Tiles: unavailable";
+        statusElement.textContent = "Tiles: cache unavailable";
         return;
       }
       try {
@@ -109,7 +109,7 @@
         const megabytes = bytes / (1024 * 1024);
         statusElement.textContent = `Tiles: ${megabytes < 10 ? megabytes.toFixed(1) : Math.round(megabytes)} MB · ${requests.length}`;
       } catch {
-        statusElement.textContent = "Tiles: unavailable";
+        statusElement.textContent = "Tiles: cache unavailable";
       }
     }
     function scheduleRefresh() {
