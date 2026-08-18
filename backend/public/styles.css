@@ -755,14 +755,17 @@ body {
 }
 
 .dwelling-marker.dwelling-status-312,
-.dwelling-marker.dwelling-status-324,
 .dwelling-marker.dwelling-status-000,
 .dwelling-marker.dwelling-status-001,
 .dwelling-square-dot.dwelling-status-312,
-.dwelling-square-dot.dwelling-status-324,
 .dwelling-square-dot.dwelling-status-000,
 .dwelling-square-dot.dwelling-status-001 {
   background: #9ca3af;
+}
+
+.dwelling-marker.dwelling-status-324,
+.dwelling-square-dot.dwelling-status-324 {
+  background: #6a717d;
 }
 
 .dwelling-square-dot {
