@@ -335,7 +335,7 @@
       if (getZoneKind(props) === "block") blockCount += 1;
     }
     const markers = [...allDwellingMarkers];
-    const completedStatuses = new Set(["400", "402", "701", "312", "324", "000", "001", "601"]);
+    const completedStatuses = new Set(["400", "402", "701", "500", "312", "324", "000", "001", "601"]);
     const completed = markers.filter((marker) =>
       completedStatuses.has(normalizeDwellingStatus(marker.feature?.properties?.status))
     ).length;
@@ -464,7 +464,7 @@
   }
 
   function isCompletedDwellingCluster(markers) {
-    const completedStatuses = new Set(["400", "402", "701", "312", "324", "000", "001", "601"]);
+    const completedStatuses = new Set(["400", "402", "701", "500", "312", "324", "000", "001", "601"]);
     return markers.length > 0 && markers.every((marker) =>
       completedStatuses.has(normalizeDwellingStatus(marker.feature?.properties?.status))
     );

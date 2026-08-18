@@ -616,7 +616,7 @@
   }
 
   function isCompletedDwellingCluster(records) {
-    const completedStatuses = new Set(["400", "402", "701", "312", "324", "000", "001", "601"]);
+    const completedStatuses = new Set(["400", "402", "701", "500", "312", "324", "000", "001", "601"]);
     return records.length > 0 && records.every((record) => completedStatuses.has(normalizeDwellingStatus(record.status)));
   }
 
@@ -862,7 +862,7 @@
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [20, 20] });
     }
-  } else {
+  } else if (zones.length === 0 && dwellings.length === 0 && specialLocations.length === 0) {
     setSearchStatus(
       mapData.loadError || "No geometry or dwellings found for this CLD.",
       true
