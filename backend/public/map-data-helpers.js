@@ -40,6 +40,12 @@
     return isPolygonGeometry(geometry) && (getZoneKind(props) === "cu" || getZoneKind(props) === "block");
   }
 
+  function isHiddenBlock(props) {
+    if (getZoneKind(props) !== "block") return false;
+    const value = props?.hidden;
+    return value === true || value === 1 || String(value || "").trim().toLowerCase() === "true";
+  }
+
   function isDwellingFeature(props, geometry) {
     if (!props || typeof props !== "object") return false;
     if (!isPointGeometry(geometry)) return false;
@@ -101,6 +107,7 @@
     hasDwellingIdentifier,
     getZoneKind,
     isZoneFeature,
+    isHiddenBlock,
     isDwellingFeature,
     isSpecialLocationFeature,
     extractCuCode,

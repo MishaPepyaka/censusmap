@@ -7,6 +7,7 @@
     hasDwellingIdentifier,
     getZoneKind,
     isZoneFeature,
+    isHiddenBlock,
     isDwellingFeature,
     isSpecialLocationFeature,
     extractCuCode,
@@ -324,7 +325,7 @@
   const dwellingsLayer = L.layerGroup().addTo(map);
   const specialLocationsLayer = L.layerGroup().addTo(map);
   const dwellingClusterLayer = L.layerGroup().addTo(map);
-  polygonLayer.addData(buildFeatureCollection(zones));
+  polygonLayer.addData(buildFeatureCollection(zones.filter((feature) => !isHiddenBlock(feature.properties || {}))));
 
   function selectZone(layer, popupLatLng = null) {
     if (selectedPolygonLayer && selectedPolygonLayer !== layer) {
@@ -725,7 +726,7 @@
   function replaceZoneFeatures(nextZones) {
     selectedPolygonLayer = null;
     polygonLayer.clearLayers();
-    polygonLayer.addData(buildFeatureCollection(nextZones));
+    polygonLayer.addData(buildFeatureCollection(nextZones.filter((feature) => !isHiddenBlock(feature.properties || {}))));
     bindPolygonInteractions();
     redrawPolygonLayers();
   }

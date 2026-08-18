@@ -1,6 +1,6 @@
 (async function initGeometryEditor() {
   const { getJson } = window.CensusMapApi;
-  const { isPolygonGeometry } = window.CensusMapData;
+  const { isPolygonGeometry, getZoneKind, isHiddenBlock } = window.CensusMapData;
   const match = window.location.pathname.match(/^\/(\d+)\/edit_geometry\/?$/);
   const cld = match ? match[1] : "";
   if (!cld) return window.location.replace("/");
@@ -13,6 +13,7 @@
 
   const status = document.getElementById("geometry-status");
   const saveButton = document.getElementById("geometry-save-btn");
+  const visibilityButton = document.getElementById("geometry-visibility-btn");
   document.getElementById("geometry-route-label").textContent = `CLD ${cld} geometry editor`;
   document.getElementById("geometry-back-link").href = `/${cld}/edit`;
   document.getElementById("geometry-view-link").href = `/${cld}`;
@@ -89,7 +90,29 @@
   }
 
   function style(layer, active) {
-    return { color: active ? "#facc15" : "#38bdf8", weight: active ? 4 : 2, fillColor: "#0ea5e9", fillOpacity: active ? .16 : .07 };
+    const hidden = isHiddenBlock(layer?.feature?.properties || {});
+    return {
+      color: active ? "#facc15" : "#38bdf8",
+      weight: active ? 4 : 2,
+      fillColor: "#0ea5e9",
+      fillOpacity: active ? .16 : (hidden ? .025 : .07),
+      dashArray: hidden ? "4 6" : null
+    };
+  }
+
+  function isBlockLayer(layer) {
+    return getZoneKind(layer?.feature?.properties || {}) === "block";
+  }
+
+  function syncVisibilityButton() {
+    if (!visibilityButton) return;
+    const isBlock = isBlockLayer(selected);
+    visibilityButton.disabled = !isBlock;
+    if (!isBlock) {
+      visibilityButton.textContent = "Hide block";
+      return;
+    }
+    visibilityButton.textContent = isHiddenBlock(selected.feature.properties || {}) ? "Show block" : "Hide block";
   }
 
   function walkRings(value, path = [], out = []) {
@@ -137,14 +160,16 @@
     selected = layer;
     layer.setStyle(style(layer, true));
     showHandles(layer);
-    setStatus(`${zoneName(layer.feature)} selected`);
+    syncVisibilityButton();
+    const hiddenMessage = isHiddenBlock(layer.feature?.properties || {}) ? " (hidden on maps)" : "";
+    setStatus(`${zoneName(layer.feature)} selected${hiddenMessage}`);
   }
 
   try {
     const data = await getJson(`/api/cld/${cld}/features`);
     for (const feature of data.features || []) {
       if (!isPolygonGeometry(feature?.geometry)) continue;
-      const geo = L.geoJSON(feature, { style: () => style(null, false) });
+      const geo = L.geoJSON(feature, { style: () => style({ feature }, false) });
       geo.eachLayer((layer) => {
         layer.feature = feature;
         layer.on("click", () => selectLayer(layer));
@@ -178,5 +203,19 @@
     } finally {
       saveButton.disabled = dirty.size === 0;
     }
+  });
+
+  visibilityButton?.addEventListener("click", () => {
+    if (!isBlockLayer(selected)) return;
+    const props = selected.feature.properties || {};
+    const willHide = !isHiddenBlock(props);
+    if (willHide) props.hidden = true;
+    else delete props.hidden;
+    selected.feature.properties = props;
+    selected.setStyle(style(selected, true));
+    dirty.add(selected);
+    saveButton.disabled = false;
+    syncVisibilityButton();
+    setStatus(`${zoneName(selected.feature)} will be ${willHide ? "hidden" : "shown"} on the viewer and editor after saving.`, "pending");
   });
 })();

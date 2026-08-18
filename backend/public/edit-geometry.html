@@ -20,14 +20,15 @@
           <a id="geometry-view-link" class="route-link-btn" href="#">Viewer</a>
         </div>
       </div>
-      <div class="editor-help">Drag the white points to correct a boundary. Saving writes only changed CU and Block polygons.</div>
+      <div class="editor-help">Drag the white points to correct a boundary. Select a block to hide or show it on the viewer and editor maps.</div>
+      <button id="geometry-visibility-btn" type="button" class="editor-save-btn" disabled>Hide block</button>
       <button id="geometry-save-btn" type="button" class="editor-save-btn" disabled>Save geometry</button>
     </section>
     <div id="user-widget-root"></div>
     <script src="/vendor/leaflet/leaflet.js?v=20260725a"></script>
     <script src="/api-client.js?v=20260804a"></script>
     <script src="/app-auth.js?v=20260804a"></script>
-    <script src="/map-data-helpers.js?v=20260804a"></script>
-    <script src="/app-edit-geometry.js?v=20260816a"></script>
+    <script src="/map-data-helpers.js?v=20260818a"></script>
+    <script src="/app-edit-geometry.js?v=20260818a"></script>
   </body>
 </html>

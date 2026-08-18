@@ -7,6 +7,7 @@
     hasDwellingIdentifier,
     getZoneKind,
     isZoneFeature,
+    isHiddenBlock,
     isDwellingFeature,
     isSpecialLocationFeature,
     extractCuCode,
@@ -1230,6 +1231,7 @@
   }
 
   for (const feature of blocks) {
+    if (isHiddenBlock(feature.properties || {})) continue;
     addFeatureLayer(feature);
   }
   rebuildBadges();
