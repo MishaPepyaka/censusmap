@@ -1,22 +1,25 @@
 export function registerRegionRoutes(app, {
   buildFeatureCollection,
-  createImageUpload,
-  createRegionFeature,
-  deleteRegionFeature,
-  ensureRegionMediaDirs,
   extractCuCode,
   normalizeClD,
   normalizeDwellingNo,
   normalizeFeatures,
   pool,
-  readRegionBundle,
-  regionExists,
+  repository,
   requireAuth,
   requireClDAccess,
   summarizeRegion,
-  updateRegionFeature,
   useFileStore
 }) {
+  const {
+    createFeature: createRegionFeature,
+    createImageUpload,
+    deleteFeature: deleteRegionFeature,
+    ensureMediaDirs: ensureRegionMediaDirs,
+    exists: regionExists,
+    readBundle: readRegionBundle,
+    updateFeature: updateRegionFeature
+  } = repository;
   app.get("/api/cld/:cld", requireAuth, requireClDAccess, async (req, res) => {
     const cld = normalizeClD(req.params.cld);
     if (!cld) return res.status(400).json({ error: "Invalid CLD" });

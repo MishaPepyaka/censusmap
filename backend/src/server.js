@@ -15,6 +15,7 @@ import { registerUserRoutes } from "./routes/user-routes.js";
 import { assertDwellingNoUnique, classifyRegionFeature, inferRegionFeatureType, summarizeRegion } from "./services/region-service.js";
 import { registerPageRoutes } from "./routes/page-routes.js";
 import { registerLegacyFeatureRoutes } from "./routes/legacy-feature-routes.js";
+import { createRegionRepository } from "./repositories/region-repository.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
@@ -1146,23 +1147,27 @@ registerUserRoutes(app, {
 
 
 
+const regionRepository = createRegionRepository({
+  createFeature: createRegionFeature,
+  createImageUpload,
+  deleteFeature: deleteRegionFeature,
+  ensureMediaDirs: ensureRegionMediaDirs,
+  exists: regionExists,
+  readBundle: readRegionBundle,
+  updateFeature: updateRegionFeature
+});
+
 registerRegionRoutes(app, {
   buildFeatureCollection,
-  createImageUpload,
-  createRegionFeature,
-  deleteRegionFeature,
-  ensureRegionMediaDirs,
   extractCuCode,
   normalizeClD,
   normalizeDwellingNo,
   normalizeFeatures,
   pool,
-  readRegionBundle,
-  regionExists,
+  repository: regionRepository,
   requireAuth,
   requireClDAccess,
   summarizeRegion,
-  updateRegionFeature,
   useFileStore
 });
 

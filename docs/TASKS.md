@@ -40,7 +40,8 @@ implementation.
     - [ ] Extract persistence adapters into repositories.
 
 - [ ] R112 Consolidate region persistence.
-  - Implement a single `RegionRepository` interface for the selected runtime store.
+  - [x] Define and wire a single `RegionRepository` interface for region routes.
+  - [ ] Move PostGIS and temporary file-store implementations behind dedicated repository adapters.
   - [x] Isolate legacy `/api/features` CRUD and import compatibility in `legacy-feature-routes.js`.
   - Keep legacy file-store and shared-feature conversion in one-time migration/import scripts only.
   - Remove obsolete `/api/features` CRUD and `map_features` code after migration verification.
