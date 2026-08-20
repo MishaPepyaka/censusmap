@@ -56,3 +56,26 @@ test("file region repository reads and normalizes a region bundle", async (t) =>
   assert.deepEqual((await repository.listIndexes()).map((index) => index.cld), ["1234", "5678"]);
   assert.deepEqual(await repository.resolveLookup("12340001"), { cld: "1234", matchedBy: "cu", label: "Updated" });
 });
+
+test("file region repository serializes concurrent writes for one CLD", async (t) => {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "censusmap-region-repository-"));
+  t.after(() => fs.rm(rootDir, { recursive: true, force: true }));
+  const repository = createFileRegionRepository(rootDir);
+  await repository.ensureRegion("5678");
+  const feature = (dwellingNo) => ({
+    properties: { CUID: "56780001", DWELLING_NO: dwellingNo },
+    geometry: { type: "Point", coordinates: [-97, 56] }
+  });
+
+  const results = await Promise.allSettled([
+    repository.createFeature("5678", "dwellings", feature("1"), 1),
+    repository.createFeature("5678", "dwellings", feature("2"), 1)
+  ]);
+
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  const rejected = results.find((result) => result.status === "rejected");
+  assert.equal(rejected.reason.name, "RegionRevisionConflictError");
+  assert.equal(rejected.reason.actualRevision, 2);
+  assert.equal((await repository.readIndex("5678")).revision, 2);
+  assert.equal((await repository.readFeatures("5678", "dwellings")).length, 1);
+});

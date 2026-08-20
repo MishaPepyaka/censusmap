@@ -5,6 +5,7 @@ import { ensureDir, exists, readJsonFile, writeJsonFile } from "../infrastructur
 import { RegionRevisionConflictError } from "../domain/region-revision.js";
 
 export function createFileRegionRepository(cldRootDir) {
+  const regionLocks = new Map();
   const revisionOf = (index) => Number.isFinite(Number(index?.revision)) ? Number(index.revision) : 1;
   const assertRevision = (index, expectedRevision) => {
     if (expectedRevision !== undefined && Number(expectedRevision) !== revisionOf(index)) {
@@ -17,6 +18,22 @@ export function createFileRegionRepository(cldRootDir) {
     if (!fileName) throw new Error(`Unsupported region file type: ${type}`);
     return path.join(cldRootDir, cld, fileName);
   };
+
+  async function withRegionLock(cld, operation) {
+    const previous = regionLocks.get(cld) || Promise.resolve();
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const queued = previous.then(() => gate);
+    regionLocks.set(cld, queued);
+
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (regionLocks.get(cld) === queued) regionLocks.delete(cld);
+    }
+  }
 
   async function readIndex(cld) {
     const index = await readJsonFile(indexPath(cld), null);
@@ -100,46 +117,52 @@ export function createFileRegionRepository(cldRootDir) {
       return null;
     },
     async createFeature(cld, type, feature, expectedRevision) {
-      const index = await readIndex(cld);
-      assertRevision(index, expectedRevision);
-      const nextId = Number.isFinite(Number(index.nextFeatureId)) ? Number(index.nextFeatureId) : 1;
-      const normalized = normalizeRegionFeature({ ...feature, id: nextId });
-      const features = await readFeatures(cld, type);
-      features.push(normalized);
-      await writeJsonFile(featurePath(cld, type), buildFeatureCollection(features));
-      if (type !== "dwellings") {
-        const cuCodes = new Set(Array.isArray(index.cuCodes) ? index.cuCodes : []);
-        const cuCode = extractCuCode(normalized.properties || {});
-        if (cuCode) cuCodes.add(cuCode);
-        index.cuCodes = [...cuCodes].sort();
-      }
-      index.nextFeatureId = nextId + 1;
-      index.revision = revisionOf(index) + 1;
-      await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
-      return nextId;
+      return withRegionLock(cld, async () => {
+        const index = await readIndex(cld);
+        assertRevision(index, expectedRevision);
+        const nextId = Number.isFinite(Number(index.nextFeatureId)) ? Number(index.nextFeatureId) : 1;
+        const normalized = normalizeRegionFeature({ ...feature, id: nextId });
+        const features = await readFeatures(cld, type);
+        features.push(normalized);
+        await writeJsonFile(featurePath(cld, type), buildFeatureCollection(features));
+        if (type !== "dwellings") {
+          const cuCodes = new Set(Array.isArray(index.cuCodes) ? index.cuCodes : []);
+          const cuCode = extractCuCode(normalized.properties || {});
+          if (cuCode) cuCodes.add(cuCode);
+          index.cuCodes = [...cuCodes].sort();
+        }
+        index.nextFeatureId = nextId + 1;
+        index.revision = revisionOf(index) + 1;
+        await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
+        return nextId;
+      });
     },
     async updateFeature(cld, type, id, feature, expectedRevision) {
-      const index = await readIndex(cld);
-      assertRevision(index, expectedRevision);
-      const features = await readFeatures(cld, type);
-      const targetIndex = features.findIndex((item) => Number(item?.id) === Number(id));
-      if (targetIndex === -1) return false;
-      features[targetIndex] = normalizeRegionFeature({ ...feature, id: Number(id) });
-      await writeJsonFile(featurePath(cld, type), buildFeatureCollection(features));
-      index.revision = revisionOf(index) + 1;
-      await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
-      return true;
+      return withRegionLock(cld, async () => {
+        const index = await readIndex(cld);
+        assertRevision(index, expectedRevision);
+        const features = await readFeatures(cld, type);
+        const targetIndex = features.findIndex((item) => Number(item?.id) === Number(id));
+        if (targetIndex === -1) return false;
+        features[targetIndex] = normalizeRegionFeature({ ...feature, id: Number(id) });
+        await writeJsonFile(featurePath(cld, type), buildFeatureCollection(features));
+        index.revision = revisionOf(index) + 1;
+        await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
+        return true;
+      });
     },
     async deleteFeature(cld, type, id, expectedRevision) {
-      const index = await readIndex(cld);
-      assertRevision(index, expectedRevision);
-      const features = await readFeatures(cld, type);
-      const next = features.filter((item) => Number(item?.id) !== Number(id));
-      if (next.length === features.length) return false;
-      await writeJsonFile(featurePath(cld, type), buildFeatureCollection(next));
-      index.revision = revisionOf(index) + 1;
-      await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
-      return true;
+      return withRegionLock(cld, async () => {
+        const index = await readIndex(cld);
+        assertRevision(index, expectedRevision);
+        const features = await readFeatures(cld, type);
+        const next = features.filter((item) => Number(item?.id) !== Number(id));
+        if (next.length === features.length) return false;
+        await writeJsonFile(featurePath(cld, type), buildFeatureCollection(next));
+        index.revision = revisionOf(index) + 1;
+        await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
+        return true;
+      });
     },
     async readBundle(cld) {
       const [index, cu, blocks, dwellings] = await Promise.all([

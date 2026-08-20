@@ -49,10 +49,23 @@ test("region feature mutations require a current revision and report conflicts",
     geometry: { type: "Point", coordinates: [-97, 56] }
   };
 
+  const snapshot = await fetch(`${baseUrl}/api/cld/1234/features`);
+  assert.equal(snapshot.status, 200);
+  assert.equal(snapshot.headers.get("etag"), "\"1\"");
+  assert.deepEqual(await snapshot.json(), { type: "FeatureCollection", features: [], revision: 1 });
+
   const missing = await fetch(`${baseUrl}/api/cld/1234/features`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(feature)
   });
   assert.equal(missing.status, 428);
+
+  const missingUpdate = await fetch(`${baseUrl}/api/cld/1234/features/7`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(feature)
+  });
+  assert.equal(missingUpdate.status, 428);
+
+  const missingDelete = await fetch(`${baseUrl}/api/cld/1234/features/7`, { method: "DELETE" });
+  assert.equal(missingDelete.status, 428);
 
   const created = await fetch(`${baseUrl}/api/cld/1234/features`, {
     method: "POST", headers: { "Content-Type": "application/json", "If-Match": "\"1\"" }, body: JSON.stringify(feature)

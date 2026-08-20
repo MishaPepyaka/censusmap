@@ -66,9 +66,9 @@ implementation.
   - Keep legacy file-store and shared-feature conversion in one-time migration/import scripts only.
   - Remove obsolete `/api/features` CRUD and `map_features` code after migration verification.
 
-- [ ] R113 Add safe concurrent editing.
+- [x] R113 Add safe concurrent editing.
   - [x] Return a revision/version with each region snapshot.
-  - Require the revision for writes and return a conflict response rather than silently overwriting a newer edit.
+  - [x] Require the revision for writes and return a conflict response rather than silently overwriting a newer edit.
 
 ## Phase 2 — Shared frontend foundation
 
