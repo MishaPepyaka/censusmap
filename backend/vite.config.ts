@@ -2,10 +2,8 @@ import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
 export default defineConfig(({ mode }) => {
-  const entryName = mode === "map-data-helpers" ? "map-data-helpers" : "api-client";
-  const entry = entryName === "map-data-helpers"
-    ? resolve(import.meta.dirname, "../frontend/src/entries/map-data-helpers.ts")
-    : resolve(import.meta.dirname, "../frontend/src/entries/api-client.ts");
+  const entryName = mode === "map-data-helpers" || mode === "offline-data" ? mode : "api-client";
+  const entry = resolve(import.meta.dirname, `../frontend/src/entries/${entryName}.ts`);
   return {
   publicDir: false,
   build: {
