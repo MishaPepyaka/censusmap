@@ -89,37 +89,6 @@
     return `${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4)}`;
   }
 
-  // Edits are queued locally before they reach the server.  The viewer must
-  // render that queue too, otherwise opening it immediately after an edit
-  // shows the old server copy of the map.
-  function getFeatureId(feature) {
-    return feature?.id ?? feature?.properties?._id ?? null;
-  }
-
-  function applyPendingMutations(features) {
-    const nextFeatures = Array.isArray(features) ? [...features] : [];
-    try {
-      const queue = JSON.parse(localStorage.getItem(`cld-map-pending:${cld}`) || "[]");
-      if (!Array.isArray(queue)) return nextFeatures;
-      for (const item of queue) {
-        if (item.method === "POST" && item.payload?.geometry) {
-          nextFeatures.push({ ...item.payload, _offlineQueueId: item.id, _offlineMutationKey: item.dedupeKey || item.id });
-          continue;
-        }
-        const id = String(item.payload?.id ?? item.url?.split("/").pop() ?? "");
-        const index = nextFeatures.findIndex((feature) => String(getFeatureId(feature) ?? "") === id);
-        if (item.method === "PUT" && index >= 0 && item.payload?.geometry) {
-          nextFeatures[index] = item.payload;
-        } else if (item.method === "DELETE" && index >= 0) {
-          nextFeatures.splice(index, 1);
-        }
-      }
-    } catch {
-      // A malformed local queue must not prevent the map from opening.
-    }
-    return nextFeatures;
-  }
-
   function buildFeatureCollection(features) {
     return {
       type: "FeatureCollection",
@@ -134,7 +103,7 @@
   async function getMapData(forceNetwork = false) {
     const snapshot = await loadRegionSnapshot(cld, { forceNetwork });
     if (Number.isFinite(Number(snapshot.revision))) regionRevision = Number(snapshot.revision);
-    return { ...partitionRegionFeatures(applyPendingMutations(snapshot.features)), loadError: snapshot.loadError };
+    return { ...partitionRegionFeatures(snapshot.features), loadError: snapshot.loadError };
   }
 
   function getZoneCenter(layer) {

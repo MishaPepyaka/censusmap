@@ -142,3 +142,39 @@ export async function hydratePendingMutations(cld: string | number): Promise<unk
     return [];
   }
 }
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+function localPendingMutations(cld: string | number): unknown[] {
+  try {
+    const queue = JSON.parse(localStorage.getItem(localMutationKey(cld)) || "[]");
+    return Array.isArray(queue) ? queue : [];
+  } catch {
+    return [];
+  }
+}
+
+export function applyLocalPendingMutations(cld: string | number, features: unknown[]): unknown[] {
+  const nextFeatures = Array.isArray(features) ? [...features] : [];
+  for (const rawMutation of localPendingMutations(cld)) {
+    const mutation = asRecord(rawMutation);
+    if (!mutation) continue;
+    const payload = asRecord(mutation.payload);
+    const method = String(mutation.method || "").toUpperCase();
+    if (method === "POST" && payload?.geometry) {
+      nextFeatures.push({ ...payload, _offlineQueueId: mutation.id, _offlineMutationKey: mutation.dedupeKey || mutation.id });
+      continue;
+    }
+    const id = String(payload?.id ?? String(mutation.url || "").split("/").pop() ?? "");
+    const index = nextFeatures.findIndex((feature) => {
+      const record = asRecord(feature);
+      const properties = asRecord(record?.properties);
+      return String(record?.id ?? properties?._id ?? "") === id;
+    });
+    if (method === "PUT" && index >= 0 && payload?.geometry) nextFeatures[index] = payload;
+    if (method === "DELETE" && index >= 0) nextFeatures.splice(index, 1);
+  }
+  return nextFeatures;
+}

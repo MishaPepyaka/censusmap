@@ -150,34 +150,10 @@
     return displaySharedDwellingNo(props, "0001");
   }
 
-  function applyPendingMutations(features) {
-    const nextFeatures = Array.isArray(features) ? [...features] : [];
-    try {
-      const queue = JSON.parse(localStorage.getItem(`cld-map-pending:${cld}`) || "[]");
-      if (!Array.isArray(queue)) return nextFeatures;
-      for (const item of queue) {
-        if (item.method === "POST" && item.payload?.geometry) {
-          nextFeatures.push({ ...item.payload, _offlineQueueId: item.id, _offlineMutationKey: item.dedupeKey || item.id });
-          continue;
-        }
-        const id = String(item.payload?.id ?? item.url?.split("/").pop() ?? "");
-        const index = nextFeatures.findIndex((feature) => String(getFeatureId(feature) ?? "") === id);
-        if (item.method === "PUT" && index >= 0 && item.payload?.geometry) {
-          nextFeatures[index] = item.payload;
-        } else if (item.method === "DELETE" && index >= 0) {
-          nextFeatures.splice(index, 1);
-        }
-      }
-    } catch {
-      // A damaged queue must not prevent the saved map from opening.
-    }
-    return nextFeatures;
-  }
-
   async function getMapData(forceNetwork = false) {
     const snapshot = await loadRegionSnapshot(cld, { forceNetwork });
     if (Number.isFinite(Number(snapshot.revision))) regionRevision = Number(snapshot.revision);
-    const features = applyPendingMutations(snapshot.features.filter((feature) => !isExcludedCuFeature(feature)));
+    const features = snapshot.features.filter((feature) => !isExcludedCuFeature(feature));
     const partitioned = partitionRegionFeatures(features);
     return {
       source: snapshot.source,

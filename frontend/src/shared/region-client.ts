@@ -1,6 +1,6 @@
 import { getJsonWithTimeout } from "./api.js";
 import { isDwellingFeature, isSpecialLocationFeature, isZoneFeature, type RegionFeature } from "./map-data.js";
-import { readCachedFeatures, saveCachedFeatures } from "./offline-data.js";
+import { applyLocalPendingMutations, readCachedFeatures, saveCachedFeatures } from "./offline-data.js";
 
 export type RegionSnapshotSource = "api" | "cache" | "none";
 export type RegionSnapshot = {
@@ -54,12 +54,12 @@ export async function loadRegionSnapshot(cld: string | number, { forceNetwork = 
     if (features.length === 0) throw new Error("The map server returned an empty feature list");
     const revision = asRevision(payload);
     saveCachedFeatures(normalizedCld, features, revision);
-    return { features, loadError: "", revision, source: "api" };
+    return { features: applyLocalPendingMutations(normalizedCld, features) as RegionFeature[], loadError: "", revision, source: "api" };
   } catch (error) {
     const snapshot = await readCachedFeatures(normalizedCld);
     const features = Array.isArray(snapshot?.features) ? snapshot.features as RegionFeature[] : [];
     if (features.length > 0) {
-      return { features, loadError: "Offline: showing the last map saved on this device.", revision: asRevision(snapshot), source: "cache" };
+      return { features: applyLocalPendingMutations(normalizedCld, features) as RegionFeature[], loadError: "Offline: showing the last map saved on this device.", revision: asRevision(snapshot), source: "cache" };
     }
     return {
       features: [],
