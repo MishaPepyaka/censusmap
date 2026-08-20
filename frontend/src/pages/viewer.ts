@@ -20,7 +20,7 @@
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
-  const { describeOfflineSnapshotMetadata, describeOfflineSnapshotState, loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
+  const { describeOfflineSnapshotState, loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
   const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
   const { bindZoomUiMode, createCommonMapShell, createRegionPolygonStyle, getBlockFillOpacity, getFeatureLayerCenter, toFeatureCollection } = window.CensusMapRuntime;
   const { createDwellingSearchIndex } = window.CensusMapDwellingSearch;
@@ -146,9 +146,7 @@
     }).length;
     const closedPercent = records.length ? ((closedCases / records.length) * 100).toFixed(1) : "0.0";
     const summaryText = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${closedCases} completed (${closedPercent}%)`;
-    const snapshotText = describeOfflineSnapshotState(mapData.offlineState);
-    const snapshotMetadata = describeOfflineSnapshotMetadata(mapData.savedAt, mapData.revision);
-    routeSubtitle.textContent = `${summaryText} · ${snapshotText}${snapshotMetadata ? ` · ${snapshotMetadata}` : ""}${mapData.loadError ? ` · ${mapData.loadError}` : ""}`;
+    routeSubtitle.textContent = mapData.loadError ? `${summaryText} · ${mapData.loadError}` : summaryText;
   }
   updateRouteSubtitle();
   const cuCodes = zones.map((feature) => extractCuCode(feature.properties || {}));

@@ -20,7 +20,7 @@
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
-  const { describeOfflineSnapshotMetadata, describeOfflineSnapshotState, loadRegionSnapshot, partitionRegionFeatures } = window.CensusMapRegion;
+  const { describeOfflineSnapshotState, loadRegionSnapshot, partitionRegionFeatures } = window.CensusMapRegion;
   const { buildMapActionButtons } = window.CensusMapActions;
   const { bindZoomUiMode, createCommonMapShell, createRegionPolygonStyle, getBlockFillOpacity, getFeatureLayerCenter } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
@@ -260,8 +260,7 @@
       completedStatuses.has(normalizeDwellingStatus(marker.feature?.properties?.status))
     ).length;
     const percent = markers.length ? ((completed / markers.length) * 100).toFixed(1) : "0.0";
-    const snapshotMetadata = describeOfflineSnapshotMetadata(data.savedAt, data.revision);
-    editorRouteSummary.textContent = `${cuCodes.size} CU · ${blockCount} blocks · ${markers.length} dwellings · ${completed} completed (${percent}%) · ${describeOfflineSnapshotState(data.offlineState)}${snapshotMetadata ? ` · ${snapshotMetadata}` : ""}`;
+    editorRouteSummary.textContent = `${cuCodes.size} CU · ${blockCount} blocks · ${markers.length} dwellings · ${completed} completed (${percent}%)`;
   }
 
   if (data.loadError) {
