@@ -611,59 +611,8 @@ async function readRegionFeatures(cld, type) {
 
 async function writeRegionFeatures(cld, type, features) {
   if (!useFileStore) {
-    const dbType = type;
     await ensureRegionRecord(cld);
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("DELETE FROM region_features WHERE cld = $1 AND feature_type = $2;", [cld, dbType]);
-      for (const feature of features) {
-        const normalized = normalizeRegionFeature(feature);
-        if (!normalized.geometry) continue;
-        if (Number.isFinite(Number(normalized.id))) {
-          await client.query(
-            `
-              INSERT INTO region_features (id, cld, feature_type, properties, geom)
-              VALUES ($1, $2, $3, $4::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326))
-              ON CONFLICT (id) DO UPDATE SET
-                cld = EXCLUDED.cld,
-                feature_type = EXCLUDED.feature_type,
-                properties = EXCLUDED.properties,
-                geom = EXCLUDED.geom,
-                updated_at = NOW();
-            `,
-            [
-              Number(normalized.id),
-              cld,
-              dbType,
-              JSON.stringify(normalized.properties || {}),
-              JSON.stringify(normalized.geometry)
-            ]
-          );
-        } else {
-          await client.query(
-            `
-              INSERT INTO region_features (cld, feature_type, properties, geom)
-              VALUES ($1, $2, $3::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326));
-            `,
-            [cld, dbType, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
-          );
-        }
-      }
-      if (dbType === "cu") {
-        const cuCodes = uniqueSorted(features.map((feature) => extractCuCode(feature?.properties || {})));
-        await client.query(
-          "UPDATE cld_regions SET cu_codes = $2::text[], updated_at = NOW() WHERE cld = $1;",
-          [cld, cuCodes]
-        );
-      }
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    await postgisRegionRepository.writeFeatures(cld, type, features);
     return;
   }
   await fileRegionRepository.writeFeatures(cld, type, features);
