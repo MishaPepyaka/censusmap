@@ -178,6 +178,7 @@
     try {
       if (!navigator.onLine) throw new Error("Offline");
       const data = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`, {}, 15000);
+      if (Number.isFinite(Number(data.revision))) regionRevision = Number(data.revision);
       const features = applyPendingMutations((data.features || []).filter((f) => !isExcludedCuFeature(f)));
       if (features.length === 0) throw new Error("The map server returned an empty feature list");
       // Never let a transient empty response replace a usable offline map.
@@ -1302,6 +1303,7 @@
   }
 
   const offlineQueueKey = `cld-map-pending:${cld}`;
+  let regionRevision = 1;
   let offlineQueueFlushInProgress = false;
 
   function readOfflineQueue() {
@@ -1324,6 +1326,7 @@
       url,
       payload,
       dedupeKey,
+      baseRevision: existing >= 0 ? Number(queue[existing].baseRevision || regionRevision) : regionRevision,
       queuedAt: existing >= 0 ? queue[existing].queuedAt : Date.now(),
       revision: existing >= 0 ? Number(queue[existing].revision || 0) + 1 : 1
     };
@@ -1380,9 +1383,10 @@
         try {
           const result = await getJsonWithTimeout(item.url, {
             method: item.method,
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "If-Match": `\"${item.baseRevision}\"` },
             body: item.payload === undefined ? undefined : JSON.stringify(item.payload)
           });
+          if (Number.isFinite(Number(result?.revision))) regionRevision = Number(result.revision);
           applyQueuedCreateResult(item, result);
         } catch {
           remaining.push(item);
