@@ -50,6 +50,7 @@ implementation.
     - [x] Extract PostGIS feature update.
     - [x] Extract PostGIS feature deletion.
     - [x] Extract PostGIS region bundle loading.
+    - [x] Extract PostGIS CU-code synchronisation.
     - [x] Extract temporary file-store existence/index/features/bundle read adapter.
     - [x] Extract temporary file-store index and feature-collection write adapter.
     - [x] Extract temporary file-store region initialisation and media-directory handling.

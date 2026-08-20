@@ -76,6 +76,26 @@ export function createPostgisRegionRepository(pool) {
     async deleteFeature(cld, id) {
       await pool.query("DELETE FROM region_features WHERE id = $1 AND cld = $2;", [id, cld]);
     },
+    async syncCuCodes(cld) {
+      const { rows } = await pool.query(
+        `
+          SELECT DISTINCT COALESCE(properties->>'CUID', properties->>'cu') AS cu_code
+          FROM region_features
+          WHERE cld = $1 AND feature_type = 'cu'
+          ORDER BY cu_code;
+        `,
+        [cld]
+      );
+      const cuCodes = rows.map((row) => String(row.cu_code || "").trim()).filter(Boolean);
+      await pool.query(
+        `
+          UPDATE cld_regions
+          SET cu_codes = $2::text[], updated_at = NOW()
+          WHERE cld = $1;
+        `,
+        [cld, cuCodes]
+      );
+    },
     async writeIndex(cld, index) {
       await pool.query(
         `

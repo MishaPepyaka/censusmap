@@ -14,6 +14,7 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
     calls.push({ query, values });
     if (query.includes("SELECT cld")) return { rows: [{ cld: "1234", label: "Test", ssids: ["A"], cu_codes: ["12340001"], created_at: "a", updated_at: "b" }] };
     if (query.includes("SELECT id, feature_type")) return { rows: [{ id: 8, feature_type: "dwellings", properties: { DWELLING_NO: "12" }, geometry: { type: "Point", coordinates: [-97, 56] } }] };
+    if (query.includes("SELECT DISTINCT")) return { rows: [{ cu_code: "12340009" }] };
     return { rows: [{ id: 7, properties: { CUID: "12340001" }, geometry: { type: "Point", coordinates: [-97, 56] } }] };
   }, connect: async () => client };
   const repository = createPostgisRegionRepository(pool);
@@ -48,4 +49,7 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
   assert.equal(bundle.cu.length, 1);
   assert.equal(bundle.blocks.length, 1);
   assert.equal(bundle.dwellings.length, 1);
+  await repository.syncCuCodes("1234");
+  assert.deepEqual(calls.at(-2).values, ["1234"]);
+  assert.deepEqual(calls.at(-1).values, ["1234", ["12340009"]]);
 });
