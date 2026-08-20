@@ -656,18 +656,11 @@ async function createRegionFeature(cld, feature) {
   assertDwellingNoUnique(normalized, dwellings);
 
   if (!useFileStore) {
-    const properties = normalized.properties || {};
-    const query = `
-      INSERT INTO region_features (cld, feature_type, properties, geom)
-      VALUES ($1, $2, $3::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326))
-      RETURNING id;
-    `;
-    const values = [cld, type, JSON.stringify(properties), JSON.stringify(normalized.geometry)];
-    const { rows } = await pool.query(query, values);
+    const id = await postgisRegionRepository.createFeature(cld, type, normalized);
     if (type === "cu") {
       await syncRegionCuCodes(cld);
     }
-    return rows[0].id;
+    return id;
   }
 
   const index = await readRegionIndex(cld);

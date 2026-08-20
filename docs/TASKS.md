@@ -46,6 +46,7 @@ implementation.
     - [x] Extract PostGIS region-index write adapter.
     - [x] Extract PostGIS feature-collection replacement transaction.
     - [x] Extract PostGIS feature lookup by ID.
+    - [x] Extract PostGIS feature creation.
     - [x] Extract temporary file-store existence/index/features/bundle read adapter.
     - [x] Extract temporary file-store index and feature-collection write adapter.
     - [x] Extract temporary file-store region initialisation and media-directory handling.

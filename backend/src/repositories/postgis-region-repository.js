@@ -41,6 +41,18 @@ export function createPostgisRegionRepository(pool) {
       if (rows.length === 0) return null;
       return { type: rows[0].feature_type, feature: toRegionFeature(rows[0]) };
     },
+    async createFeature(cld, type, feature) {
+      const normalized = normalizeRegionFeature(feature);
+      const { rows } = await pool.query(
+        `
+          INSERT INTO region_features (cld, feature_type, properties, geom)
+          VALUES ($1, $2, $3::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326))
+          RETURNING id;
+        `,
+        [cld, type, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
+      );
+      return rows[0].id;
+    },
     async writeIndex(cld, index) {
       await pool.query(
         `

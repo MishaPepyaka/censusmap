@@ -13,7 +13,7 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
   const pool = { query: async (query, values) => {
     calls.push({ query, values });
     if (query.includes("SELECT cld")) return { rows: [{ cld: "1234", label: "Test", ssids: ["A"], cu_codes: ["12340001"], created_at: "a", updated_at: "b" }] };
-    if (query.includes("feature_type, properties")) return { rows: [{ id: 8, feature_type: "dwellings", properties: { DWELLING_NO: "12" }, geometry: { type: "Point", coordinates: [-97, 56] } }] };
+    if (query.includes("SELECT id, feature_type")) return { rows: [{ id: 8, feature_type: "dwellings", properties: { DWELLING_NO: "12" }, geometry: { type: "Point", coordinates: [-97, 56] } }] };
     return { rows: [{ id: 7, properties: { CUID: "12340001" }, geometry: { type: "Point", coordinates: [-97, 56] } }] };
   }, connect: async () => client };
   const repository = createPostgisRegionRepository(pool);
@@ -28,6 +28,8 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
   assert.equal(found.type, "dwellings");
   assert.equal(found.feature.properties.dwellingNo, "0012");
   assert.deepEqual(calls[3].values, ["1234", 8]);
+  assert.equal(await repository.createFeature("1234", "dwellings", { properties: { CUID: "12340001", DWELLING_NO: "12" }, geometry: { type: "Point", coordinates: [-97, 56] } }), 7);
+  assert.deepEqual(calls[4].values, ["1234", "dwellings", JSON.stringify({ CUID: "12340001", DWELLING_NO: "12", cu: "12340001", dwellingNo: "0012" }), JSON.stringify({ type: "Point", coordinates: [-97, 56] })]);
   await repository.writeFeatures("1234", "cu", [{ id: 8, properties: { CUID: "12340002" }, geometry: { type: "Polygon", coordinates: [] } }]);
   assert.equal(transactionCalls[0].query, "BEGIN");
   assert.deepEqual(transactionCalls[1].values, ["1234", "cu"]);
