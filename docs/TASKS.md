@@ -89,6 +89,7 @@ implementation.
     - [x] Convert shared map runtime while preserving `window.CensusMapRuntime` for existing pages.
 
 - [ ] R121 Create one region data client.
+  - [x] Centralise viewer/editor CLD snapshot loading, revision extraction, feature partitioning, offline-cache fallback, and load errors.
   - Centralise CLD loading, canonical feature parsing, caching, and error handling.
   - Remove duplicate `getMapData`, feature partitioning, identifier extraction, and status normalisation from viewer/editor/StatCan code.
 

@@ -14,6 +14,7 @@
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
+  const { loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
   const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
   const { readMapUrlState, bindMapUrlState, setupBaseMap, setupTileCacheStatus, createUserLocationTracker } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
@@ -106,15 +107,6 @@
     return `${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4)}`;
   }
 
-  function parseFeatures(payload) {
-    const features = Array.isArray(payload?.features) ? payload.features : [];
-    return {
-      zones: features.filter((feature) => isZoneFeature(feature)),
-      dwellings: features.filter((feature) => isDwellingFeature(feature.properties || {}, feature.geometry || {})),
-      specialLocations: features.filter((feature) => isSpecialLocationFeature(feature.properties || {}, feature.geometry || {}))
-    };
-  }
-
   // Edits are queued locally before they reach the server.  The viewer must
   // render that queue too, otherwise opening it immediately after an edit
   // shows the old server copy of the map.
@@ -154,56 +146,13 @@
   }
 
   async function loadRegionSummary() {
-    if (!navigator.onLine) {
-      return {
-        cld,
-        label: `CLD ${cld}`,
-        ssids: [],
-        counts: { cu: 0, blocks: 0, dwellings: 0 },
-        loadError: "Offline"
-      };
-    }
-    try {
-      return await getJsonWithTimeout(`/api/cld/${cld}`);
-    } catch (error) {
-      return {
-        cld,
-        label: `CLD ${cld}`,
-        ssids: [],
-        counts: { cu: 0, blocks: 0, dwellings: 0 },
-        loadError: error.message
-      };
-    }
+    return loadSharedRegionSummary(cld);
   }
 
   async function getMapData(forceNetwork = false) {
-    try {
-      if (!navigator.onLine) throw new Error("Offline");
-      const apiData = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`, {}, 15000);
-      if (Number.isFinite(Number(apiData.revision))) regionRevision = Number(apiData.revision);
-      const serverFeatures = Array.isArray(apiData.features) ? apiData.features : [];
-      const features = applyPendingMutations(serverFeatures);
-      if (features.length === 0) throw new Error("The map server returned an empty feature list");
-      // Never let a transient empty response replace a usable offline map.
-      if (serverFeatures.length > 0) window.CldOfflineStore?.saveCachedFeatures(cld, serverFeatures);
-      return { ...parseFeatures({ features }), loadError: "" };
-    } catch (error) {
-      const snapshot = await window.CldOfflineStore?.readCachedFeatures(cld);
-      if (Array.isArray(snapshot?.features) && snapshot.features.length > 0) {
-        return {
-          ...parseFeatures({ features: applyPendingMutations(snapshot.features) }),
-          loadError: "Offline: showing the last map saved on this device."
-        };
-      }
-      return {
-        zones: [],
-        dwellings: [],
-        specialLocations: [],
-        loadError: navigator.onLine
-          ? `Map data could not be loaded: ${error.message}`
-          : "Offline: application shell is ready. Connect once to download this CLD for offline use."
-      };
-    }
+    const snapshot = await loadRegionSnapshot(cld, { forceNetwork });
+    if (Number.isFinite(Number(snapshot.revision))) regionRevision = Number(snapshot.revision);
+    return { ...partitionRegionFeatures(applyPendingMutations(snapshot.features)), loadError: snapshot.loadError };
   }
 
   function getZoneCenter(layer) {

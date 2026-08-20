@@ -14,6 +14,7 @@
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
+  const { loadRegionSnapshot, partitionRegionFeatures } = window.CensusMapRegion;
   const { buildMapActionButtons } = window.CensusMapActions;
   const { readMapUrlState, bindMapUrlState, setupBaseMap, setupTileCacheStatus, createUserLocationTracker } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
@@ -175,41 +176,17 @@
   }
 
   async function getMapData(forceNetwork = false) {
-    try {
-      if (!navigator.onLine) throw new Error("Offline");
-      const data = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`, {}, 15000);
-      if (Number.isFinite(Number(data.revision))) regionRevision = Number(data.revision);
-      const features = applyPendingMutations((data.features || []).filter((f) => !isExcludedCuFeature(f)));
-      if (features.length === 0) throw new Error("The map server returned an empty feature list");
-      // Never let a transient empty response replace a usable offline map.
-      if (features.length > 0) window.CldOfflineStore?.saveCachedFeatures(cld, features);
-      return {
-        source: "api",
-        loadError: "",
-        blocks: features.filter((f) => isZoneFeature(f)),
-        dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {})),
-        specialLocations: features.filter((f) => isSpecialLocationFeature(f.properties || {}, f.geometry || {}))
-      };
-    } catch (apiError) {
-      const snapshot = await window.CldOfflineStore?.readCachedFeatures(cld);
-      if (Array.isArray(snapshot?.features) && snapshot.features.length > 0) {
-        const features = applyPendingMutations(snapshot.features.filter((f) => !isExcludedCuFeature(f)));
-        return {
-          source: "cache",
-          loadError: "Offline: showing the last map saved on this device.",
-          blocks: features.filter((f) => isZoneFeature(f)),
-          dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {})),
-          specialLocations: features.filter((f) => isSpecialLocationFeature(f.properties || {}, f.geometry || {}))
-        };
-      }
-      return {
-        source: "none",
-        loadError: `Data load failed: API (${apiError.message})`,
-        blocks: [],
-        dwellings: [],
-        specialLocations: []
-      };
-    }
+    const snapshot = await loadRegionSnapshot(cld, { forceNetwork });
+    if (Number.isFinite(Number(snapshot.revision))) regionRevision = Number(snapshot.revision);
+    const features = applyPendingMutations(snapshot.features.filter((feature) => !isExcludedCuFeature(feature)));
+    const partitioned = partitionRegionFeatures(features);
+    return {
+      source: snapshot.source,
+      loadError: snapshot.loadError,
+      blocks: partitioned.zones,
+      dwellings: partitioned.dwellings,
+      specialLocations: partitioned.specialLocations
+    };
   }
 
   function getZoneCenter(layer) {
