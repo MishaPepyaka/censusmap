@@ -1,3 +1,20 @@
+import { parseRegionRevision, RegionRevisionConflictError } from "../domain/region-revision.js";
+
+function requiredRevision(req, res) {
+  const revision = parseRegionRevision(req.get("if-match"));
+  if (revision !== null) return revision;
+  res.status(428).json({ error: "If-Match region revision is required" });
+  return null;
+}
+
+function respondMutationError(res, error) {
+  if (error instanceof RegionRevisionConflictError) {
+    res.set("etag", `\"${error.actualRevision}\"`);
+    return res.status(409).json({ error: error.message, revision: error.actualRevision });
+  }
+  return res.status(400).json({ error: error.message });
+}
+
 export function registerRegionRoutes(app, {
   buildFeatureCollection,
   extractCuCode,
@@ -74,13 +91,17 @@ export function registerRegionRoutes(app, {
   app.post("/api/cld/:cld/features", requireAuth, requireClDAccess, async (req, res) => {
     const cld = normalizeClD(req.params.cld);
     if (!cld) return res.status(400).json({ error: "Invalid CLD" });
+    const revision = requiredRevision(req, res);
+    if (revision === null) return;
     try {
       const features = normalizeFeatures(req.body);
       if (features.length !== 1) return res.status(400).json({ error: "Send exactly one GeoJSON Feature in request body" });
-      const id = await createRegionFeature(cld, features[0]);
-      return res.status(201).json({ ok: true, inserted: 1, ids: [id] });
+      const id = await createRegionFeature(cld, features[0], revision);
+      const bundle = await readRegionBundle(cld);
+      res.set("etag", `\"${bundle.index.revision}\"`);
+      return res.status(201).json({ ok: true, inserted: 1, ids: [id], revision: bundle.index.revision });
     } catch (error) {
-      return res.status(400).json({ error: error.message });
+      return respondMutationError(res, error);
     }
   });
 
@@ -89,14 +110,18 @@ export function registerRegionRoutes(app, {
     const id = Number(req.params.id);
     if (!cld) return res.status(400).json({ error: "Invalid CLD" });
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid feature id" });
+    const revision = requiredRevision(req, res);
+    if (revision === null) return;
     try {
       const features = normalizeFeatures(req.body);
       if (features.length !== 1) return res.status(400).json({ error: "Send exactly one GeoJSON Feature in request body" });
-      const updated = await updateRegionFeature(cld, id, features[0]);
+      const updated = await updateRegionFeature(cld, id, features[0], revision);
       if (!updated) return res.status(404).json({ error: "Feature not found" });
-      return res.json({ ok: true, updatedId: id });
+      const bundle = await readRegionBundle(cld);
+      res.set("etag", `\"${bundle.index.revision}\"`);
+      return res.json({ ok: true, updatedId: id, revision: bundle.index.revision });
     } catch (error) {
-      return res.status(400).json({ error: error.message });
+      return respondMutationError(res, error);
     }
   });
 
@@ -105,12 +130,16 @@ export function registerRegionRoutes(app, {
     const id = Number(req.params.id);
     if (!cld) return res.status(400).json({ error: "Invalid CLD" });
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid feature id" });
+    const revision = requiredRevision(req, res);
+    if (revision === null) return;
     try {
-      const deleted = await deleteRegionFeature(cld, id);
+      const deleted = await deleteRegionFeature(cld, id, revision);
       if (!deleted) return res.status(404).json({ error: "Feature not found" });
-      return res.json({ ok: true, deletedId: id });
+      const bundle = await readRegionBundle(cld);
+      res.set("etag", `\"${bundle.index.revision}\"`);
+      return res.json({ ok: true, deletedId: id, revision: bundle.index.revision });
     } catch (error) {
-      return res.status(400).json({ error: error.message });
+      return respondMutationError(res, error);
     }
   });
 

@@ -593,7 +593,7 @@ async function findRegionFeatureById(cld, id) {
   return result ? { ...result, bundle: null } : { type: null, feature: null, bundle: null };
 }
 
-async function createRegionFeature(cld, feature) {
+async function createRegionFeature(cld, feature, expectedRevision) {
   const normalized = assertValidRegionFeature(feature, cld);
 
   if (!(await regionExists(cld))) {
@@ -606,17 +606,17 @@ async function createRegionFeature(cld, feature) {
   assertDwellingNoUnique(normalized, dwellings);
 
   if (!useFileStore) {
-    const id = await postgisRegionRepository.createFeature(cld, type, normalized);
+    const id = await postgisRegionRepository.createFeature(cld, type, normalized, expectedRevision);
     if (type === "cu") {
       await syncRegionCuCodes(cld);
     }
     return id;
   }
 
-  return fileRegionRepository.createFeature(cld, type, normalized);
+  return fileRegionRepository.createFeature(cld, type, normalized, expectedRevision);
 }
 
-async function updateRegionFeature(cld, id, feature) {
+async function updateRegionFeature(cld, id, feature, expectedRevision) {
   if (!Number.isFinite(Number(id))) throw new Error("Invalid feature id");
   const normalized = assertValidRegionFeature(feature, cld);
 
@@ -634,27 +634,27 @@ async function updateRegionFeature(cld, id, feature) {
   const dwellings = existing.type === "dwellings" ? collection : await readRegionFeatures(cld, "dwellings");
   assertDwellingNoUnique(normalized, dwellings, Number(id));
   if (!useFileStore) {
-    await postgisRegionRepository.updateFeature(cld, id, normalized);
+    const updated = await postgisRegionRepository.updateFeature(cld, id, normalized, expectedRevision);
     if (existing.type === "cu") {
       await syncRegionCuCodes(cld);
     }
-    return true;
+    return updated;
   }
-  return fileRegionRepository.updateFeature(cld, existing.type, id, normalized);
+  return fileRegionRepository.updateFeature(cld, existing.type, id, normalized, expectedRevision);
 }
 
-async function deleteRegionFeature(cld, id) {
+async function deleteRegionFeature(cld, id, expectedRevision) {
   if (!Number.isFinite(Number(id))) throw new Error("Invalid feature id");
   const existing = await findRegionFeatureById(cld, id);
   if (!existing.type) return false;
   if (!useFileStore) {
-    await postgisRegionRepository.deleteFeature(cld, id);
+    const deleted = await postgisRegionRepository.deleteFeature(cld, id, expectedRevision);
     if (existing.type === "cu") {
       await syncRegionCuCodes(cld);
     }
-    return true;
+    return deleted;
   }
-  return fileRegionRepository.deleteFeature(cld, existing.type, id);
+  return fileRegionRepository.deleteFeature(cld, existing.type, id, expectedRevision);
 }
 
 async function buildLookupRecords() {
