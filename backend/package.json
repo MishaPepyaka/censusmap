@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "build:frontend": "vite build --config vite.config.ts && vite build --config vite.config.ts --mode map-data-helpers && vite build --config vite.config.ts --mode offline-data && vite build --config vite.config.ts --mode map-actions && vite build --config vite.config.ts --mode map-runtime && vite build --config vite.config.ts --mode region-client && vite build --config vite.config.ts --mode app-landing && vite build --config vite.config.ts --mode app-auth && vite build --config vite.config.ts --mode app-login",
+    "build:frontend": "vite build --config vite.config.ts && vite build --config vite.config.ts --mode map-data-helpers && vite build --config vite.config.ts --mode offline-data && vite build --config vite.config.ts --mode map-actions && vite build --config vite.config.ts --mode map-runtime && vite build --config vite.config.ts --mode region-client && vite build --config vite.config.ts --mode app-viewer && vite build --config vite.config.ts --mode app-landing && vite build --config vite.config.ts --mode app-auth && vite build --config vite.config.ts --mode app-login",
     "import:cld:db": "node scripts/import-cld-files-to-db.mjs",
     "test": "node --test",
     "test:unit": "node --test test/*.test.js test/domain/*.test.js test/infrastructure/*.test.js test/repositories/*.test.js test/services/*.test.js",
