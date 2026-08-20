@@ -33,6 +33,7 @@
   let selectedPolygonLayer = null;
   let selectedDwellingMarker = null;
   let badgesReady = false;
+  let regionRevision = 1;
 
   const dwellingByCode = new Map();
   const dwellingByCu = new Map();
@@ -179,6 +180,7 @@
     try {
       if (!navigator.onLine) throw new Error("Offline");
       const apiData = await getJsonWithTimeout(`/api/cld/${cld}/features${forceNetwork ? `?refresh=${Date.now()}` : ""}`, {}, 15000);
+      if (Number.isFinite(Number(apiData.revision))) regionRevision = Number(apiData.revision);
       const serverFeatures = Array.isArray(apiData.features) ? apiData.features : [];
       const features = applyPendingMutations(serverFeatures);
       if (features.length === 0) throw new Error("The map server returned an empty feature list");
@@ -523,9 +525,9 @@
         record.status = nextStatus;
         marker.setIcon(iconForDwellingMarker(marker, marker === selectedDwellingMarker));
         try {
-          await getJson(`/api/cld/${cld}/features/${record.featureId}`, {
+          const result = await getJson(`/api/cld/${cld}/features/${record.featureId}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "If-Match": `\"${regionRevision}\"` },
             body: JSON.stringify({
               type: "Feature",
               id: record.featureId,
@@ -533,6 +535,7 @@
               geometry: record.geometry
             })
           });
+          if (Number.isFinite(Number(result?.revision))) regionRevision = Number(result.revision);
           record.properties.status = nextStatus;
           updateRouteSubtitle();
           setSearchStatus(`Status for ${record.code} saved.`, false);

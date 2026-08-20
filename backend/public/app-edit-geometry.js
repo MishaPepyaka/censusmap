@@ -35,6 +35,7 @@
   const dirty = new Set();
   let selected = null;
   const offlineQueueKey = `cld-map-pending:${cld}`;
+  let regionRevision = 1;
 
   function readQueue() {
     try {
@@ -56,6 +57,7 @@
       url: `/api/cld/${cld}/features/${id}`,
       payload,
       dedupeKey,
+      baseRevision: index >= 0 ? Number(previous.baseRevision || regionRevision) : regionRevision,
       queuedAt: previous?.queuedAt || Date.now(),
       revision: Number(previous?.revision || 0) + 1
     };
@@ -70,7 +72,12 @@
     if (!navigator.onLine) return;
     for (const item of readQueue().filter((entry) => String(entry.dedupeKey || "").startsWith("geometry:"))) {
       try {
-        await getJson(item.url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.payload) });
+        const result = await getJson(item.url, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "If-Match": `\"${item.baseRevision}\"` },
+          body: JSON.stringify(item.payload)
+        });
+        if (Number.isFinite(Number(result?.revision))) regionRevision = Number(result.revision);
         const queue = readQueue();
         const index = queue.findIndex((entry) => entry.id === item.id && Number(entry.revision) === Number(item.revision));
         if (index >= 0) {
@@ -167,6 +174,7 @@
 
   try {
     const data = await getJson(`/api/cld/${cld}/features`);
+    if (Number.isFinite(Number(data.revision))) regionRevision = Number(data.revision);
     for (const feature of data.features || []) {
       if (!isPolygonGeometry(feature?.geometry)) continue;
       const geo = L.geoJSON(feature, { style: () => style({ feature }, false) });
