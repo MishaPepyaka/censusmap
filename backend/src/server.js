@@ -16,7 +16,7 @@ import { assertDwellingNoUnique, classifyRegionFeature, inferRegionFeatureType, 
 import { registerPageRoutes } from "./routes/page-routes.js";
 import { registerLegacyFeatureRoutes } from "./routes/legacy-feature-routes.js";
 import { createRegionRepository } from "./repositories/region-repository.js";
-import { createPostgisRegionRepository, toRegionFeature } from "./repositories/postgis-region-repository.js";
+import { createPostgisRegionRepository } from "./repositories/postgis-region-repository.js";
 import { createFileRegionRepository } from "./repositories/file-region-repository.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
@@ -629,23 +629,8 @@ async function readRegionBundle(cld) {
 
 async function findRegionFeatureById(cld, id) {
   if (!useFileStore) {
-    const { rows } = await pool.query(
-      `
-        SELECT id, feature_type, properties, ST_AsGeoJSON(geom)::json AS geometry
-        FROM region_features
-        WHERE cld = $1 AND id = $2
-        LIMIT 1;
-      `,
-      [cld, Number(id)]
-    );
-    if (rows.length === 0) {
-      return { type: null, feature: null, bundle: null };
-    }
-    return {
-      type: rows[0].feature_type,
-      feature: toRegionFeature(rows[0]),
-      bundle: null
-    };
+    const result = await postgisRegionRepository.findFeature(cld, id);
+    return result ? { ...result, bundle: null } : { type: null, feature: null, bundle: null };
   }
   const bundle = await readRegionBundle(cld);
   for (const type of ["cu", "blocks", "dwellings"]) {

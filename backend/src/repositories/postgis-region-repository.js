@@ -28,6 +28,19 @@ export function createPostgisRegionRepository(pool) {
       const { rows } = await pool.query("SELECT id, properties, ST_AsGeoJSON(geom)::json AS geometry FROM region_features WHERE cld = $1 AND feature_type = $2 ORDER BY id;", [cld, type]);
       return rows.map(toRegionFeature);
     },
+    async findFeature(cld, id) {
+      const { rows } = await pool.query(
+        `
+          SELECT id, feature_type, properties, ST_AsGeoJSON(geom)::json AS geometry
+          FROM region_features
+          WHERE cld = $1 AND id = $2
+          LIMIT 1;
+        `,
+        [cld, Number(id)]
+      );
+      if (rows.length === 0) return null;
+      return { type: rows[0].feature_type, feature: toRegionFeature(rows[0]) };
+    },
     async writeIndex(cld, index) {
       await pool.query(
         `
