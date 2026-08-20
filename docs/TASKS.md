@@ -110,9 +110,8 @@ implementation.
   - [ ] Share feature rendering and dwelling search indexing.
   - Keep viewer and editor as mode-specific controllers over the same shell.
 
-- [ ] R123 Retire or migrate the standalone StatCan prototype.
-  - Decide whether `/statcan` remains a supported product surface.
-  - If retained, migrate it to the common region client and map shell; otherwise remove its route and assets.
+- [x] R123 Retire or migrate the standalone StatCan prototype.
+  - [x] Retire `/statcan`; it used the deprecated global feature API outside the CLD product model.
 
 ## Phase 3 — Durable offline work
 

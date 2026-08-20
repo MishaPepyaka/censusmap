@@ -2,7 +2,6 @@ export function registerPageRoutes(app, {
   getUser, normalizeClD, publicDir, regionExists, requireAdmin, requireAuth,
   requireClDAccess, requireUserManagementAccess
 }) {
-  app.get("/statcan", (_req, res) => res.sendFile(`${publicDir}/statcan.html`));
   app.get("/login", (_req, res) => res.sendFile(`${publicDir}/login.html`));
   app.get("/users", requireUserManagementAccess, (_req, res) => res.sendFile(`${publicDir}/users.html`));
   app.get("/", async (req, res) => {
