@@ -45,6 +45,7 @@ implementation.
     - [x] Extract PostGIS existence/index/features read adapter.
     - [x] Extract temporary file-store existence/index/features/bundle read adapter.
     - [x] Extract temporary file-store index and feature-collection write adapter.
+    - [x] Extract temporary file-store region initialisation and media-directory handling.
   - [x] Isolate legacy `/api/features` CRUD and import compatibility in `legacy-feature-routes.js`.
   - Keep legacy file-store and shared-feature conversion in one-time migration/import scripts only.
   - Remove obsolete `/api/features` CRUD and `map_features` code after migration verification.

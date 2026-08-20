@@ -1,6 +1,6 @@
 import path from "node:path";
 import { buildFeatureCollection, featureFileNames, normalizeRegionFeature } from "../domain/region-feature.js";
-import { exists, readJsonFile, writeJsonFile } from "../infrastructure/json-files.js";
+import { ensureDir, exists, readJsonFile, writeJsonFile } from "../infrastructure/json-files.js";
 
 export function createFileRegionRepository(cldRootDir) {
   const indexPath = (cld) => path.join(cldRootDir, cld, "index.json");
@@ -21,10 +21,39 @@ export function createFileRegionRepository(cldRootDir) {
     return (Array.isArray(parsed?.features) ? parsed.features : []).map(normalizeRegionFeature);
   }
 
+  async function ensureMediaDirs(cld) {
+    const regionDir = path.join(cldRootDir, cld);
+    await Promise.all([
+      ensureDir(path.join(regionDir, "media", "dwellings")),
+      ensureDir(path.join(regionDir, "media", "uploads"))
+    ]);
+  }
+
   return Object.freeze({
     exists(cld) {
       return exists(indexPath(cld));
     },
+    async ensureRegion(cld) {
+      await ensureMediaDirs(cld);
+      await Promise.all(Object.keys(featureFileNames()).map(async (type) => {
+        const filePath = featurePath(cld, type);
+        if (!(await exists(filePath))) {
+          await writeJsonFile(filePath, buildFeatureCollection([]));
+        }
+      }));
+      if (!(await exists(indexPath(cld)))) {
+        await writeJsonFile(indexPath(cld), {
+          cld,
+          label: `CLD ${cld}`,
+          ssids: [],
+          cuCodes: [],
+          nextFeatureId: 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+    },
+    ensureMediaDirs,
     readIndex,
     readFeatures,
     async readBundle(cld) {

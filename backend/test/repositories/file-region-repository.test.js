@@ -31,4 +31,14 @@ test("file region repository reads and normalizes a region bundle", async (t) =>
   assert.equal(updatedBundle.index.label, "Updated");
   assert.equal(updatedBundle.index.nextFeatureId, 9);
   assert.equal(updatedBundle.dwellings[0].properties.dwellingNo, "0012");
+
+  await repository.ensureRegion("5678");
+  assert.equal(await repository.exists("5678"), true);
+  const emptyBundle = await repository.readBundle("5678");
+  assert.equal(emptyBundle.index.label, "CLD 5678");
+  assert.equal(emptyBundle.index.nextFeatureId, 1);
+  assert.deepEqual(emptyBundle.cu, []);
+  assert.deepEqual(emptyBundle.blocks, []);
+  assert.deepEqual(emptyBundle.dwellings, []);
+  assert.equal(await fs.stat(path.join(rootDir, "5678", "media", "dwellings")).then((entry) => entry.isDirectory()), true);
 });

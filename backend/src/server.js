@@ -402,6 +402,10 @@ async function regionExists(cld) {
 }
 
 async function ensureRegionMediaDirs(cld) {
+  if (useFileStore) {
+    await fileRegionRepository.ensureMediaDirs(cld);
+    return;
+  }
   const regionDir = path.join(cldRootDir, cld);
   await ensureDir(path.join(regionDir, "media", "dwellings"));
   await ensureDir(path.join(regionDir, "media", "uploads"));
@@ -511,31 +515,7 @@ async function ensureEmptyRegionFiles(cld) {
     await ensureRegionMediaDirs(cld);
     return;
   }
-  const regionDir = path.join(cldRootDir, cld);
-  const names = featureFileNames();
-  await ensureRegionMediaDirs(cld);
-  const initialFiles = [
-    path.join(regionDir, names.cu),
-    path.join(regionDir, names.blocks),
-    path.join(regionDir, names.dwellings)
-  ];
-  for (const filePath of initialFiles) {
-    if (!(await exists(filePath))) {
-      await writeJsonFile(filePath, buildFeatureCollection([]));
-    }
-  }
-  const indexPath = path.join(regionDir, "index.json");
-  if (!(await exists(indexPath))) {
-    await writeJsonFile(indexPath, {
-      cld,
-      label: `CLD ${cld}`,
-      ssids: [],
-      cuCodes: [],
-      nextFeatureId: 1,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-  }
+  await fileRegionRepository.ensureRegion(cld);
 }
 
 async function migrateLegacyDataToClDStore() {
