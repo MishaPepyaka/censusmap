@@ -13,6 +13,7 @@ import { registerTileRoutes } from "./routes/tile-routes.js";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
 import { registerUserRoutes } from "./routes/user-routes.js";
 import { assertDwellingNoUnique, classifyRegionFeature, inferRegionFeatureType, summarizeRegion } from "./services/region-service.js";
+import { registerPageRoutes } from "./routes/page-routes.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
@@ -1375,52 +1376,15 @@ app.delete("/api/features", async (_req, res) => {
   return res.json({ ok: true });
 });
 
-app.get("/statcan", (_req, res) => {
-  res.sendFile(path.join(publicDir, "statcan.html"));
+const registerViewerRoute = registerPageRoutes(app, {
+  getUser, normalizeClD, publicDir, regionExists, requireAdmin, requireAuth,
+  requireClDAccess, requireUserManagementAccess
 });
 
-app.get("/login", (_req, res) => {
-  res.sendFile(path.join(publicDir, "login.html"));
-});
-
-app.get("/users", requireUserManagementAccess, (_req, res) => {
-  res.sendFile(path.join(publicDir, "users.html"));
-});
-
-app.get("/", async (req, res) => {
-  const user = await getUser(req);
-  if (!user) return res.redirect("/login");
-  res.sendFile(path.join(publicDir, "landing.html"));
-});
-
-app.get("/:cld/edit", requireAuth, requireClDAccess, async (req, res, next) => {
-  const cld = normalizeClD(req.params.cld);
-  if (!cld) return next();
-  if (!(await regionExists(cld))) {
-    return res.status(404).sendFile(path.join(publicDir, "landing.html"));
-  }
-  return res.sendFile(path.join(publicDir, "edit.html"));
-});
-
-app.get("/:cld/edit_geometry", requireAdmin, async (req, res, next) => {
-  const cld = normalizeClD(req.params.cld);
-  if (!cld) return next();
-  if (!(await regionExists(cld))) {
-    return res.status(404).sendFile(path.join(publicDir, "landing.html"));
-  }
-  return res.sendFile(path.join(publicDir, "edit-geometry.html"));
-});
 
 registerPublicAssets(app, publicDir);
 
-app.get("/:cld", requireAuth, requireClDAccess, async (req, res, next) => {
-  const cld = normalizeClD(req.params.cld);
-  if (!cld) return next();
-  if (!(await regionExists(cld))) {
-    return res.status(404).sendFile(path.join(publicDir, "landing.html"));
-  }
-  return res.sendFile(path.join(publicDir, "index.html"));
-});
+registerViewerRoute(app);
 
 app.get("*", (_req, res) => {
   res.redirect("/");
