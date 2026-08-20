@@ -20,7 +20,7 @@
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
-  const { describeOfflineSnapshotState, loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
+  const { describeOfflineSnapshotMetadata, describeOfflineSnapshotState, loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
   const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
   const { createCommonMapShell } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
@@ -107,7 +107,7 @@
       }
     });
     if (Number.isFinite(Number(snapshot.revision))) regionRevision = Number(snapshot.revision);
-    return { ...partitionRegionFeatures(snapshot.features), loadError: snapshot.loadError, offlineState: snapshot.offlineState };
+    return { ...partitionRegionFeatures(snapshot.features), loadError: snapshot.loadError, offlineState: snapshot.offlineState, revision: snapshot.revision, savedAt: snapshot.savedAt };
   }
 
   function getZoneCenter(layer) {
@@ -173,7 +173,8 @@
     const closedPercent = records.length ? ((closedCases / records.length) * 100).toFixed(1) : "0.0";
     const summaryText = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${closedCases} completed (${closedPercent}%)`;
     const snapshotText = describeOfflineSnapshotState(mapData.offlineState);
-    routeSubtitle.textContent = `${summaryText} · ${snapshotText}${mapData.loadError ? ` · ${mapData.loadError}` : ""}`;
+    const snapshotMetadata = describeOfflineSnapshotMetadata(mapData.savedAt, mapData.revision);
+    routeSubtitle.textContent = `${summaryText} · ${snapshotText}${snapshotMetadata ? ` · ${snapshotMetadata}` : ""}${mapData.loadError ? ` · ${mapData.loadError}` : ""}`;
   }
   updateRouteSubtitle();
   const cuCodes = zones.map((feature) => extractCuCode(feature.properties || {}));
