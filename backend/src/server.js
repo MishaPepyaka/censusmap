@@ -10,6 +10,7 @@ import { createApp, registerPublicAssets } from "./app.js";
 import { registerSystemRoutes } from "./routes/system-routes.js";
 import { registerRegionRoutes } from "./routes/region-routes.js";
 import { registerTileRoutes } from "./routes/tile-routes.js";
+import { registerAuthRoutes } from "./routes/auth-routes.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
@@ -1164,48 +1165,21 @@ registerSystemRoutes(app, {
   useFileStore
 });
 
-app.post("/api/login", async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: "Username and password required" });
-  }
-  try {
-    const { rows } = await pool.query("SELECT * FROM users WHERE username = $1 LIMIT 1;", [username]);
-    if (rows.length === 0) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-    const user = rows[0];
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-    const token = jwt.sign({ id: user.id, username: user.username }, jwtSecret, { expiresIn: "30d" });
-    res.cookie(AUTH_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 30 * 24 * 60 * 60 * 1000 });
-    const authUser = await loadUserById(user.id);
-    res.json({
-      ok: true,
-      user: authUser || {
-        id: user.id,
-        username: user.username,
-        isAdmin: Boolean(user.is_admin),
-        role: normalizeUserRole(user.role)
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+registerAuthRoutes(app, {
+  authCookie: AUTH_COOKIE,
+  bcrypt,
+  getUser,
+  isAdminUser,
+  jwt,
+  jwtSecret,
+  loadUserById,
+  mapConfig,
+  normalizeUserRole,
+  pool,
+  requireAuth,
+  secureCookies: process.env.NODE_ENV === "production"
 });
 
-app.post("/api/logout", (req, res) => {
-  res.clearCookie(AUTH_COOKIE);
-  res.json({ ok: true });
-});
-
-app.get("/api/me", async (req, res) => {
-  const user = await getUser(req);
-  if (!user) return res.status(401).json({ error: "Not logged in" });
-  res.json({ user });
-});
 
 app.get("/api/admin/users", requireUserManagementAccess, async (req, res) => {
   try {
@@ -1357,18 +1331,6 @@ app.delete("/api/admin/users/:id", requireUserManagementAccess, async (req, res)
   }
 });
 
-app.get("/api/config", requireAuth, (req, res) => {
-  res.json({
-    ...mapConfig,
-    auth: {
-      editProtected: true,
-      isAdmin: req.user.isAdmin,
-      role: req.user.role,
-      canManageUsers: isAdminUser(req.user) || req.user.role === "crew_leader",
-      canEdit: isAdminUser(req.user) || req.user.role === "crew_leader"
-    }
-  });
-});
 
 registerRegionRoutes(app, {
   buildFeatureCollection,
