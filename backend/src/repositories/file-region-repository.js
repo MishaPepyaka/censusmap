@@ -2,8 +2,15 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { buildFeatureCollection, extractCuCode, featureFileNames, normalizeClD, normalizeRegionFeature, normalizeSsid } from "../domain/region-feature.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "../infrastructure/json-files.js";
+import { RegionRevisionConflictError } from "../domain/region-revision.js";
 
 export function createFileRegionRepository(cldRootDir) {
+  const revisionOf = (index) => Number.isFinite(Number(index?.revision)) ? Number(index.revision) : 1;
+  const assertRevision = (index, expectedRevision) => {
+    if (expectedRevision !== undefined && Number(expectedRevision) !== revisionOf(index)) {
+      throw new RegionRevisionConflictError(revisionOf(index));
+    }
+  };
   const indexPath = (cld) => path.join(cldRootDir, cld, "index.json");
   const featurePath = (cld, type) => {
     const fileName = featureFileNames()[type];
@@ -92,8 +99,9 @@ export function createFileRegionRepository(cldRootDir) {
       }
       return null;
     },
-    async createFeature(cld, type, feature) {
+    async createFeature(cld, type, feature, expectedRevision) {
       const index = await readIndex(cld);
+      assertRevision(index, expectedRevision);
       const nextId = Number.isFinite(Number(index.nextFeatureId)) ? Number(index.nextFeatureId) : 1;
       const normalized = normalizeRegionFeature({ ...feature, id: nextId });
       const features = await readFeatures(cld, type);
@@ -106,22 +114,31 @@ export function createFileRegionRepository(cldRootDir) {
         index.cuCodes = [...cuCodes].sort();
       }
       index.nextFeatureId = nextId + 1;
+      index.revision = revisionOf(index) + 1;
       await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
       return nextId;
     },
-    async updateFeature(cld, type, id, feature) {
+    async updateFeature(cld, type, id, feature, expectedRevision) {
+      const index = await readIndex(cld);
+      assertRevision(index, expectedRevision);
       const features = await readFeatures(cld, type);
       const targetIndex = features.findIndex((item) => Number(item?.id) === Number(id));
       if (targetIndex === -1) return false;
       features[targetIndex] = normalizeRegionFeature({ ...feature, id: Number(id) });
       await writeJsonFile(featurePath(cld, type), buildFeatureCollection(features));
+      index.revision = revisionOf(index) + 1;
+      await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
       return true;
     },
-    async deleteFeature(cld, type, id) {
+    async deleteFeature(cld, type, id, expectedRevision) {
+      const index = await readIndex(cld);
+      assertRevision(index, expectedRevision);
       const features = await readFeatures(cld, type);
       const next = features.filter((item) => Number(item?.id) !== Number(id));
       if (next.length === features.length) return false;
       await writeJsonFile(featurePath(cld, type), buildFeatureCollection(next));
+      index.revision = revisionOf(index) + 1;
+      await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
       return true;
     },
     async readBundle(cld) {
