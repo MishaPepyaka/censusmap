@@ -29,6 +29,19 @@
     window.location.replace("/");
     return;
   }
+  const requestedMapView = (() => {
+    const query = new URLSearchParams(window.location.search);
+    const rawZoom = query.get("zoom");
+    const rawLat = query.get("lat");
+    const rawLng = query.get("lng");
+    const zoom = rawZoom === null ? Number.NaN : Number(rawZoom);
+    const lat = rawLat === null ? Number.NaN : Number(rawLat);
+    const lng = rawLng === null ? Number.NaN : Number(rawLng);
+    return {
+      zoom,
+      hasCenter: Number.isFinite(lat) && lat >= -90 && lat <= 90 && Number.isFinite(lng) && lng >= -180 && lng <= 180
+    };
+  })();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {
@@ -406,7 +419,7 @@
       const element = marker.getElement?.();
       if (element) element.style.pointerEvents = specialLocationsVisible ? "" : "none";
     }
-    const clusterMode = !isRelocationMode() && map.getZoom() < 15;
+    const clusterMode = !isRelocationMode() && map.getZoom() < 14;
     const buckets = new Map();
     for (const marker of allDwellingMarkers) {
       marker.setOpacity(clusterMode ? 0 : 1);
@@ -1198,6 +1211,11 @@
     setStatus(data.loadError || `No region geometry loaded for CLD ${cld}.`, true);
   }
   mapUrlState.applyRequestedMapView();
+  const dwellingBounds = dwellingsLayer.getBounds();
+  if (dwellingBounds.isValid() && !map.getBounds().intersects(dwellingBounds)) {
+    map.fitBounds(dwellingBounds, { padding: [20, 20] });
+    setStatus("Map focused on this CLD's dwellings.", false);
+  }
 
   function clearDwellingForm() {
     dwellingFields.cu.value = "";
