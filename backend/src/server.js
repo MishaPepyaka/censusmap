@@ -182,19 +182,11 @@ async function requireUserManagementAccess(req, res, next) {
 }
 
 async function getDirectAllowedClds(userId) {
-  const { rows } = await pool.query(
-    "SELECT cld FROM user_clds WHERE user_id = $1 ORDER BY cld;",
-    [Number(userId)]
-  );
-  return rows.map((row) => row.cld);
+  return userRepository.listDirectAllowedClds(userId);
 }
 
 async function getCrewLeaderIdsForUser(userId) {
-  const { rows } = await pool.query(
-    "SELECT crew_leader_id FROM user_crew_leaders WHERE user_id = $1 ORDER BY crew_leader_id;",
-    [Number(userId)]
-  );
-  return rows.map((row) => row.crew_leader_id);
+  return userRepository.listCrewLeaderIds(userId);
 }
 
 async function getCrewLeaderUsersForUser(userId) {

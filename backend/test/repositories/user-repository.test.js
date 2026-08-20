@@ -6,11 +6,15 @@ test("user repository loads users by id and username", async () => {
   const calls = [];
   const repository = createUserRepository({ query: async (sql, values) => {
     calls.push({ sql, values });
+    if (sql.includes("FROM user_clds")) return { rows: [{ cld: "1234" }] };
+    if (sql.includes("FROM user_crew_leaders")) return { rows: [{ crew_leader_id: 9 }] };
     return { rows: values[0] === "missing" ? [] : [{ id: 7, username: "editor" }] };
   } });
   assert.deepEqual(await repository.findById(7), { id: 7, username: "editor" });
   assert.equal(await repository.findById("bad"), null);
   assert.deepEqual(await repository.findByUsername("editor"), { id: 7, username: "editor" });
   assert.equal(await repository.findByUsername("missing"), null);
-  assert.equal(calls.length, 3);
+  assert.deepEqual(await repository.listDirectAllowedClds(7), ["1234"]);
+  assert.deepEqual(await repository.listCrewLeaderIds(7), [9]);
+  assert.equal(calls.length, 5);
 });
