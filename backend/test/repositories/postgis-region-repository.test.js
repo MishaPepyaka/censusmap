@@ -30,6 +30,9 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
   assert.deepEqual(calls[3].values, ["1234", 8]);
   assert.equal(await repository.createFeature("1234", "dwellings", { properties: { CUID: "12340001", DWELLING_NO: "12" }, geometry: { type: "Point", coordinates: [-97, 56] } }), 7);
   assert.deepEqual(calls[4].values, ["1234", "dwellings", JSON.stringify({ CUID: "12340001", DWELLING_NO: "12", cu: "12340001", dwellingNo: "0012" }), JSON.stringify({ type: "Point", coordinates: [-97, 56] })]);
+  await repository.updateFeature("1234", 7, { properties: { CUID: "12340001", DWELLING_NO: "13" }, geometry: { type: "Point", coordinates: [-97, 56] } });
+  assert.deepEqual(calls[5].values, [7, "1234", JSON.stringify({ CUID: "12340001", DWELLING_NO: "13", cu: "12340001", dwellingNo: "0013" }), JSON.stringify({ type: "Point", coordinates: [-97, 56] })]);
+  assert.match(calls[5].query, /UPDATE region_features/);
   await repository.writeFeatures("1234", "cu", [{ id: 8, properties: { CUID: "12340002" }, geometry: { type: "Polygon", coordinates: [] } }]);
   assert.equal(transactionCalls[0].query, "BEGIN");
   assert.deepEqual(transactionCalls[1].values, ["1234", "cu"]);

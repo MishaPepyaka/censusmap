@@ -700,17 +700,7 @@ async function updateRegionFeature(cld, id, feature) {
   const dwellings = existing.type === "dwellings" ? collection : await readRegionFeatures(cld, "dwellings");
   assertDwellingNoUnique(normalized, dwellings, Number(id));
   if (!useFileStore) {
-    await pool.query(
-      `
-        UPDATE region_features
-        SET
-          properties = $3::jsonb,
-          geom = ST_SetSRID(ST_GeomFromGeoJSON($4), 4326),
-          updated_at = NOW()
-        WHERE id = $1 AND cld = $2;
-      `,
-      [id, cld, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
-    );
+    await postgisRegionRepository.updateFeature(cld, id, normalized);
     if (existing.type === "cu") {
       await syncRegionCuCodes(cld);
     }

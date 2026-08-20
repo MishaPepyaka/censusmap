@@ -53,6 +53,20 @@ export function createPostgisRegionRepository(pool) {
       );
       return rows[0].id;
     },
+    async updateFeature(cld, id, feature) {
+      const normalized = normalizeRegionFeature(feature);
+      await pool.query(
+        `
+          UPDATE region_features
+          SET
+            properties = $3::jsonb,
+            geom = ST_SetSRID(ST_GeomFromGeoJSON($4), 4326),
+            updated_at = NOW()
+          WHERE id = $1 AND cld = $2;
+        `,
+        [id, cld, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
+      );
+    },
     async writeIndex(cld, index) {
       await pool.query(
         `
