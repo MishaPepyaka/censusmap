@@ -187,6 +187,13 @@ export function bindZoomUiMode(map: MapLike & { getContainer: () => HTMLElement 
   return sync;
 }
 
+export function createRegionPolygonStyle({ feature, selected, color, isCu, blockFillOpacity }: {
+  feature: unknown; selected: boolean; color: { stroke: string; fill: string }; isCu: (feature: unknown) => boolean; blockFillOpacity: (selected: boolean) => number;
+}) {
+  const cu = isCu(feature);
+  return { color: color.stroke, fillColor: color.fill, fillOpacity: cu ? (selected ? 0.18 : 0.08) : blockFillOpacity(selected), weight: selected ? 4 : (cu ? 3 : 2), dashArray: cu ? "8 6" : null, opacity: 0.95 };
+}
+
 export function createUserLocationTracker(map: MapLike, markerOptions: Record<string, unknown> = {}) {
   let marker: Marker | null = null;
   let accuracyCircle: Circle | null = null;

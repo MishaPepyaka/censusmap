@@ -22,7 +22,7 @@
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { describeOfflineSnapshotMetadata, describeOfflineSnapshotState, loadRegionSnapshot, partitionRegionFeatures } = window.CensusMapRegion;
   const { buildMapActionButtons } = window.CensusMapActions;
-  const { bindZoomUiMode, createCommonMapShell, getBlockFillOpacity, getFeatureLayerCenter } = window.CensusMapRuntime;
+  const { bindZoomUiMode, createCommonMapShell, createRegionPolygonStyle, getBlockFillOpacity, getFeatureLayerCenter } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
@@ -278,15 +278,7 @@
     const props = feature?.properties || {};
     const cu = extractCuCode(props);
     const color = colorMap.get(cu) || { stroke: "#15803d", fill: "#22c55e" };
-    const isCu = getZoneKind(props) === "cu";
-    return {
-      color: color.stroke,
-      fillColor: color.fill,
-      fillOpacity: isCu ? (selected ? 0.18 : 0.08) : blockFillOpacity(selected),
-      weight: selected ? 4 : (isCu ? 3 : 2),
-      dashArray: isCu ? "8 6" : null,
-      opacity: 0.95
-    };
+    return createRegionPolygonStyle({ feature, selected, color, isCu: (value) => getZoneKind(value?.properties || {}) === "cu", blockFillOpacity });
   }
 
   const editableLayer = L.featureGroup().addTo(map);

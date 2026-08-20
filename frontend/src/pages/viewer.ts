@@ -22,7 +22,7 @@
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { describeOfflineSnapshotMetadata, describeOfflineSnapshotState, loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
   const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
-  const { bindZoomUiMode, createCommonMapShell, getBlockFillOpacity, getFeatureLayerCenter, toFeatureCollection } = window.CensusMapRuntime;
+  const { bindZoomUiMode, createCommonMapShell, createRegionPolygonStyle, getBlockFillOpacity, getFeatureLayerCenter, toFeatureCollection } = window.CensusMapRuntime;
   const { createDwellingSearchIndex } = window.CensusMapDwellingSearch;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
@@ -161,16 +161,7 @@
     const props = feature?.properties || {};
     const cu = extractCuCode(props);
     const color = colorMap.get(cu) || { stroke: "#15803d", fill: "#22c55e" };
-    const zoneKind = getZoneKind(props);
-    const isCu = zoneKind === "cu";
-    return {
-      color: color.stroke,
-      fillColor: color.fill,
-      fillOpacity: isCu ? (selected ? 0.18 : 0.08) : blockFillOpacity(selected),
-      weight: selected ? 4 : (isCu ? 3 : 2),
-      dashArray: isCu ? "8 6" : null,
-      opacity: 0.95
-    };
+    return createRegionPolygonStyle({ feature, selected, color, isCu: (value) => getZoneKind(value?.properties || {}) === "cu", blockFillOpacity });
   }
 
   const polygonLayer = L.geoJSON(null, {
