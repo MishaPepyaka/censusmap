@@ -97,6 +97,11 @@
     }
   }
 
+  window.addEventListener("online", () => {
+    void flushGeometryQueue();
+  });
+  void flushGeometryQueue();
+
   function zoneName(feature) {
     const props = feature.properties || {};
     return props.CB_COLCODE ? `Block ${String(props.CB_COLCODE).padStart(2, "0")}` : `CU ${props.CUID || props.cu || ""}`;
