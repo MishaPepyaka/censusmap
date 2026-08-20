@@ -2,70 +2,13 @@
   const { getJson } = window.CensusMapApi;
   const { buildMapActionButtons } = window.CensusMapActions;
   const { createDwellingSearchIndex } = window.CensusMapDwellingSearch;
+  const { escapeHtml, extractBlockCode, extractCuCode, extractDwellingNo, getZoneKind, isDwellingFeature, isZoneFeature } = window.CensusMapData;
   const searchInput = document.getElementById("dwelling-search-input");
   const searchBtn = document.getElementById("dwelling-search-btn");
   const searchStatus = document.getElementById("dwelling-search-status");
 
   const dwellingSearchIndex = createDwellingSearchIndex();
   const dwellingsByKey = new Map();
-
-  function isNonEmpty(value) {
-    return value !== undefined && value !== null && String(value).trim().length > 0;
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  function normalizeSearchCode(value) {
-    return String(value || "").replace(/\D/g, "");
-  }
-
-  function extractCuCode(props) {
-    if (isNonEmpty(props.CUID)) return String(props.CUID).trim();
-    if (isNonEmpty(props.cu)) return String(props.cu).trim();
-    if (isNonEmpty(props.name)) return String(props.name).split("/")[0].trim();
-    if (isNonEmpty(props.label)) return String(props.label).split("/")[0].trim();
-    return "UNKNOWN";
-  }
-
-  function extractBlockCode(props) {
-    if (isNonEmpty(props.CB_COLCODE)) return String(props.CB_COLCODE).trim().padStart(2, "0");
-    if (isNonEmpty(props.block)) return String(props.block).trim().padStart(2, "0");
-    if (isNonEmpty(props.GEOCODE)) return String(props.GEOCODE).trim().slice(-2);
-    const fromName = isNonEmpty(props.name) ? String(props.name).split("/")[1] : "";
-    return fromName && fromName.trim().length > 0 ? fromName.trim().padStart(2, "0") : "??";
-  }
-
-  function extractDwellingNo(props) {
-    const raw = props.dwellingNo ?? props.DWELLING_NO ?? props.vrNumber ?? props.VR_NUMBER;
-    if (!isNonEmpty(raw)) return "0000";
-    return String(raw).trim().replace(/\D/g, "").padStart(4, "0").slice(-4);
-  }
-
-  function isDwellingFeature(props, geometry) {
-    if (!props || typeof props !== "object") return false;
-    if (String(props._group || "").toLowerCase() === "dwellings") return true;
-    if (isNonEmpty(props.dwellingNo) || isNonEmpty(props.DWELLING_NO) || isNonEmpty(props.vrNumber) || isNonEmpty(props.VR_NUMBER)) {
-      return geometry?.type === "Point";
-    }
-    return false;
-  }
-
-  function isCuBoundaryFeature(props, geometry) {
-    if (!props || typeof props !== "object") return false;
-    const t = geometry?.type;
-    const isArea = t === "Polygon" || t === "MultiPolygon";
-    if (!isArea) return false;
-    if (String(props._group || "").toLowerCase() === "cu") return true;
-    if (isNonEmpty(props.CUID) && !isNonEmpty(props.COLB_UID) && !isNonEmpty(props.CB_COLCODE)) return true;
-    return false;
-  }
 
   function setStatus(message, isError) {
     if (!searchStatus) return;
@@ -93,7 +36,7 @@
         ? payload
         : [];
     return {
-      cuBoundaries: features.filter((f) => isCuBoundaryFeature(f.properties || {}, f.geometry || {})),
+      cuBoundaries: features.filter((f) => isZoneFeature(f) && getZoneKind(f.properties || {}) === "cu"),
       dwellings: features.filter((f) => isDwellingFeature(f.properties || {}, f.geometry || {}))
     };
   }
