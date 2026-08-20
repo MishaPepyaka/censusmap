@@ -5,9 +5,16 @@ export type OfflineSnapshot = {
   savedAt: number;
 };
 
+export type PendingMutationSnapshot = {
+  cld: string;
+  mutations: unknown[];
+  savedAt: number;
+};
+
 const DB_NAME = "census-map-offline";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const SNAPSHOT_STORE = "cld-snapshots";
+const PENDING_MUTATION_STORE = "cld-pending-mutations";
 let databasePromise: Promise<IDBDatabase> | null = null;
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -21,6 +28,7 @@ function openDatabase(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       const database = request.result;
       if (!database.objectStoreNames.contains(SNAPSHOT_STORE)) database.createObjectStore(SNAPSHOT_STORE, { keyPath: "cld" });
+      if (!database.objectStoreNames.contains(PENDING_MUTATION_STORE)) database.createObjectStore(PENDING_MUTATION_STORE, { keyPath: "cld" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("Could not open offline storage"));
@@ -88,5 +96,49 @@ export function saveCachedFeatures(cld: string | number, features: unknown[], re
     localStorage.setItem(localSnapshotKey(cld), JSON.stringify(snapshot));
   } catch {
     // IndexedDB remains the preferred offline store.
+  }
+}
+
+function localMutationKey(cld: string | number): string {
+  return `cld-map-pending:${cld}`;
+}
+
+export async function readPendingMutations(cld: string | number): Promise<PendingMutationSnapshot | null> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(PENDING_MUTATION_STORE, "readonly");
+    const request = transaction.objectStore(PENDING_MUTATION_STORE).get(String(cld));
+    request.onsuccess = () => resolve((request.result as PendingMutationSnapshot | undefined) || null);
+    request.onerror = () => reject(request.error || new Error("Could not read pending mutations"));
+  });
+}
+
+export async function savePendingMutations(cld: string | number, mutations: unknown[]): Promise<PendingMutationSnapshot> {
+  const database = await openDatabase();
+  const snapshot: PendingMutationSnapshot = { cld: String(cld), mutations: Array.isArray(mutations) ? mutations : [], savedAt: Date.now() };
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(PENDING_MUTATION_STORE, "readwrite");
+    transaction.objectStore(PENDING_MUTATION_STORE).put(snapshot);
+    transaction.oncomplete = () => resolve(snapshot);
+    transaction.onerror = () => reject(transaction.error || new Error("Could not save pending mutations"));
+    transaction.onabort = () => reject(transaction.error || new Error("Pending mutation save was aborted"));
+  });
+}
+
+export async function hydratePendingMutations(cld: string | number): Promise<unknown[]> {
+  const key = localMutationKey(cld);
+  try {
+    const local = JSON.parse(localStorage.getItem(key) || "[]");
+    if (Array.isArray(local) && local.length > 0) return local;
+  } catch {
+    // Continue with IndexedDB when localStorage is unavailable or malformed.
+  }
+  try {
+    const snapshot = await readPendingMutations(cld);
+    const mutations = Array.isArray(snapshot?.mutations) ? snapshot.mutations : [];
+    if (mutations.length > 0) localStorage.setItem(key, JSON.stringify(mutations));
+    return mutations;
+  } catch {
+    return [];
   }
 }

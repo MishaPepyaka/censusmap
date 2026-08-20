@@ -48,6 +48,12 @@
     }
   }
 
+  function writeQueue(queue) {
+    localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
+    void window.CldOfflineStore?.savePendingMutations(cld, queue);
+    window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
+  }
+
   function queueGeometryChange(id, payload) {
     const queue = readQueue();
     const dedupeKey = `geometry:${id}`;
@@ -65,8 +71,7 @@
     };
     if (index >= 0) queue.splice(index, 1, item);
     else queue.push(item);
-    localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
-    window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
+    writeQueue(queue);
     return item;
   }
 
@@ -84,8 +89,7 @@
         const index = queue.findIndex((entry) => entry.id === item.id && Number(entry.revision) === Number(item.revision));
         if (index >= 0) {
           queue.splice(index, 1);
-          localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
-          window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
+          writeQueue(queue);
         }
       } catch {
         // The queued geometry stays on this device until connectivity returns.
@@ -174,6 +178,7 @@
     setStatus(`${zoneName(layer.feature)} selected${hiddenMessage}`);
   }
 
+  await window.CldOfflineStore?.hydratePendingMutations(cld);
   try {
     const data = await getJson(`/api/cld/${cld}/features`);
     if (Number.isFinite(Number(data.revision))) regionRevision = Number(data.revision);

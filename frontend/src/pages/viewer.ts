@@ -36,6 +36,7 @@
       // The viewer still works online if a browser disallows service workers.
     });
   }
+  await window.CldOfflineStore?.hydratePendingMutations(cld);
 
   let selectedPolygonLayer = null;
   let selectedDwellingMarker = null;

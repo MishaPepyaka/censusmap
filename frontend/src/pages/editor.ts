@@ -289,6 +289,7 @@
     });
   }
 
+  await window.CldOfflineStore?.hydratePendingMutations(cld);
   const data = await getMapData();
   const blocks = data.blocks;
   const dwellings = data.dwellings;
@@ -1284,6 +1285,12 @@
     }
   }
 
+  function writeOfflineQueue(queue) {
+    localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
+    void window.CldOfflineStore?.savePendingMutations(cld, queue);
+    window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
+  }
+
   function queueMutation(method, url, payload, dedupeKey = "") {
     const queue = readOfflineQueue();
     const existing = dedupeKey
@@ -1301,8 +1308,7 @@
     };
     if (existing >= 0) queue.splice(existing, 1, item);
     else queue.push(item);
-    localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
-    window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
+    writeOfflineQueue(queue);
     setSyncStatus("Waiting to send", "pending");
     void flushOfflineQueue();
     return item;
@@ -1311,8 +1317,7 @@
   function discardQueuedMutation(mutationId) {
     if (!mutationId) return;
     const queue = readOfflineQueue().filter((item) => item.id !== mutationId);
-    localStorage.setItem(offlineQueueKey, JSON.stringify(queue));
-    window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
+    writeOfflineQueue(queue);
   }
 
   function applyQueuedCreateResult(item, result) {
@@ -1371,8 +1376,7 @@
       const newerIds = new Set(newerItems.map((item) => item.id));
       const nextQueue = [...remaining.filter((item) => !newerIds.has(item.id)), ...newerItems];
       queuedDuringFlush = newerItems.length > 0;
-      localStorage.setItem(offlineQueueKey, JSON.stringify(nextQueue));
-      window.dispatchEvent(new CustomEvent("census-map-local-change", { detail: { cld } }));
+      writeOfflineQueue(nextQueue);
       setSyncStatus(nextQueue.length ? "Waiting to send" : "Saved", nextQueue.length ? "pending" : "saved");
     } finally {
       offlineQueueFlushInProgress = false;
