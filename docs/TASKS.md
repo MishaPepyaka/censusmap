@@ -81,6 +81,7 @@ implementation.
     - [x] Convert shared map-data helpers while preserving `window.CensusMapData` for existing pages.
     - [x] Convert the shared offline snapshot store while preserving `window.CldOfflineStore` for existing pages.
     - [x] Convert shared map-action controls while preserving `window.CensusMapActions` for existing pages.
+    - [x] Convert shared map runtime while preserving `window.CensusMapRuntime` for existing pages.
 
 - [ ] R121 Create one region data client.
   - Centralise CLD loading, canonical feature parsing, caching, and error handling.
