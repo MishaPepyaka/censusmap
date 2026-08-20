@@ -611,9 +611,8 @@ registerAuthRoutes(app, {
 
 
 registerUserRoutes(app, {
-  bcrypt, getCrewLeaderIdsForUser, getCrewLeaderUsersForUser, getDirectAllowedClds,
-  getManagedUserIds, getManagedUsersForCrewLeader, isAdminUser, normalizeUserRole,
-  pool, requireUserManagementAccess, resolveUserIdsFromRefs
+  bcrypt, getManagedUserIds, isAdminUser, normalizeUserRole, requireUserManagementAccess,
+  resolveUserIdsFromRefs, userRepository
 });
 
 

@@ -42,6 +42,7 @@ implementation.
     - [x] Move user identity lookups used by authentication into `repositories/user-repository.js`.
     - [x] Move direct CLD and crew-leader relationship reads into `repositories/user-repository.js`.
     - [x] Move user-access and managed-user reads into `repositories/user-repository.js`.
+    - [x] Move user CRUD persistence and user-access assignment writes into `repositories/user-repository.js`.
     - [ ] Extract persistence adapters into repositories.
 
 - [ ] R112 Consolidate region persistence.

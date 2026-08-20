@@ -13,12 +13,20 @@ test("user repository loads users by id and username", async () => {
     if (sql.includes("SELECT id FROM users ORDER BY id")) return { rows: [{ id: 7 }, { id: 8 }] };
     if (sql.includes("SELECT 1")) return { rows: [{ "?column?": 1 }] };
     if (sql.includes("FROM user_crew_leaders")) return { rows: [{ crew_leader_id: 9 }] };
-    return { rows: values[0] === "missing" ? [] : [{ id: 7, username: "editor" }] };
+    return { rows: values?.[0] === "missing" ? [] : [{ id: 7, username: "editor" }] };
   } });
   assert.deepEqual(await repository.findById(7), { id: 7, username: "editor" });
   assert.equal(await repository.findById("bad"), null);
   assert.deepEqual(await repository.findByUsername("editor"), { id: 7, username: "editor" });
   assert.equal(await repository.findByUsername("missing"), null);
+  assert.deepEqual(await repository.listUsers(), [{ id: 7, username: "editor" }]);
+  assert.equal(await repository.create({ username: "new", passwordHash: "hash", isAdmin: false, role: "enumerator" }), 7);
+  await repository.updatePassword(7, "new-hash");
+  await repository.updateRole(7, "crew_leader");
+  await repository.replaceDirectAllowedClds(7, ["1234"]);
+  await repository.replaceCrewLeaderIds(7, [9]);
+  await repository.addCrewLeader(7, 9);
+  await repository.delete(7);
   assert.deepEqual(await repository.listDirectAllowedClds(7), ["1234"]);
   assert.deepEqual(await repository.listCrewLeaderIds(7), [9]);
   assert.deepEqual(await repository.listCrewLeaderUsers(7), [{ id: 9, username: "leader" }]);
@@ -26,5 +34,5 @@ test("user repository loads users by id and username", async () => {
   assert.deepEqual(await repository.listAllUserIds(), [7, 8]);
   assert.deepEqual(await repository.listManagedUserIdsIncludingSelf(9), [7, 8]);
   assert.equal(await repository.hasClDAccess(7, "1234"), true);
-  assert.equal(calls.length, 10);
+  assert.equal(calls.length, 20);
 });
