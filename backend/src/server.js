@@ -17,6 +17,7 @@ import { registerPageRoutes } from "./routes/page-routes.js";
 import { registerLegacyFeatureRoutes } from "./routes/legacy-feature-routes.js";
 import { createRegionRepository } from "./repositories/region-repository.js";
 import { createPostgisRegionRepository, toRegionFeature } from "./repositories/postgis-region-repository.js";
+import { createFileRegionRepository } from "./repositories/file-region-repository.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
@@ -61,6 +62,7 @@ const pool = useFileStore
       password: process.env.POSTGRES_PASSWORD || "maps"
     });
 const postgisRegionRepository = useFileStore ? null : createPostgisRegionRepository(pool);
+const fileRegionRepository = useFileStore ? createFileRegionRepository(cldRootDir) : null;
 
 const mapConfig = {
   baseTileUrl: process.env.BASE_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -394,7 +396,7 @@ async function initDb() {
 
 async function regionExists(cld) {
   if (useFileStore) {
-    return exists(path.join(cldRootDir, cld, "index.json"));
+    return fileRegionRepository.exists(cld);
   }
   return postgisRegionRepository.exists(cld);
 }
@@ -608,12 +610,7 @@ async function readRegionIndex(cld) {
   if (!useFileStore) {
     return postgisRegionRepository.readIndex(cld);
   }
-  const regionDir = path.join(cldRootDir, cld);
-  const index = await readJsonFile(path.join(regionDir, "index.json"), null);
-  if (!index) {
-    throw new Error(`Unknown CLD ${cld}`);
-  }
-  return index;
+  return fileRegionRepository.readIndex(cld);
 }
 
 async function writeRegionIndex(cld, index) {
@@ -650,13 +647,7 @@ async function readRegionFeatures(cld, type) {
   if (!useFileStore) {
     return postgisRegionRepository.readFeatures(cld, type);
   }
-  const names = featureFileNames();
-  const fileName = names[type];
-  if (!fileName) throw new Error(`Unsupported region file type: ${type}`);
-  const filePath = path.join(cldRootDir, cld, fileName);
-  const parsed = await readJsonFile(filePath, buildFeatureCollection([]));
-  const features = Array.isArray(parsed?.features) ? parsed.features : [];
-  return features.map((feature) => normalizeRegionFeature(feature));
+  return fileRegionRepository.readFeatures(cld, type);
 }
 
 async function writeRegionFeatures(cld, type, features) {
@@ -727,12 +718,8 @@ async function readRegionBundle(cld) {
   if (useFileStore) {
     await ensureEmptyRegionFiles(cld);
   }
-  const [index, cu, blocks, dwellings] = await Promise.all([
-    readRegionIndex(cld),
-    readRegionFeatures(cld, "cu"),
-    readRegionFeatures(cld, "blocks"),
-    readRegionFeatures(cld, "dwellings")
-  ]);
+  if (useFileStore) return fileRegionRepository.readBundle(cld);
+  const [index, cu, blocks, dwellings] = await Promise.all([readRegionIndex(cld), readRegionFeatures(cld, "cu"), readRegionFeatures(cld, "blocks"), readRegionFeatures(cld, "dwellings")]);
   return { index, cu, blocks, dwellings };
 }
 
