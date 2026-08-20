@@ -623,8 +623,7 @@ async function readRegionBundle(cld) {
     await ensureEmptyRegionFiles(cld);
   }
   if (useFileStore) return fileRegionRepository.readBundle(cld);
-  const [index, cu, blocks, dwellings] = await Promise.all([readRegionIndex(cld), readRegionFeatures(cld, "cu"), readRegionFeatures(cld, "blocks"), readRegionFeatures(cld, "dwellings")]);
-  return { index, cu, blocks, dwellings };
+  return postgisRegionRepository.readBundle(cld);
 }
 
 async function findRegionFeatureById(cld, id) {

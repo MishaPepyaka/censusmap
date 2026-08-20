@@ -43,4 +43,9 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
   assert.deepEqual(transactionCalls[3].values, ["1234", ["12340002"]]);
   assert.equal(transactionCalls[4].query, "COMMIT");
   assert.equal(released, true);
+  const bundle = await repository.readBundle("1234");
+  assert.equal(bundle.index.cld, "1234");
+  assert.equal(bundle.cu.length, 1);
+  assert.equal(bundle.blocks.length, 1);
+  assert.equal(bundle.dwellings.length, 1);
 });

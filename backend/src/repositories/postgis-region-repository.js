@@ -28,6 +28,12 @@ export function createPostgisRegionRepository(pool) {
       const { rows } = await pool.query("SELECT id, properties, ST_AsGeoJSON(geom)::json AS geometry FROM region_features WHERE cld = $1 AND feature_type = $2 ORDER BY id;", [cld, type]);
       return rows.map(toRegionFeature);
     },
+    async readBundle(cld) {
+      const [index, cu, blocks, dwellings] = await Promise.all([
+        this.readIndex(cld), this.readFeatures(cld, "cu"), this.readFeatures(cld, "blocks"), this.readFeatures(cld, "dwellings")
+      ]);
+      return { index, cu, blocks, dwellings };
+    },
     async findFeature(cld, id) {
       const { rows } = await pool.query(
         `
