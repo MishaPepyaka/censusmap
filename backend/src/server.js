@@ -411,17 +411,6 @@ async function ensureRegionMediaDirs(cld) {
   await ensureDir(path.join(regionDir, "media", "uploads"));
 }
 
-async function ensureRegionRecord(cld, label = `CLD ${cld}`) {
-  await pool.query(
-    `
-      INSERT INTO cld_regions (cld, label)
-      VALUES ($1, $2)
-      ON CONFLICT (cld) DO NOTHING;
-    `,
-    [cld, label]
-  );
-}
-
 async function syncRegionCuCodes(cld) {
   await postgisRegionRepository.syncCuCodes(cld);
 }
@@ -578,7 +567,7 @@ async function readRegionIndex(cld) {
 
 async function writeRegionIndex(cld, index) {
   if (!useFileStore) {
-    await ensureRegionRecord(cld, index.label || `CLD ${cld}`);
+    await postgisRegionRepository.ensureRegion(cld, index.label || `CLD ${cld}`);
     await postgisRegionRepository.writeIndex(cld, index);
     return;
   }
@@ -594,7 +583,7 @@ async function readRegionFeatures(cld, type) {
 
 async function writeRegionFeatures(cld, type, features) {
   if (!useFileStore) {
-    await ensureRegionRecord(cld);
+    await postgisRegionRepository.ensureRegion(cld);
     await postgisRegionRepository.writeFeatures(cld, type, features);
     return;
   }

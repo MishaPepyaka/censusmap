@@ -19,6 +19,16 @@ export function createPostgisRegionRepository(pool) {
       const { rows } = await pool.query("SELECT 1 FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);
       return rows.length > 0;
     },
+    async ensureRegion(cld, label = `CLD ${cld}`) {
+      await pool.query(
+        `
+          INSERT INTO cld_regions (cld, label)
+          VALUES ($1, $2)
+          ON CONFLICT (cld) DO NOTHING;
+        `,
+        [cld, label]
+      );
+    },
     async readIndex(cld) {
       const { rows } = await pool.query("SELECT cld, label, ssids, cu_codes, created_at, updated_at FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);
       if (rows.length === 0) throw new Error(`Unknown CLD ${cld}`);
