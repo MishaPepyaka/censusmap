@@ -18,7 +18,7 @@ implementation.
   - Production defaults set `USE_FILE_STORE=false`; the file store remains temporary migration/recovery compatibility.
   - R112 will remove its duplicate runtime CRUD after migration verification.
 
-- [ ] R101 Add a test baseline.
+- [x] R101 Add a test baseline.
   - [x] Add unit tests for CLD/SSID, feature classification, dwelling identity, status normalisation, and JSON persistence.
   - [x] Add isolated file-store API integration coverage for health, lookup, and anonymous access rejection.
   - [x] Add a Chromium smoke test for login and anonymous viewer/editor redirects.
