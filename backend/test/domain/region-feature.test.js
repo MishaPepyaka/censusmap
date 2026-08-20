@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import {
   classifyFeature,
   extractClDFromProperties,
+  getDwellingIdentity,
   normalizeClD,
+  normalizeDwellingProperties,
   normalizeDwellingNo,
+  normalizeDwellingStatus,
   normalizeFeatures,
   normalizeSsid
 } from "../../src/domain/region-feature.js";
@@ -14,6 +17,29 @@ test("normalises CLD, SSID, and dwelling identifiers", () => {
   assert.equal(normalizeSsid("  ab-123 "), "AB-123");
   assert.equal(normalizeDwellingNo("VR-21"), "0021");
   assert.equal(normalizeDwellingNo("no number"), null);
+  assert.equal(normalizeDwellingStatus("500"), "500");
+  assert.equal(normalizeDwellingStatus("unknown"), "429");
+});
+
+test("adds canonical dwelling fields without dropping legacy input", () => {
+  const properties = normalizeDwellingProperties({
+    CUID: "12340001",
+    CB_COLCODE: "2",
+    VR_NUMBER: "7",
+    status: "bad-value",
+    _group: "dwelling"
+  });
+  assert.deepEqual(properties, {
+    CUID: "12340001",
+    CB_COLCODE: "2",
+    VR_NUMBER: "7",
+    status: "429",
+    _group: "dwellings",
+    cu: "12340001",
+    block: "02",
+    dwellingNo: "0007"
+  });
+  assert.deepEqual(getDwellingIdentity(properties), { cuCode: "12340001", dwellingNo: "0007" });
 });
 
 test("resolves a CLD from direct and zone properties", () => {

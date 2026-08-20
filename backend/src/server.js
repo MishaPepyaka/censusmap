@@ -17,6 +17,7 @@ import {
   extractClDFromProperties,
   extractCuCode,
   featureFileNames,
+  getDwellingIdentity,
   hasText,
   isSpecialLocationFeature,
   normalizeClD,
@@ -779,31 +780,19 @@ async function readRegionBundle(cld) {
   return { index, cu, blocks, dwellings };
 }
 
-function extractDwellingIdentity(properties) {
-  if (!properties || typeof properties !== "object") return null;
-  const dwellingNo = normalizeDwellingNo(
-    properties.dwellingNo ?? properties.DWELLING_NO ?? properties.vrNumber ?? properties.VR_NUMBER
-  );
-  const cuCode = extractCuCode(properties);
-  const rawGroup = hasText(properties._group) ? String(properties._group).trim().toLowerCase() : "";
-  const looksLikeDwelling = rawGroup === "dwellings" || hasText(dwellingNo);
-  if (!looksLikeDwelling || !cuCode || !dwellingNo) return null;
-  return { cuCode, dwellingNo };
-}
-
 function buildDwellingDuplicateError(cuCode, dwellingNo, conflictingId) {
   const suffix = Number.isFinite(conflictingId) ? ` (feature id ${conflictingId})` : "";
   return new Error(`Dwelling ${dwellingNo} already exists in CU ${cuCode}${suffix}`);
 }
 
 async function assertDwellingNoUnique(feature, dwellings, excludeId = null) {
-  const identity = extractDwellingIdentity(feature?.properties || {});
+  const identity = getDwellingIdentity(feature?.properties || {});
   if (!identity) return;
   const { cuCode, dwellingNo } = identity;
   const conflict = dwellings.find((item) => {
     const itemId = Number(item?.id);
     if (Number.isFinite(excludeId) && itemId === Number(excludeId)) return false;
-    const itemIdentity = extractDwellingIdentity(item?.properties || {});
+    const itemIdentity = getDwellingIdentity(item?.properties || {});
     if (!itemIdentity) return false;
     return itemIdentity.cuCode === cuCode && itemIdentity.dwellingNo === dwellingNo;
   });

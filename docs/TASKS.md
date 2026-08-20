@@ -27,9 +27,9 @@ implementation.
 ## Phase 1 — Canonical domain and backend
 
 - [ ] R110 Define the canonical API/domain model.
-  - Define `RegionFeature`, `DwellingProperties`, `SpecialLocationProperties`, and `RegionSummary`.
-  - Normalise legacy property spellings at import/API boundaries only.
-  - Validate GeoJSON, dwelling identity, status, and CLD ownership in one shared backend service.
+  - [x] Define canonical normalisation for `RegionFeature` and dwelling properties (`cu`, `block`, `dwellingNo`, `status`).
+  - [x] Normalise legacy property spellings at the backend input/output boundary while retaining aliases for UI compatibility.
+  - [ ] Add explicit GeoJSON and CLD-ownership validation in the shared region service.
 
 - [ ] R111 Split the Express monolith.
   - Extract app setup, error handling, and middleware from `backend/src/server.js`.
