@@ -81,6 +81,7 @@ implementation.
     - [x] Migrate the shared authentication widget.
     - [x] Migrate the login-page controller.
     - [x] Migrate the viewer-page controller.
+    - [x] Migrate the editor-page controller.
   - Keep generated static assets as the only runtime files under `backend/public/`.
   - [ ] Convert shared domain, API, map, and offline modules before converting page-specific UI.
     - [x] Convert the shared API client while preserving `window.CensusMapApi` for existing pages.

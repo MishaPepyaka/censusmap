@@ -1,0 +1,1 @@
+import "../pages/editor.js";
