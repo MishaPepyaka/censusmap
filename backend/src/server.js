@@ -15,7 +15,7 @@ import { registerUserRoutes } from "./routes/user-routes.js";
 import { assertDwellingNoUnique, classifyRegionFeature, createRegionMutationService, summarizeRegion } from "./services/region-service.js";
 import { registerPageRoutes } from "./routes/page-routes.js";
 import { registerLegacyFeatureRoutes } from "./routes/legacy-feature-routes.js";
-import { createRegionRepository } from "./repositories/region-repository.js";
+import { createRegionRepository, createRegionStorageAdapter } from "./repositories/region-repository.js";
 import { createPostgisRegionRepository } from "./repositories/postgis-region-repository.js";
 import { createFileRegionRepository } from "./repositories/file-region-repository.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
@@ -62,6 +62,12 @@ const pool = useFileStore
     });
 const postgisRegionRepository = useFileStore ? null : createPostgisRegionRepository(pool);
 const fileRegionRepository = useFileStore ? createFileRegionRepository(cldRootDir) : null;
+const regionStorage = createRegionStorageAdapter({
+  fileRepository: fileRegionRepository,
+  postgisRepository: postgisRegionRepository,
+  ensurePostgisMediaDirs,
+  useFileStore
+});
 
 const mapConfig = {
   baseTileUrl: process.env.BASE_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -395,25 +401,10 @@ async function initDb() {
   }
 }
 
-async function regionExists(cld) {
-  if (useFileStore) {
-    return fileRegionRepository.exists(cld);
-  }
-  return postgisRegionRepository.exists(cld);
-}
-
-async function ensureRegionMediaDirs(cld) {
-  if (useFileStore) {
-    await fileRegionRepository.ensureMediaDirs(cld);
-    return;
-  }
+async function ensurePostgisMediaDirs(cld) {
   const regionDir = path.join(cldRootDir, cld);
   await ensureDir(path.join(regionDir, "media", "dwellings"));
   await ensureDir(path.join(regionDir, "media", "uploads"));
-}
-
-async function syncRegionCuCodes(cld) {
-  await postgisRegionRepository.syncCuCodes(cld);
 }
 
 async function ensureFileStore() {
@@ -480,17 +471,6 @@ function extractClDForFeature(feature, cuToClDMap) {
   return "";
 }
 
-async function ensureEmptyRegionFiles(cld) {
-  if (!useFileStore) {
-    if (!(await regionExists(cld))) {
-      throw new Error(`Unknown CLD ${cld}`);
-    }
-    await ensureRegionMediaDirs(cld);
-    return;
-  }
-  await fileRegionRepository.ensureRegion(cld);
-}
-
 async function migrateLegacyDataToClDStore() {
   await ensureDir(cldRootDir);
   const existingEntries = await fs.readdir(cldRootDir, { withFileTypes: true }).catch(() => []);
@@ -546,17 +526,8 @@ async function migrateLegacyDataToClDStore() {
   }
 }
 
-async function readRegionBundle(cld) {
-  if (useFileStore) {
-    await ensureEmptyRegionFiles(cld);
-  }
-  if (useFileStore) return fileRegionRepository.readBundle(cld);
-  return postgisRegionRepository.readBundle(cld);
-}
-
 async function buildLookupRecords() {
-  const repository = useFileStore ? fileRegionRepository : postgisRegionRepository;
-  const indexes = await repository.listIndexes();
+  const indexes = await regionStorage.listIndexes();
   return indexes.map((index) => ({
     cld: index.cld,
     label: index.label || `CLD ${index.cld}`,
@@ -566,8 +537,7 @@ async function buildLookupRecords() {
 }
 
 async function resolveClDFromLookup(queryValue) {
-  const repository = useFileStore ? fileRegionRepository : postgisRegionRepository;
-  return repository.resolveLookup(queryValue);
+  return regionStorage.resolveLookup(queryValue);
 }
 
 function mediaUrlFromFilePath(filePath) {
@@ -713,20 +683,7 @@ registerUserRoutes(app, {
 
 
 
-const activeRegionStorage = useFileStore ? fileRegionRepository : postgisRegionRepository;
-const regionMutations = createRegionMutationService({
-  createFeature: (cld, type, feature, expectedRevision) => activeRegionStorage.createFeature(cld, type, feature, expectedRevision),
-  deleteFeature: (cld, type, id, expectedRevision) => useFileStore
-    ? activeRegionStorage.deleteFeature(cld, type, id, expectedRevision)
-    : activeRegionStorage.deleteFeature(cld, id, expectedRevision),
-  exists: regionExists,
-  findFeature: (cld, id) => activeRegionStorage.findFeature(cld, id),
-  readFeatures: (cld, type) => activeRegionStorage.readFeatures(cld, type),
-  syncCuCodes: useFileStore ? undefined : syncRegionCuCodes,
-  updateFeature: (cld, type, id, feature, expectedRevision) => useFileStore
-    ? activeRegionStorage.updateFeature(cld, type, id, feature, expectedRevision)
-    : activeRegionStorage.updateFeature(cld, id, feature, expectedRevision)
-});
+const regionMutations = createRegionMutationService(regionStorage);
 const {
   createFeature: createRegionFeature,
   deleteFeature: deleteRegionFeature,
@@ -737,9 +694,9 @@ const regionRepository = createRegionRepository({
   createFeature: createRegionFeature,
   createImageUpload,
   deleteFeature: deleteRegionFeature,
-  ensureMediaDirs: ensureRegionMediaDirs,
-  exists: regionExists,
-  readBundle: readRegionBundle,
+  ensureMediaDirs: regionStorage.ensureMediaDirs,
+  exists: regionStorage.exists,
+  readBundle: regionStorage.readBundle,
   updateFeature: updateRegionFeature
 });
 
@@ -773,7 +730,7 @@ registerLegacyFeatureRoutes(app, {
 
 
 const registerViewerRoute = registerPageRoutes(app, {
-  getUser, normalizeClD, publicDir, regionExists, requireAdmin, requireAuth,
+  getUser, normalizeClD, publicDir, regionExists: regionStorage.exists, requireAdmin, requireAuth,
   requireClDAccess, requireUserManagementAccess
 });
 

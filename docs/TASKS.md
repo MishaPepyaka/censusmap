@@ -43,6 +43,7 @@ implementation.
 
 - [ ] R112 Consolidate region persistence.
   - [x] Define and wire a single `RegionRepository` interface for region routes.
+  - [x] Centralise file-store/PostGIS selection and normalize their persistence interfaces in a region storage adapter.
   - [ ] Move PostGIS and temporary file-store implementations behind dedicated repository adapters.
     - [x] Extract PostGIS existence/index/features read adapter.
     - [x] Extract PostGIS region-index write adapter.
