@@ -635,12 +635,7 @@ async function writeRegionIndex(cld, index) {
     );
     return;
   }
-  const regionDir = path.join(cldRootDir, cld);
-  await writeJsonFile(path.join(regionDir, "index.json"), {
-    ...index,
-    cld,
-    updatedAt: new Date().toISOString()
-  });
+  await fileRegionRepository.writeIndex(cld, index);
 }
 
 async function readRegionFeatures(cld, type) {
@@ -707,11 +702,7 @@ async function writeRegionFeatures(cld, type, features) {
     }
     return;
   }
-  const names = featureFileNames();
-  const fileName = names[type];
-  if (!fileName) throw new Error(`Unsupported region file type: ${type}`);
-  const filePath = path.join(cldRootDir, cld, fileName);
-  await writeJsonFile(filePath, buildFeatureCollection(features.map((feature) => normalizeRegionFeature(feature))));
+  await fileRegionRepository.writeFeatures(cld, type, features);
 }
 
 async function readRegionBundle(cld) {

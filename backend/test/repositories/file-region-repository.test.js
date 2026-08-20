@@ -24,4 +24,11 @@ test("file region repository reads and normalizes a region bundle", async (t) =>
   assert.deepEqual(bundle.index, { cld: "1234", label: "Test" });
   assert.equal(bundle.cu[0].id, 7);
   assert.equal(bundle.cu[0].properties.cu, "12340001");
+
+  await repository.writeFeatures("1234", "dwellings", [{ id: "8", properties: { CUID: "12340001", DWELLING_NO: "12" }, geometry: { type: "Point", coordinates: [-97, 56] } }]);
+  await repository.writeIndex("1234", { label: "Updated", nextFeatureId: 9 });
+  const updatedBundle = await repository.readBundle("1234");
+  assert.equal(updatedBundle.index.label, "Updated");
+  assert.equal(updatedBundle.index.nextFeatureId, 9);
+  assert.equal(updatedBundle.dwellings[0].properties.dwellingNo, "0012");
 });
