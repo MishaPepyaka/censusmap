@@ -22,7 +22,8 @@ implementation.
   - [x] Add unit tests for CLD/SSID, feature classification, dwelling identity, status normalisation, and JSON persistence.
   - [x] Add isolated file-store API integration coverage for health, lookup, and anonymous access rejection.
   - [x] Add a Chromium smoke test for login and anonymous viewer/editor redirects.
-  - [ ] Add PostGIS-backed authenticated CRUD and CLD-access integration coverage.
+  - [x] Add opt-in PostGIS-backed authenticated CRUD and CLD-access integration coverage.
+    - Set `POSTGRES_TEST_URL` to a dedicated database whose name contains `test`; the suite skips safely otherwise.
 
 ## Phase 1 — Canonical domain and backend
 

@@ -888,6 +888,11 @@ export async function startServer({ listenPort = port } = {}) {
   });
 }
 
+export async function stopServer(server) {
+  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  if (pool) await pool.end();
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   startServer().catch((error) => {
     console.error("Failed to initialize app:", error);
