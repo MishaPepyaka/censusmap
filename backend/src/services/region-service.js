@@ -1,4 +1,4 @@
-import { classifyFeature, getDwellingIdentity, isSpecialLocationFeature } from "../domain/region-feature.js";
+import { assertValidRegionFeature, classifyFeature, getDwellingIdentity, isSpecialLocationFeature } from "../domain/region-feature.js";
 
 export function assertDwellingNoUnique(feature, dwellings, excludeId = null) {
   const identity = getDwellingIdentity(feature?.properties || {});
@@ -40,4 +40,55 @@ export function inferRegionFeatureType(feature) {
 
 export function classifyRegionFeature(feature) {
   return classifyFeature(feature);
+}
+
+export function createRegionMutationService(storage) {
+  const requiredMethods = ["createFeature", "deleteFeature", "exists", "findFeature", "readFeatures", "updateFeature"];
+  for (const method of requiredMethods) {
+    if (typeof storage?.[method] !== "function") throw new TypeError(`Region mutation storage requires ${method}()`);
+  }
+
+  async function createFeature(cld, feature, expectedRevision) {
+    const normalized = assertValidRegionFeature(feature, cld);
+    if (!(await storage.exists(cld))) throw new Error(`Unknown CLD ${cld}`);
+
+    const type = inferRegionFeatureType(normalized);
+    const collection = await storage.readFeatures(cld, type);
+    const dwellings = type === "dwellings" ? collection : await storage.readFeatures(cld, "dwellings");
+    assertDwellingNoUnique(normalized, dwellings);
+
+    const id = await storage.createFeature(cld, type, normalized, expectedRevision);
+    if (type === "cu") await storage.syncCuCodes?.(cld);
+    return id;
+  }
+
+  async function updateFeature(cld, id, feature, expectedRevision) {
+    if (!Number.isFinite(Number(id))) throw new Error("Invalid feature id");
+    const normalized = assertValidRegionFeature(feature, cld);
+    const existing = await storage.findFeature(cld, id);
+    if (!existing) return false;
+
+    const collection = await storage.readFeatures(cld, existing.type);
+    normalized.id = Number(id);
+    if (inferRegionFeatureType(normalized) !== existing.type) {
+      throw new Error("Changing feature type is not supported");
+    }
+
+    const dwellings = existing.type === "dwellings" ? collection : await storage.readFeatures(cld, "dwellings");
+    assertDwellingNoUnique(normalized, dwellings, Number(id));
+    const updated = await storage.updateFeature(cld, existing.type, id, normalized, expectedRevision);
+    if (updated && existing.type === "cu") await storage.syncCuCodes?.(cld);
+    return updated;
+  }
+
+  async function deleteFeature(cld, id, expectedRevision) {
+    if (!Number.isFinite(Number(id))) throw new Error("Invalid feature id");
+    const existing = await storage.findFeature(cld, id);
+    if (!existing) return false;
+    const deleted = await storage.deleteFeature(cld, existing.type, id, expectedRevision);
+    if (deleted && existing.type === "cu") await storage.syncCuCodes?.(cld);
+    return deleted;
+  }
+
+  return Object.freeze({ createFeature, updateFeature, deleteFeature });
 }

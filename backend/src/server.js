@@ -12,7 +12,7 @@ import { registerRegionRoutes } from "./routes/region-routes.js";
 import { registerTileRoutes } from "./routes/tile-routes.js";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
 import { registerUserRoutes } from "./routes/user-routes.js";
-import { assertDwellingNoUnique, classifyRegionFeature, inferRegionFeatureType, summarizeRegion } from "./services/region-service.js";
+import { assertDwellingNoUnique, classifyRegionFeature, createRegionMutationService, summarizeRegion } from "./services/region-service.js";
 import { registerPageRoutes } from "./routes/page-routes.js";
 import { registerLegacyFeatureRoutes } from "./routes/legacy-feature-routes.js";
 import { createRegionRepository } from "./repositories/region-repository.js";
@@ -21,7 +21,6 @@ import { createFileRegionRepository } from "./repositories/file-region-repositor
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
-  assertValidRegionFeature,
   extractClDFromProperties,
   extractCuCode,
   featureFileNames,
@@ -547,114 +546,12 @@ async function migrateLegacyDataToClDStore() {
   }
 }
 
-async function readRegionIndex(cld) {
-  if (!useFileStore) {
-    return postgisRegionRepository.readIndex(cld);
-  }
-  return fileRegionRepository.readIndex(cld);
-}
-
-async function writeRegionIndex(cld, index) {
-  if (!useFileStore) {
-    await postgisRegionRepository.ensureRegion(cld, index.label || `CLD ${cld}`);
-    await postgisRegionRepository.writeIndex(cld, index);
-    return;
-  }
-  await fileRegionRepository.writeIndex(cld, index);
-}
-
-async function readRegionFeatures(cld, type) {
-  if (!useFileStore) {
-    return postgisRegionRepository.readFeatures(cld, type);
-  }
-  return fileRegionRepository.readFeatures(cld, type);
-}
-
-async function writeRegionFeatures(cld, type, features) {
-  if (!useFileStore) {
-    await postgisRegionRepository.ensureRegion(cld);
-    await postgisRegionRepository.writeFeatures(cld, type, features);
-    return;
-  }
-  await fileRegionRepository.writeFeatures(cld, type, features);
-}
-
 async function readRegionBundle(cld) {
   if (useFileStore) {
     await ensureEmptyRegionFiles(cld);
   }
   if (useFileStore) return fileRegionRepository.readBundle(cld);
   return postgisRegionRepository.readBundle(cld);
-}
-
-async function findRegionFeatureById(cld, id) {
-  const repository = useFileStore ? fileRegionRepository : postgisRegionRepository;
-  const result = await repository.findFeature(cld, id);
-  return result ? { ...result, bundle: null } : { type: null, feature: null, bundle: null };
-}
-
-async function createRegionFeature(cld, feature, expectedRevision) {
-  const normalized = assertValidRegionFeature(feature, cld);
-
-  if (!(await regionExists(cld))) {
-    throw new Error(`Unknown CLD ${cld}`);
-  }
-
-  const type = inferRegionFeatureType(normalized);
-  const collection = await readRegionFeatures(cld, type);
-  const dwellings = type === "dwellings" ? collection : await readRegionFeatures(cld, "dwellings");
-  assertDwellingNoUnique(normalized, dwellings);
-
-  if (!useFileStore) {
-    const id = await postgisRegionRepository.createFeature(cld, type, normalized, expectedRevision);
-    if (type === "cu") {
-      await syncRegionCuCodes(cld);
-    }
-    return id;
-  }
-
-  return fileRegionRepository.createFeature(cld, type, normalized, expectedRevision);
-}
-
-async function updateRegionFeature(cld, id, feature, expectedRevision) {
-  if (!Number.isFinite(Number(id))) throw new Error("Invalid feature id");
-  const normalized = assertValidRegionFeature(feature, cld);
-
-  const existing = await findRegionFeatureById(cld, id);
-  if (!existing.type) return false;
-
-  const collection = await readRegionFeatures(cld, existing.type);
-
-  normalized.id = Number(id);
-  const candidateType = inferRegionFeatureType(normalized);
-  if (candidateType !== existing.type) {
-    throw new Error("Changing feature type is not supported");
-  }
-
-  const dwellings = existing.type === "dwellings" ? collection : await readRegionFeatures(cld, "dwellings");
-  assertDwellingNoUnique(normalized, dwellings, Number(id));
-  if (!useFileStore) {
-    const updated = await postgisRegionRepository.updateFeature(cld, id, normalized, expectedRevision);
-    if (existing.type === "cu") {
-      await syncRegionCuCodes(cld);
-    }
-    return updated;
-  }
-  return fileRegionRepository.updateFeature(cld, existing.type, id, normalized, expectedRevision);
-}
-
-async function deleteRegionFeature(cld, id, expectedRevision) {
-  if (!Number.isFinite(Number(id))) throw new Error("Invalid feature id");
-  const existing = await findRegionFeatureById(cld, id);
-  if (!existing.type) return false;
-  if (!useFileStore) {
-    const deleted = await postgisRegionRepository.deleteFeature(cld, id, expectedRevision);
-    if (existing.type === "cu") {
-      await syncRegionCuCodes(cld);
-    }
-    return deleted;
-  }
-  return fileRegionRepository.deleteFeature(cld, existing.type, id, expectedRevision);
 }
 
 async function buildLookupRecords() {
@@ -815,6 +712,26 @@ registerUserRoutes(app, {
 });
 
 
+
+const activeRegionStorage = useFileStore ? fileRegionRepository : postgisRegionRepository;
+const regionMutations = createRegionMutationService({
+  createFeature: (cld, type, feature, expectedRevision) => activeRegionStorage.createFeature(cld, type, feature, expectedRevision),
+  deleteFeature: (cld, type, id, expectedRevision) => useFileStore
+    ? activeRegionStorage.deleteFeature(cld, type, id, expectedRevision)
+    : activeRegionStorage.deleteFeature(cld, id, expectedRevision),
+  exists: regionExists,
+  findFeature: (cld, id) => activeRegionStorage.findFeature(cld, id),
+  readFeatures: (cld, type) => activeRegionStorage.readFeatures(cld, type),
+  syncCuCodes: useFileStore ? undefined : syncRegionCuCodes,
+  updateFeature: (cld, type, id, feature, expectedRevision) => useFileStore
+    ? activeRegionStorage.updateFeature(cld, type, id, feature, expectedRevision)
+    : activeRegionStorage.updateFeature(cld, id, feature, expectedRevision)
+});
+const {
+  createFeature: createRegionFeature,
+  deleteFeature: deleteRegionFeature,
+  updateFeature: updateRegionFeature
+} = regionMutations;
 
 const regionRepository = createRegionRepository({
   createFeature: createRegionFeature,
