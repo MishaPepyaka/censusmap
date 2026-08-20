@@ -1,7 +1,8 @@
 export const bufferedTileSources = {
   satellite: {
     maxZoom: 22,
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{x}/{y}"
+    // ArcGIS tile URLs are level/row/column: z/y/x (unlike common z/x/y templates).
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
   },
   schematic: {
     maxZoom: 19,
