@@ -16,6 +16,7 @@ import { assertDwellingNoUnique, classifyRegionFeature, inferRegionFeatureType, 
 import { registerPageRoutes } from "./routes/page-routes.js";
 import { registerLegacyFeatureRoutes } from "./routes/legacy-feature-routes.js";
 import { createRegionRepository } from "./repositories/region-repository.js";
+import { createPostgisRegionRepository, toRegionFeature } from "./repositories/postgis-region-repository.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
@@ -59,6 +60,7 @@ const pool = useFileStore
       user: process.env.POSTGRES_USER || "maps",
       password: process.env.POSTGRES_PASSWORD || "maps"
     });
+const postgisRegionRepository = useFileStore ? null : createPostgisRegionRepository(pool);
 
 const mapConfig = {
   baseTileUrl: process.env.BASE_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -394,34 +396,13 @@ async function regionExists(cld) {
   if (useFileStore) {
     return exists(path.join(cldRootDir, cld, "index.json"));
   }
-  const { rows } = await pool.query("SELECT 1 FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);
-  return rows.length > 0;
+  return postgisRegionRepository.exists(cld);
 }
 
 async function ensureRegionMediaDirs(cld) {
   const regionDir = path.join(cldRootDir, cld);
   await ensureDir(path.join(regionDir, "media", "dwellings"));
   await ensureDir(path.join(regionDir, "media", "uploads"));
-}
-
-function regionRowToIndex(row) {
-  return {
-    cld: row.cld,
-    label: row.label || `CLD ${row.cld}`,
-    ssids: Array.isArray(row.ssids) ? row.ssids : [],
-    cuCodes: Array.isArray(row.cu_codes) ? row.cu_codes : [],
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  };
-}
-
-function regionFeatureRowToFeature(row) {
-  return {
-    type: "Feature",
-    id: row.id,
-    properties: row.properties || {},
-    geometry: row.geometry
-  };
 }
 
 async function ensureRegionRecord(cld, label = `CLD ${cld}`) {
@@ -625,19 +606,7 @@ async function listClDNumbers() {
 
 async function readRegionIndex(cld) {
   if (!useFileStore) {
-    const { rows } = await pool.query(
-      `
-        SELECT cld, label, ssids, cu_codes, created_at, updated_at
-        FROM cld_regions
-        WHERE cld = $1
-        LIMIT 1;
-      `,
-      [cld]
-    );
-    if (rows.length === 0) {
-      throw new Error(`Unknown CLD ${cld}`);
-    }
-    return regionRowToIndex(rows[0]);
+    return postgisRegionRepository.readIndex(cld);
   }
   const regionDir = path.join(cldRootDir, cld);
   const index = await readJsonFile(path.join(regionDir, "index.json"), null);
@@ -679,17 +648,7 @@ async function writeRegionIndex(cld, index) {
 
 async function readRegionFeatures(cld, type) {
   if (!useFileStore) {
-    const dbType = type;
-    const { rows } = await pool.query(
-      `
-        SELECT id, properties, ST_AsGeoJSON(geom)::json AS geometry
-        FROM region_features
-        WHERE cld = $1 AND feature_type = $2
-        ORDER BY id;
-      `,
-      [cld, dbType]
-    );
-    return rows.map((row) => normalizeRegionFeature(regionFeatureRowToFeature(row)));
+    return postgisRegionRepository.readFeatures(cld, type);
   }
   const names = featureFileNames();
   const fileName = names[type];
@@ -793,7 +752,7 @@ async function findRegionFeatureById(cld, id) {
     }
     return {
       type: rows[0].feature_type,
-      feature: normalizeRegionFeature(regionFeatureRowToFeature(rows[0])),
+      feature: toRegionFeature(rows[0]),
       bundle: null
     };
   }

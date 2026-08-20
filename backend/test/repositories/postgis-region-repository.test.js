@@ -1,0 +1,17 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createPostgisRegionRepository } from "../../src/repositories/postgis-region-repository.js";
+
+test("PostGIS region repository maps index and GeoJSON feature rows", async () => {
+  const calls = [];
+  const pool = { query: async (query, values) => {
+    calls.push({ query, values });
+    if (query.includes("SELECT cld")) return { rows: [{ cld: "1234", label: "Test", ssids: ["A"], cu_codes: ["12340001"], created_at: "a", updated_at: "b" }] };
+    return { rows: [{ id: 7, properties: { CUID: "12340001" }, geometry: { type: "Point", coordinates: [-97, 56] } }] };
+  } };
+  const repository = createPostgisRegionRepository(pool);
+  assert.deepEqual(await repository.readIndex("1234"), { cld: "1234", label: "Test", ssids: ["A"], cuCodes: ["12340001"], createdAt: "a", updatedAt: "b" });
+  const features = await repository.readFeatures("1234", "dwellings");
+  assert.equal(features[0].properties.cu, "12340001");
+  assert.deepEqual(calls[1].values, ["1234", "dwellings"]);
+});
