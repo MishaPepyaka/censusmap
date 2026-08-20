@@ -41,6 +41,7 @@ implementation.
     - [x] Move region feature mutation validation and storage orchestration into `services/region-service.js`.
     - [x] Move user identity lookups used by authentication into `repositories/user-repository.js`.
     - [x] Move direct CLD and crew-leader relationship reads into `repositories/user-repository.js`.
+    - [x] Move user-access and managed-user reads into `repositories/user-repository.js`.
     - [ ] Extract persistence adapters into repositories.
 
 - [ ] R112 Consolidate region persistence.

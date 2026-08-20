@@ -190,17 +190,7 @@ async function getCrewLeaderIdsForUser(userId) {
 }
 
 async function getCrewLeaderUsersForUser(userId) {
-  const { rows } = await pool.query(
-    `
-      SELECT u.id, u.username
-      FROM user_crew_leaders ucl
-      JOIN users u ON u.id = ucl.crew_leader_id
-      WHERE ucl.user_id = $1
-      ORDER BY u.username;
-    `,
-    [Number(userId)]
-  );
-  return rows;
+  return userRepository.listCrewLeaderUsers(userId);
 }
 
 async function resolveUserIdsFromRefs(values) {
@@ -217,47 +207,23 @@ async function resolveUserIdsFromRefs(values) {
       ids.add(maybeId);
       continue;
     }
-    const { rows } = await pool.query("SELECT id FROM users WHERE username = $1 LIMIT 1;", [ref]);
-    if (rows.length > 0) {
-      ids.add(rows[0].id);
-    }
+    const user = await userRepository.findByUsername(ref);
+    if (user) ids.add(user.id);
   }
   return [...ids];
 }
 
 async function getManagedUsersForCrewLeader(userId) {
-  const { rows } = await pool.query(
-    `
-      SELECT DISTINCT u.id
-      FROM user_crew_leaders ucl
-      JOIN users u ON u.id = ucl.user_id
-      WHERE ucl.crew_leader_id = $1
-      ORDER BY u.id;
-    `,
-    [Number(userId)]
-  );
-  return rows.map((row) => row.id);
+  return userRepository.listManagedUserIds(userId);
 }
 
 async function getManagedUserIds(user) {
   if (!user) return [];
   if (isAdminUser(user)) {
-    const { rows } = await pool.query("SELECT id FROM users ORDER BY id;");
-    return rows.map((row) => row.id);
+    return userRepository.listAllUserIds();
   }
   if (user.role === "crew_leader") {
-    const { rows } = await pool.query(
-      `
-        SELECT DISTINCT user_id AS id
-        FROM user_crew_leaders
-        WHERE crew_leader_id = $1
-        UNION
-        SELECT $1::integer AS id
-        ORDER BY id;
-      `,
-      [Number(user.id)]
-    );
-    return rows.map((row) => row.id);
+    return userRepository.listManagedUserIdsIncludingSelf(user.id);
   }
   return [Number(user.id)];
 }
@@ -265,23 +231,7 @@ async function getManagedUserIds(user) {
 async function hasClDAccess(user, cld) {
   if (!user) return false;
   if (isAdminUser(user)) return true;
-  const { rows } = await pool.query(
-    `
-      SELECT 1
-      FROM (
-        SELECT cld FROM user_clds WHERE user_id = $1
-        UNION
-        SELECT ucl.cld
-        FROM user_crew_leaders rel
-        JOIN user_clds ucl ON ucl.user_id = rel.crew_leader_id
-        WHERE rel.user_id = $1
-      ) allowed
-      WHERE cld = $2 OR cld = '0000'
-      LIMIT 1;
-    `,
-    [user.id, cld]
-  );
-  return rows.length > 0;
+  return userRepository.hasClDAccess(user.id, cld);
 }
 
 async function requireClDAccess(req, res, next) {
