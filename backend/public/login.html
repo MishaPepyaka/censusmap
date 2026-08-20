@@ -26,38 +26,6 @@
         </form>
       </section>
     </main>
-    <script>
-      (function() {
-        const form = document.getElementById('login-form');
-        const status = document.getElementById('login-status');
-        
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          status.textContent = 'Authenticating...';
-          status.classList.remove('landing-status-error');
-          
-          const username = document.getElementById('username').value;
-          const password = document.getElementById('password').value;
-          
-          try {
-            const res = await fetch('/api/login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ username, password })
-            });
-            const data = await res.json();
-            if (res.ok) {
-              window.location.assign('/');
-            } else {
-              status.textContent = data.error || 'Login failed';
-              status.classList.add('landing-status-error');
-            }
-          } catch (err) {
-            status.textContent = 'Connection error';
-            status.classList.add('landing-status-error');
-          }
-        });
-      })();
-    </script>
+    <script src="/app-login.js?v=20260820a"></script>
   </body>
 </html>

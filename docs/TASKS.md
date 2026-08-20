@@ -77,6 +77,7 @@ implementation.
   - [ ] Move page scripts from `backend/public/` into `frontend/src/` modules.
     - [x] Migrate the landing-page controller.
     - [x] Migrate the shared authentication widget.
+    - [x] Migrate the login-page controller.
   - Keep generated static assets as the only runtime files under `backend/public/`.
   - [ ] Convert shared domain, API, map, and offline modules before converting page-specific UI.
     - [x] Convert the shared API client while preserving `window.CensusMapApi` for existing pages.
