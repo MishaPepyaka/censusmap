@@ -67,6 +67,9 @@ export function createPostgisRegionRepository(pool) {
         [id, cld, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
       );
     },
+    async deleteFeature(cld, id) {
+      await pool.query("DELETE FROM region_features WHERE id = $1 AND cld = $2;", [id, cld]);
+    },
     async writeIndex(cld, index) {
       await pool.query(
         `

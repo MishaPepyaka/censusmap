@@ -719,7 +719,7 @@ async function deleteRegionFeature(cld, id) {
   const next = collection.filter((item) => Number(item?.id) !== Number(id));
   if (next.length === collection.length) return false;
   if (!useFileStore) {
-    await pool.query("DELETE FROM region_features WHERE id = $1 AND cld = $2;", [id, cld]);
+    await postgisRegionRepository.deleteFeature(cld, id);
     if (existing.type === "cu") {
       await syncRegionCuCodes(cld);
     }
