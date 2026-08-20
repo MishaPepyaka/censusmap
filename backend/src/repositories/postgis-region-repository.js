@@ -29,6 +29,12 @@ export function createPostgisRegionRepository(pool) {
         [cld, label]
       );
     },
+    async listIndexes() {
+      const { rows } = await pool.query(
+        "SELECT cld, label, ssids, cu_codes, created_at, updated_at FROM cld_regions ORDER BY cld;"
+      );
+      return rows.map(toRegionIndex);
+    },
     async readIndex(cld) {
       const { rows } = await pool.query("SELECT cld, label, ssids, cu_codes, created_at, updated_at FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);
       if (rows.length === 0) throw new Error(`Unknown CLD ${cld}`);

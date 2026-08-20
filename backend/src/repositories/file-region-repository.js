@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { buildFeatureCollection, featureFileNames, normalizeRegionFeature } from "../domain/region-feature.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "../infrastructure/json-files.js";
@@ -29,6 +30,18 @@ export function createFileRegionRepository(cldRootDir) {
     ]);
   }
 
+  async function listIndexes() {
+    await ensureDir(cldRootDir);
+    const entries = await fs.readdir(cldRootDir, { withFileTypes: true }).catch(() => []);
+    const clds = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((name) => /^[0-9]+$/.test(name))
+      .sort();
+    const indexes = await Promise.all(clds.map((cld) => readJsonFile(indexPath(cld), null)));
+    return indexes.filter(Boolean);
+  }
+
   return Object.freeze({
     exists(cld) {
       return exists(indexPath(cld));
@@ -54,6 +67,7 @@ export function createFileRegionRepository(cldRootDir) {
       }
     },
     ensureMediaDirs,
+    listIndexes,
     readIndex,
     readFeatures,
     async readBundle(cld) {

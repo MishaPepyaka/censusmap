@@ -52,6 +52,7 @@ implementation.
     - [x] Extract PostGIS region bundle loading.
     - [x] Extract PostGIS CU-code synchronisation.
     - [x] Extract PostGIS CLD record initialisation.
+    - [x] Extract PostGIS and file-store CLD catalog loading.
     - [x] Extract temporary file-store existence/index/features/bundle read adapter.
     - [x] Extract temporary file-store index and feature-collection write adapter.
     - [x] Extract temporary file-store region initialisation and media-directory handling.

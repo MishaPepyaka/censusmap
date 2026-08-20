@@ -544,20 +544,6 @@ async function migrateLegacyDataToClDStore() {
   }
 }
 
-async function listClDNumbers() {
-  if (!useFileStore) {
-    const { rows } = await pool.query("SELECT cld FROM cld_regions ORDER BY cld;");
-    return rows.map((row) => row.cld);
-  }
-  await ensureDir(cldRootDir);
-  const entries = await fs.readdir(cldRootDir, { withFileTypes: true }).catch(() => []);
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => /^[0-9]+$/.test(name))
-    .sort();
-}
-
 async function readRegionIndex(cld) {
   if (!useFileStore) {
     return postgisRegionRepository.readIndex(cld);
@@ -701,30 +687,14 @@ async function deleteRegionFeature(cld, id) {
 }
 
 async function buildLookupRecords() {
-  if (!useFileStore) {
-    const { rows } = await pool.query(
-      "SELECT cld, label, ssids, cu_codes, created_at, updated_at FROM cld_regions ORDER BY cld;"
-    );
-    return rows.map((row) => ({
-      cld: row.cld,
-      label: row.label || `CLD ${row.cld}`,
-      ssids: Array.isArray(row.ssids) ? row.ssids : [],
-      cuCodes: Array.isArray(row.cu_codes) ? row.cu_codes : []
-    }));
-  }
-  const clds = await listClDNumbers();
-  const records = [];
-  for (const cld of clds) {
-    const index = await readJsonFile(path.join(cldRootDir, cld, "index.json"), null);
-    if (!index) continue;
-    records.push({
-      cld,
-      label: index.label || `CLD ${cld}`,
-      ssids: Array.isArray(index.ssids) ? index.ssids : [],
-      cuCodes: Array.isArray(index.cuCodes) ? index.cuCodes : []
-    });
-  }
-  return records;
+  const repository = useFileStore ? fileRegionRepository : postgisRegionRepository;
+  const indexes = await repository.listIndexes();
+  return indexes.map((index) => ({
+    cld: index.cld,
+    label: index.label || `CLD ${index.cld}`,
+    ssids: Array.isArray(index.ssids) ? index.ssids : [],
+    cuCodes: Array.isArray(index.cuCodes) ? index.cuCodes : []
+  }));
 }
 
 async function resolveClDFromLookup(queryValue) {

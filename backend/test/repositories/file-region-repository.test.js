@@ -41,4 +41,5 @@ test("file region repository reads and normalizes a region bundle", async (t) =>
   assert.deepEqual(emptyBundle.blocks, []);
   assert.deepEqual(emptyBundle.dwellings, []);
   assert.equal(await fs.stat(path.join(rootDir, "5678", "media", "dwellings")).then((entry) => entry.isDirectory()), true);
+  assert.deepEqual((await repository.listIndexes()).map((index) => index.cld), ["1234", "5678"]);
 });

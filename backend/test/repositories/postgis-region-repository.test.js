@@ -55,4 +55,5 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
   await repository.ensureRegion("1234", "Updated");
   assert.deepEqual(calls.at(-1).values, ["1234", "Updated"]);
   assert.match(calls.at(-1).query, /INSERT INTO cld_regions/);
+  assert.deepEqual((await repository.listIndexes()).map((index) => index.cld), ["1234"]);
 });
