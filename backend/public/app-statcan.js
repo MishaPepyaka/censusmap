@@ -1,13 +1,12 @@
 (async function initStatcanViewer() {
   const { getJson } = window.CensusMapApi;
   const { buildMapActionButtons } = window.CensusMapActions;
+  const { createDwellingSearchIndex } = window.CensusMapDwellingSearch;
   const searchInput = document.getElementById("dwelling-search-input");
   const searchBtn = document.getElementById("dwelling-search-btn");
   const searchStatus = document.getElementById("dwelling-search-status");
 
-  const dwellingsByCode = new Map();
-  const dwellingsByCu = new Map();
-  const dwellingsByNo = new Map();
+  const dwellingSearchIndex = createDwellingSearchIndex();
   const dwellingsByKey = new Map();
 
   function isNonEmpty(value) {
@@ -84,12 +83,7 @@
   }
 
   function addToIndex(record) {
-    if (!dwellingsByCode.has(record.code)) dwellingsByCode.set(record.code, []);
-    dwellingsByCode.get(record.code).push(record);
-    if (!dwellingsByCu.has(record.cu)) dwellingsByCu.set(record.cu, []);
-    dwellingsByCu.get(record.cu).push(record);
-    if (!dwellingsByNo.has(record.no)) dwellingsByNo.set(record.no, []);
-    dwellingsByNo.get(record.no).push(record);
+    dwellingSearchIndex.add(record);
   }
 
   function parseFeatures(payload) {
@@ -204,34 +198,7 @@
   }
 
   function findRecordByQuery(value) {
-    const digits = normalizeSearchCode(value);
-    if (!digits) return { record: null, message: "Enter code like 462210550033", error: true };
-
-    if (digits.length >= 12) {
-      const cu = digits.slice(0, 8);
-      const no = digits.slice(-4);
-      const code = `${cu}${no}`;
-      const list = dwellingsByCode.get(code) || [];
-      return list.length > 0
-        ? { record: list[0], message: "", error: false }
-        : { record: null, message: `Not found: ${code}`, error: true };
-    }
-
-    if (digits.length === 8) {
-      const list = dwellingsByCu.get(digits) || [];
-      if (list.length === 0) return { record: null, message: `No dwellings in CU ${digits}`, error: true };
-      return { record: list[0], message: `CU ${digits}: showing first dwelling`, error: false };
-    }
-
-    if (digits.length <= 4) {
-      const no = digits.padStart(4, "0");
-      const list = dwellingsByNo.get(no) || [];
-      if (list.length === 0) return { record: null, message: `No dwelling ${no}`, error: true };
-      if (list.length > 1) return { record: list[0], message: `Multiple ${no}, showing first match`, error: false };
-      return { record: list[0], message: "", error: false };
-    }
-
-    return { record: null, message: "Use 4, 8, or 12+ digits", error: true };
+    return dwellingSearchIndex.find(value, "462210550033");
   }
 
   function onSearch() {

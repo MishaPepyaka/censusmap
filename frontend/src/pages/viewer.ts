@@ -23,6 +23,7 @@
   const { describeOfflineSnapshotMetadata, describeOfflineSnapshotState, loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
   const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
   const { createCommonMapShell, getBlockFillOpacity, getFeatureLayerCenter, toFeatureCollection } = window.CensusMapRuntime;
+  const { createDwellingSearchIndex } = window.CensusMapDwellingSearch;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
@@ -42,9 +43,7 @@
   let badgesReady = false;
   let regionRevision = 1;
 
-  const dwellingByCode = new Map();
-  const dwellingByCu = new Map();
-  const dwellingByNo = new Map();
+  const dwellingSearchIndex = createDwellingSearchIndex();
   const dwellingRecords = [];
   const dwellingMarkerByKey = new Map();
   const OPENED_CASE_STATUS = "429";
@@ -320,12 +319,7 @@
   }
 
   function registerDwellingRecord(record) {
-    if (!dwellingByCode.has(record.code)) dwellingByCode.set(record.code, []);
-    dwellingByCode.get(record.code).push(record);
-    if (!dwellingByCu.has(record.cu)) dwellingByCu.set(record.cu, []);
-    dwellingByCu.get(record.cu).push(record);
-    if (!dwellingByNo.has(record.no)) dwellingByNo.set(record.no, []);
-    dwellingByNo.get(record.no).push(record);
+    dwellingSearchIndex.add(record);
   }
 
   function buildDwellingRecord(feature, index) {
@@ -570,9 +564,7 @@
     dwellingsLayer.clearLayers();
     dwellingClusterLayer.clearLayers();
     specialLocationsLayer.clearLayers();
-    dwellingByCode.clear();
-    dwellingByCu.clear();
-    dwellingByNo.clear();
+    dwellingSearchIndex.clear();
     dwellingRecords.length = 0;
     dwellingMarkerByKey.clear();
     selectedDwellingMarker = null;
@@ -656,34 +648,7 @@
   }
 
   function findDwellingByInput(value) {
-    const digits = normalizeSearchCode(value);
-    if (!digits) return { record: null, records: [], message: "Enter code like 462211020079", error: true };
-
-    if (digits.length >= 12) {
-      const cu = digits.slice(0, 8);
-      const no = digits.slice(-4);
-      const code = `${cu}${no}`;
-      const list = dwellingByCode.get(code) || [];
-      return list.length > 0
-        ? { record: list[0], records: list, message: "", error: false }
-        : { record: null, records: [], message: `Not found: ${code}`, error: true };
-    }
-
-    if (digits.length === 8) {
-      const list = dwellingByCu.get(digits) || [];
-      if (list.length === 0) return { record: null, records: [], message: `No dwellings in CU ${digits}`, error: true };
-      return { record: list[0], records: list, message: `CU ${digits}: showing first dwelling`, error: false };
-    }
-
-    if (digits.length <= 4) {
-      const no = digits.padStart(4, "0");
-      const list = dwellingByNo.get(no) || [];
-      if (list.length === 0) return { record: null, records: [], message: `No dwelling ${no}`, error: true };
-      if (list.length > 1) return { record: list[0], records: list, message: `Multiple ${no}, showing first match`, error: false };
-      return { record: list[0], records: list, message: "", error: false };
-    }
-
-    return { record: null, records: [], message: "Use 4, 8, or 12+ digits", error: true };
+    return dwellingSearchIndex.find(value);
   }
 
   function handleSearch() {
