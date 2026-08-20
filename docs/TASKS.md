@@ -32,9 +32,9 @@ implementation.
   - [x] Add explicit GeoJSON and CLD-ownership validation in the shared region domain module.
 
 - [ ] R111 Split the Express monolith.
-  - Extract app setup, error handling, and middleware from `backend/src/server.js`.
-  - Move auth/access, regions, users, uploads, and tile proxy routes into route modules.
-  - Move data access and business rules into repositories and services.
+  - [x] Extract Express app setup, middleware, and static asset registration from `backend/src/server.js`.
+  - [ ] Add central error handling and move auth/access, regions, users, uploads, and tile proxy routes into route modules.
+  - [ ] Move data access and business rules into repositories and services.
 
 - [ ] R112 Consolidate region persistence.
   - Implement a single `RegionRepository` interface for the selected runtime store.

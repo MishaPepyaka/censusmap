@@ -1,6 +1,3 @@
-import express from "express";
-import helmet from "helmet";
-import morgan from "morgan";
 import { Pool } from "pg";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -9,7 +6,7 @@ import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import cookieParser from "cookie-parser";
+import { createApp, registerPublicAssets } from "./app.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
@@ -38,7 +35,10 @@ const publicDir = path.join(__dirname, "..", "public");
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(repoRoot, "data"));
 const cldRootDir = path.join(dataDir, "cld");
 
-export const app = express();
+export const app = createApp({
+  cldRootDir,
+  nodeModulesDir: path.join(__dirname, "..", "node_modules")
+});
 const port = Number(process.env.PORT || 8080);
 const useFileStore = String(process.env.USE_FILE_STORE || "false").toLowerCase() === "true";
 const fileStorePath = process.env.FILE_STORE_PATH || path.join(dataDir, "file-store.json");
@@ -78,16 +78,6 @@ const mapConfig = {
     }
   }
 };
-
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(morgan("combined"));
-app.use(express.json({ limit: "25mb" }));
-app.use(cookieParser());
-app.use("/vendor/leaflet", express.static(path.join(__dirname, "..", "node_modules", "leaflet", "dist")));
-app.use("/vendor/leaflet-draw", express.static(path.join(__dirname, "..", "node_modules", "leaflet-draw", "dist")));
-app.use("/vendor/esri-leaflet", express.static(path.join(__dirname, "..", "node_modules", "esri-leaflet", "dist")));
-app.use("/vendor/xlsx", express.static(path.join(__dirname, "..", "node_modules", "xlsx", "dist")));
-app.use("/media/cld", express.static(cldRootDir));
 
 const AUTH_COOKIE = "census_session";
 const USER_ROLES = new Set(["admin", "crew_leader", "enumerator"]);
@@ -1878,7 +1868,7 @@ app.get("/:cld/edit_geometry", requireAdmin, async (req, res, next) => {
   return res.sendFile(path.join(publicDir, "edit-geometry.html"));
 });
 
-app.use(express.static(publicDir));
+registerPublicAssets(app, publicDir);
 
 app.get("/:cld", requireAuth, requireClDAccess, async (req, res, next) => {
   const cld = normalizeClD(req.params.cld);
