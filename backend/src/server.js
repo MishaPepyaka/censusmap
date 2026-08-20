@@ -585,19 +585,9 @@ async function readRegionBundle(cld) {
 }
 
 async function findRegionFeatureById(cld, id) {
-  if (!useFileStore) {
-    const result = await postgisRegionRepository.findFeature(cld, id);
-    return result ? { ...result, bundle: null } : { type: null, feature: null, bundle: null };
-  }
-  const bundle = await readRegionBundle(cld);
-  for (const type of ["cu", "blocks", "dwellings"]) {
-    const collection = bundle[type];
-    const feature = collection.find((item) => Number(item?.id) === Number(id));
-    if (feature) {
-      return { type, feature, bundle };
-    }
-  }
-  return { type: null, feature: null, bundle };
+  const repository = useFileStore ? fileRegionRepository : postgisRegionRepository;
+  const result = await repository.findFeature(cld, id);
+  return result ? { ...result, bundle: null } : { type: null, feature: null, bundle: null };
 }
 
 async function createRegionFeature(cld, feature) {

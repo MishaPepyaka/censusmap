@@ -31,6 +31,8 @@ test("file region repository reads and normalizes a region bundle", async (t) =>
   assert.equal(updatedBundle.index.label, "Updated");
   assert.equal(updatedBundle.index.nextFeatureId, 9);
   assert.equal(updatedBundle.dwellings[0].properties.dwellingNo, "0012");
+  assert.equal((await repository.findFeature("1234", 7)).type, "cu");
+  assert.equal((await repository.findFeature("1234", 8)).feature.properties.dwellingNo, "0012");
 
   await repository.ensureRegion("5678");
   assert.equal(await repository.exists("5678"), true);

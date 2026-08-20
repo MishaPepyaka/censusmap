@@ -83,6 +83,14 @@ export function createFileRegionRepository(cldRootDir) {
     resolveLookup,
     readIndex,
     readFeatures,
+    async findFeature(cld, id) {
+      const bundle = await this.readBundle(cld);
+      for (const type of ["cu", "blocks", "dwellings"]) {
+        const feature = bundle[type].find((item) => Number(item?.id) === Number(id));
+        if (feature) return { type, feature };
+      }
+      return null;
+    },
     async readBundle(cld) {
       const [index, cu, blocks, dwellings] = await Promise.all([
         readIndex(cld), readFeatures(cld, "cu"), readFeatures(cld, "blocks"), readFeatures(cld, "dwellings")
