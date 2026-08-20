@@ -102,7 +102,8 @@ implementation.
   - Remove duplicate `getMapData`, feature partitioning, identifier extraction, and status normalisation from viewer/editor/StatCan code.
 
 - [ ] R122 Create a common map shell.
-  - Share map initialisation, URL state, base maps, tile status, geolocation, feature rendering, and dwelling search indexing.
+  - [x] Share map initialisation, URL state, base maps, tile status, and geolocation between viewer and editor.
+  - [ ] Share feature rendering and dwelling search indexing.
   - Keep viewer and editor as mode-specific controllers over the same shell.
 
 - [ ] R123 Retire or migrate the standalone StatCan prototype.

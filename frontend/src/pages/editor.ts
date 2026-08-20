@@ -22,14 +22,13 @@
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { loadRegionSnapshot, partitionRegionFeatures } = window.CensusMapRegion;
   const { buildMapActionButtons } = window.CensusMapActions;
-  const { readMapUrlState, bindMapUrlState, setupBaseMap, setupTileCacheStatus, createUserLocationTracker } = window.CensusMapRuntime;
+  const { createCommonMapShell } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
     window.location.replace("/");
     return;
   }
-  const requestedMapView = readMapUrlState();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {
@@ -224,23 +223,21 @@
     return false;
   }
 
-  const map = L.map("map", {
-    preferCanvas: false,
-    zoomControl: false,
-    tap: true,
-    markerZoomAnimation: true,
-    zoomAnimation: true,
-    fadeAnimation: true,
-    inertia: false
-  }).setView([56.0, -96.0], 4);
-
-  const mapUrlState = bindMapUrlState(map, requestedMapView, (query) => {
-    if (editorViewLink) editorViewLink.href = `/${cld}?${query}`;
+  const locateBtn = document.getElementById("locate-btn");
+  const baseMapBtn = document.getElementById("basemap-btn");
+  const { map, mapUrlState, userLocationTracker } = createCommonMapShell({
+    baseMapButton: baseMapBtn,
+    tileCacheStatus,
+    locateButton: locateBtn,
+    userLocationMarkerOptions: { pane: "user-location-pane", zIndexOffset: 1000 },
+    mapOptions: { inertia: false },
+    onQueryChange: (query) => {
+      if (editorViewLink) editorViewLink.href = `/${cld}?${query}`;
+    }
   });
   const userLocationPane = map.createPane("user-location-pane");
   userLocationPane.style.zIndex = "650";
   userLocationPane.style.pointerEvents = "none";
-  L.control.zoom({ position: "bottomright" }).addTo(map);
   const vectorRenderer = L.svg({ padding: 0.5 });
   const mapContainer = map.getContainer();
   function syncZoomUiMode() {
@@ -250,21 +247,6 @@
   }
   map.on("zoomend", syncZoomUiMode);
   syncZoomUiMode();
-  const locateBtn = document.getElementById("locate-btn");
-  const baseMapBtn = document.getElementById("basemap-btn");
-  const baseMap = setupBaseMap(map, baseMapBtn);
-  setupTileCacheStatus(tileCacheStatus, [baseMap.satelliteLayer, baseMap.schematicLayer]);
-  const userLocationTracker = createUserLocationTracker(map, { pane: "user-location-pane", zIndexOffset: 1000 });
-
-  if (locateBtn) {
-    locateBtn.textContent = "🧍";
-    locateBtn.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      await userLocationTracker.focus();
-    });
-  }
-
   await window.CldOfflineStore?.hydratePendingMutations(cld);
   const data = await getMapData();
   const blocks = data.blocks;

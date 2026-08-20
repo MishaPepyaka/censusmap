@@ -22,14 +22,13 @@
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
   const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
-  const { readMapUrlState, bindMapUrlState, setupBaseMap, setupTileCacheStatus, createUserLocationTracker } = window.CensusMapRuntime;
+  const { createCommonMapShell } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
     window.location.replace("/");
     return;
   }
-  const requestedMapView = readMapUrlState();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {
@@ -127,19 +126,14 @@
     searchStatus.classList.toggle("search-status-error", Boolean(isError));
   }
 
-  const map = L.map("map", {
-    preferCanvas: false,
-    zoomControl: false,
-    tap: true,
-    markerZoomAnimation: true,
-    zoomAnimation: true,
-    fadeAnimation: true
-  }).setView([56.0, -96.0], 4);
-
-  const mapUrlState = bindMapUrlState(map, requestedMapView, (query) => {
-    if (editRouteLink) editRouteLink.href = `/${cld}/edit?${query}`;
+  const { map, mapUrlState, userLocationTracker } = createCommonMapShell({
+    baseMapButton: baseMapBtn,
+    tileCacheStatus,
+    locateButton: locateBtn,
+    onQueryChange: (query) => {
+      if (editRouteLink) editRouteLink.href = `/${cld}/edit?${query}`;
+    }
   });
-  L.control.zoom({ position: "bottomright" }).addTo(map);
   const vectorRenderer = L.svg({ padding: 0.5 });
 
   const mapContainer = map.getContainer();
@@ -150,20 +144,6 @@
   }
   map.on("zoomend", syncZoomUiMode);
   syncZoomUiMode();
-
-  const baseMap = setupBaseMap(map, baseMapBtn);
-  setupTileCacheStatus(tileCacheStatus, [baseMap.satelliteLayer, baseMap.schematicLayer]);
-  const userLocationTracker = createUserLocationTracker(map);
-
-  if (locateBtn) {
-    locateBtn.textContent = "🧍";
-    locateBtn.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      await userLocationTracker.focus();
-    });
-  }
-
 
   await loadCurrentUser();
   if (editRouteLink) {

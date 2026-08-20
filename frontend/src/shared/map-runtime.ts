@@ -4,11 +4,13 @@ type TileLayer = { addTo(map: MapLike): TileLayer; on(event: string, listener: (
 type Marker = { setLatLng(latlng: Coordinates): void; addTo(map: MapLike): Marker };
 type Circle = { setLatLng(latlng: Coordinates): void; setRadius(radius: number): void; addTo(map: MapLike): Circle };
 type MapLike = {
-  getCenter(): Coordinates; getZoom(): number; setView(latlng: [number, number], zoom: number): void; setZoom(zoom: number): void;
+  getCenter(): Coordinates; getZoom(): number; setView(latlng: [number, number], zoom: number): MapLike; setZoom(zoom: number): void;
   on(events: string, listener: () => void): void; removeLayer(layer: TileLayer): void; addLayer(layer: TileLayer): void;
   flyTo(latlng: Coordinates, zoom: number, options: { duration: number }): void;
 };
 type LeafletApi = {
+  map(container: string, options: Record<string, unknown>): MapLike;
+  control: { zoom(options: Record<string, unknown>): { addTo(map: MapLike): unknown } };
   tileLayer(url: string, options: Record<string, unknown>): TileLayer;
   marker(latlng: Coordinates, options: Record<string, unknown>): Marker;
   circle(latlng: Coordinates, options: Record<string, unknown>): Circle;
@@ -24,6 +26,14 @@ type Capacitor = { isNativePlatform?: () => boolean; Plugins?: { Geolocation?: N
 const leaflet = (window as unknown as { L: LeafletApi }).L;
 
 export type MapUrlState = { zoom: number | null; lat: number | null; lng: number | null; hasCenter: boolean };
+export type CommonMapShellOptions = {
+  mapOptions?: Record<string, unknown>;
+  baseMapButton?: HTMLElement | null;
+  tileCacheStatus?: HTMLElement | null;
+  locateButton?: HTMLElement | null;
+  userLocationMarkerOptions?: Record<string, unknown>;
+  onQueryChange?: (query: string) => void;
+};
 
 export function readMapUrlState(): MapUrlState {
   const params = new URLSearchParams(window.location.search);
@@ -108,6 +118,32 @@ export function setupTileCacheStatus(statusElement: HTMLElement | null | undefin
   layers.forEach((layer) => layer.on("load", scheduleRefresh));
   void refresh();
   window.setInterval(() => void refresh(), 120000);
+}
+
+export function createCommonMapShell(options: CommonMapShellOptions = {}) {
+  const map = leaflet.map("map", {
+    preferCanvas: false,
+    zoomControl: false,
+    tap: true,
+    markerZoomAnimation: true,
+    zoomAnimation: true,
+    fadeAnimation: true,
+    ...options.mapOptions
+  }).setView([56, -96], 4);
+  const mapUrlState = bindMapUrlState(map, readMapUrlState(), options.onQueryChange);
+  leaflet.control.zoom({ position: "bottomright" }).addTo(map);
+  const baseMap = setupBaseMap(map, options.baseMapButton);
+  setupTileCacheStatus(options.tileCacheStatus, [baseMap.satelliteLayer, baseMap.schematicLayer]);
+  const userLocationTracker = createUserLocationTracker(map, options.userLocationMarkerOptions);
+  if (options.locateButton) {
+    options.locateButton.textContent = "🧍";
+    options.locateButton.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await userLocationTracker.focus();
+    });
+  }
+  return { map, mapUrlState, baseMap, userLocationTracker };
 }
 
 export function createUserLocationTracker(map: MapLike, markerOptions: Record<string, unknown> = {}) {
