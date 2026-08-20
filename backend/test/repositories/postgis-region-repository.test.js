@@ -6,8 +6,20 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
   const calls = [];
   const transactionCalls = [];
   let released = false;
+  let revision = 1;
   const client = {
-    query: async (query, values) => transactionCalls.push({ query, values }),
+    query: async (query, values) => {
+      transactionCalls.push({ query, values });
+      if (query.includes("UPDATE cld_regions") && query.includes("RETURNING revision")) {
+        if (values[1] !== null && values[1] !== revision) return { rows: [] };
+        revision += 1;
+        return { rows: [{ revision }] };
+      }
+      if (query.includes("SELECT revision")) return { rows: [{ revision }] };
+      if (query.includes("RETURNING id")) return { rows: [{ id: 7 }] };
+      if (query.includes("UPDATE region_features") || query.includes("DELETE FROM region_features")) return { rows: [], rowCount: 1 };
+      return { rows: [] };
+    },
     release: () => { released = true; }
   };
   const pool = { query: async (query, values) => {
@@ -29,20 +41,28 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
   assert.equal(found.type, "dwellings");
   assert.equal(found.feature.properties.dwellingNo, "0012");
   assert.deepEqual(calls[3].values, ["1234", 8]);
-  assert.equal(await repository.createFeature("1234", "dwellings", { properties: { CUID: "12340001", DWELLING_NO: "12" }, geometry: { type: "Point", coordinates: [-97, 56] } }), 7);
-  assert.deepEqual(calls[4].values, ["1234", "dwellings", JSON.stringify({ CUID: "12340001", DWELLING_NO: "12", cu: "12340001", dwellingNo: "0012" }), JSON.stringify({ type: "Point", coordinates: [-97, 56] })]);
-  await repository.updateFeature("1234", 7, { properties: { CUID: "12340001", DWELLING_NO: "13" }, geometry: { type: "Point", coordinates: [-97, 56] } });
-  assert.deepEqual(calls[5].values, [7, "1234", JSON.stringify({ CUID: "12340001", DWELLING_NO: "13", cu: "12340001", dwellingNo: "0013" }), JSON.stringify({ type: "Point", coordinates: [-97, 56] })]);
-  assert.match(calls[5].query, /UPDATE region_features/);
-  await repository.deleteFeature("1234", 7);
-  assert.deepEqual(calls[6].values, [7, "1234"]);
-  assert.match(calls[6].query, /DELETE FROM region_features/);
+  assert.equal(await repository.createFeature("1234", "dwellings", { properties: { CUID: "12340001", DWELLING_NO: "12" }, geometry: { type: "Point", coordinates: [-97, 56] } }, 1), 7);
+  const created = transactionCalls.find((call) => call.query.includes("RETURNING id"));
+  assert.deepEqual(created.values, ["1234", "dwellings", JSON.stringify({ CUID: "12340001", DWELLING_NO: "12", cu: "12340001", dwellingNo: "0012" }), JSON.stringify({ type: "Point", coordinates: [-97, 56] })]);
+  await assert.rejects(
+    () => repository.updateFeature("1234", 7, { properties: { CUID: "12340001", DWELLING_NO: "13" }, geometry: { type: "Point", coordinates: [-97, 56] } }, 1),
+    { name: "RegionRevisionConflictError", actualRevision: 2 }
+  );
+  assert.equal(await repository.updateFeature("1234", 7, { properties: { CUID: "12340001", DWELLING_NO: "13" }, geometry: { type: "Point", coordinates: [-97, 56] } }, 2), true);
+  const updated = transactionCalls.find((call) => call.query.includes("UPDATE region_features"));
+  assert.deepEqual(updated.values, [7, "1234", JSON.stringify({ CUID: "12340001", DWELLING_NO: "13", cu: "12340001", dwellingNo: "0013" }), JSON.stringify({ type: "Point", coordinates: [-97, 56] })]);
+  assert.equal(await repository.deleteFeature("1234", 7, 3), true);
+  const deleted = transactionCalls.find((call) => call.query.includes("DELETE FROM region_features") && call.values?.[1] !== "cu");
+  assert.deepEqual(deleted.values, [7, "1234"]);
+  assert.equal(revision, 4);
+  const bulkStart = transactionCalls.length;
   await repository.writeFeatures("1234", "cu", [{ id: 8, properties: { CUID: "12340002" }, geometry: { type: "Polygon", coordinates: [] } }]);
-  assert.equal(transactionCalls[0].query, "BEGIN");
-  assert.deepEqual(transactionCalls[1].values, ["1234", "cu"]);
-  assert.deepEqual(transactionCalls[2].values.slice(0, 3), [8, "1234", "cu"]);
-  assert.deepEqual(transactionCalls[3].values, ["1234", ["12340002"]]);
-  assert.equal(transactionCalls[4].query, "COMMIT");
+  const bulkCalls = transactionCalls.slice(bulkStart);
+  assert.equal(bulkCalls[0].query, "BEGIN");
+  assert.deepEqual(bulkCalls[1].values, ["1234", "cu"]);
+  assert.deepEqual(bulkCalls[2].values.slice(0, 3), [8, "1234", "cu"]);
+  assert.deepEqual(bulkCalls[3].values, ["1234", ["12340002"]]);
+  assert.equal(bulkCalls[4].query, "COMMIT");
   assert.equal(released, true);
   const bundle = await repository.readBundle("1234");
   assert.equal(bundle.index.cld, "1234");
