@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { createApp, registerPublicAssets } from "./app.js";
+import { registerSystemRoutes } from "./routes/system-routes.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
@@ -1153,17 +1154,12 @@ function extractProxyTargetUrl(req) {
   }
 }
 
-app.get("/health", async (_req, res) => {
-  try {
-    if (useFileStore) {
-      await ensureFileStore();
-      return res.json({ ok: true, mode: "file" });
-    }
-    await pool.query("SELECT 1;");
-    return res.json({ ok: true, mode: "postgis" });
-  } catch (error) {
-    return res.status(500).json({ ok: false, error: error.message });
-  }
+registerSystemRoutes(app, {
+  buildLookupRecords,
+  ensureFileStore,
+  pool,
+  resolveClDFromLookup,
+  useFileStore
 });
 
 app.post("/api/login", async (req, res) => {
@@ -1370,23 +1366,6 @@ app.get("/api/config", requireAuth, (req, res) => {
       canEdit: isAdminUser(req.user) || req.user.role === "crew_leader"
     }
   });
-});
-
-app.get("/api/lookup", async (req, res) => {
-  const queryValue = String(req.query.q || "").trim();
-  if (!queryValue) {
-    return res.status(400).json({ error: "Lookup query is required" });
-  }
-  const result = await resolveClDFromLookup(queryValue);
-  if (!result) {
-    return res.status(404).json({ error: "CLD not found" });
-  }
-  return res.json(result);
-});
-
-app.get("/api/regions", async (_req, res) => {
-  const records = await buildLookupRecords();
-  res.json({ regions: records });
 });
 
 app.get("/api/cld/:cld", requireAuth, requireClDAccess, async (req, res) => {
