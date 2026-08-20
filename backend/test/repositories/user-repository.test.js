@@ -1,0 +1,16 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createUserRepository } from "../../src/repositories/user-repository.js";
+
+test("user repository loads users by id and username", async () => {
+  const calls = [];
+  const repository = createUserRepository({ query: async (sql, values) => {
+    calls.push({ sql, values });
+    return { rows: values[0] === "missing" ? [] : [{ id: 7, username: "editor" }] };
+  } });
+  assert.deepEqual(await repository.findById(7), { id: 7, username: "editor" });
+  assert.equal(await repository.findById("bad"), null);
+  assert.deepEqual(await repository.findByUsername("editor"), { id: 7, username: "editor" });
+  assert.equal(await repository.findByUsername("missing"), null);
+  assert.equal(calls.length, 3);
+});

@@ -39,6 +39,7 @@ implementation.
   - [ ] Move data access and business rules into repositories and services.
     - [x] Move region summary, feature-type classification, and dwelling uniqueness rules into `services/region-service.js`.
     - [x] Move region feature mutation validation and storage orchestration into `services/region-service.js`.
+    - [x] Move user identity lookups used by authentication into `repositories/user-repository.js`.
     - [ ] Extract persistence adapters into repositories.
 
 - [ ] R112 Consolidate region persistence.

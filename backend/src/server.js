@@ -18,6 +18,7 @@ import { registerLegacyFeatureRoutes } from "./routes/legacy-feature-routes.js";
 import { createRegionRepository, createRegionStorageAdapter } from "./repositories/region-repository.js";
 import { createPostgisRegionRepository } from "./repositories/postgis-region-repository.js";
 import { createFileRegionRepository } from "./repositories/file-region-repository.js";
+import { createUserRepository } from "./repositories/user-repository.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
@@ -62,6 +63,7 @@ const pool = useFileStore
     });
 const postgisRegionRepository = useFileStore ? null : createPostgisRegionRepository(pool);
 const fileRegionRepository = useFileStore ? createFileRegionRepository(cldRootDir) : null;
+const userRepository = useFileStore ? null : createUserRepository(pool);
 const regionStorage = createRegionStorageAdapter({
   fileRepository: fileRegionRepository,
   postgisRepository: postgisRegionRepository,
@@ -109,17 +111,8 @@ function isAdminUser(user) {
 
 async function loadUserById(userId) {
   if (!Number.isFinite(Number(userId))) return null;
-  const { rows } = await pool.query(
-    `
-      SELECT id, username, password_hash, is_admin, role, created_at
-      FROM users
-      WHERE id = $1
-      LIMIT 1;
-    `,
-    [Number(userId)]
-  );
-  if (rows.length === 0) return null;
-  const row = rows[0];
+  const row = await userRepository.findById(userId);
+  if (!row) return null;
   const allowedClds = await getDirectAllowedClds(row.id);
   const crewLeaderIds = await getCrewLeaderIdsForUser(row.id);
   return {
@@ -667,9 +660,9 @@ registerAuthRoutes(app, {
   jwt,
   jwtSecret,
   loadUserById,
+  findUserByUsername: (username) => userRepository.findByUsername(username),
   mapConfig,
   normalizeUserRole,
-  pool,
   requireAuth,
   secureCookies: process.env.NODE_ENV === "production"
 });
