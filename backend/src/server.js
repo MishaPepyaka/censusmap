@@ -13,6 +13,7 @@ import cookieParser from "cookie-parser";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
+  assertValidRegionFeature,
   classifyFeature,
   extractClDFromProperties,
   extractCuCode,
@@ -856,10 +857,7 @@ async function findRegionFeatureById(cld, id) {
 }
 
 async function createRegionFeature(cld, feature) {
-  const normalized = normalizeRegionFeature(feature);
-  if (!normalized.geometry) {
-    throw new Error("Feature geometry is required");
-  }
+  const normalized = assertValidRegionFeature(feature, cld);
 
   if (!(await regionExists(cld))) {
     throw new Error(`Unknown CLD ${cld}`);
@@ -904,8 +902,7 @@ async function createRegionFeature(cld, feature) {
 
 async function updateRegionFeature(cld, id, feature) {
   if (!Number.isFinite(Number(id))) throw new Error("Invalid feature id");
-  const normalized = normalizeRegionFeature(feature);
-  if (!normalized.geometry) throw new Error("Feature geometry is required");
+  const normalized = assertValidRegionFeature(feature, cld);
 
   const existing = await findRegionFeatureById(cld, id);
   if (!existing.type) return false;

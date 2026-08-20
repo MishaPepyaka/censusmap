@@ -113,6 +113,44 @@ export function getDwellingIdentity(properties) {
   return { cuCode: normalized.cu, dwellingNo: normalized.dwellingNo };
 }
 
+function hasValidPosition(value) {
+  if (!Array.isArray(value) || value.length < 2) return false;
+  const [longitude, latitude] = value;
+  return Number.isFinite(longitude) && Number.isFinite(latitude)
+    && longitude >= -180 && longitude <= 180
+    && latitude >= -90 && latitude <= 90;
+}
+
+function hasValidPolygonCoordinates(coordinates) {
+  return Array.isArray(coordinates) && coordinates.length > 0
+    && coordinates.every((ring) => Array.isArray(ring) && ring.length >= 4 && ring.every(hasValidPosition));
+}
+
+function hasValidGeometry(geometry) {
+  if (geometry?.type === "Point") return hasValidPosition(geometry.coordinates);
+  if (geometry?.type === "Polygon") return hasValidPolygonCoordinates(geometry.coordinates);
+  if (geometry?.type === "MultiPolygon") {
+    return Array.isArray(geometry.coordinates) && geometry.coordinates.length > 0
+      && geometry.coordinates.every(hasValidPolygonCoordinates);
+  }
+  return false;
+}
+
+export function assertValidRegionFeature(feature, cld = "") {
+  const normalized = normalizeRegionFeature(feature);
+  const type = classifyFeature(normalized);
+  if (!normalized.geometry) throw new Error("Feature geometry is required");
+  if (!type) throw new Error("Unsupported feature type or geometry");
+  if (!hasValidGeometry(normalized.geometry)) throw new Error("Feature geometry contains invalid coordinates");
+
+  const featureClD = extractClDFromProperties(normalized.properties);
+  const targetClD = normalizeClD(cld);
+  if (featureClD && targetClD && featureClD !== targetClD) {
+    throw new Error(`Feature CLD ${featureClD} does not match target CLD ${targetClD}`);
+  }
+  return normalized;
+}
+
 export function normalizeRegionFeature(feature) {
   const normalized = feature && typeof feature === "object" ? { ...feature } : {};
   normalized.type = "Feature";

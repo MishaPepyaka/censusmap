@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   classifyFeature,
+  assertValidRegionFeature,
   extractClDFromProperties,
   getDwellingIdentity,
   normalizeClD,
@@ -53,6 +54,20 @@ test("classifies canonical and legacy region features", () => {
   assert.equal(classifyFeature({ geometry: { type: "Polygon" }, properties: { _group: "cu" } }), "cu");
   assert.equal(classifyFeature({ geometry: { type: "Polygon" }, properties: { CB_COLCODE: "01" } }), "blocks");
   assert.equal(classifyFeature({ geometry: { type: "LineString" }, properties: {} }), "");
+});
+
+test("validates supported GeoJSON coordinates and CLD ownership", () => {
+  const feature = {
+    type: "Feature",
+    properties: { CLD: "1234", CUID: "12340001", _group: "cu" },
+    geometry: { type: "Polygon", coordinates: [[[-97, 56], [-96, 56], [-96, 57], [-97, 56]]] }
+  };
+  assert.equal(assertValidRegionFeature(feature, "1234").properties.cu, "12340001");
+  assert.throws(() => assertValidRegionFeature(feature, "9999"), /does not match target CLD/);
+  assert.throws(() => assertValidRegionFeature({
+    ...feature,
+    geometry: { type: "Point", coordinates: [200, 56] }
+  }, "1234"), /invalid coordinates/);
 });
 
 test("normalises Feature and FeatureCollection payloads", () => {
