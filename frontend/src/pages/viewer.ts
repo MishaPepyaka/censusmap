@@ -22,7 +22,7 @@
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { describeOfflineSnapshotMetadata, describeOfflineSnapshotState, loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
   const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
-  const { createCommonMapShell, getBlockFillOpacity, getFeatureLayerCenter, toFeatureCollection } = window.CensusMapRuntime;
+  const { bindZoomUiMode, createCommonMapShell, getBlockFillOpacity, getFeatureLayerCenter, toFeatureCollection } = window.CensusMapRuntime;
   const { createDwellingSearchIndex } = window.CensusMapDwellingSearch;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
@@ -122,14 +122,7 @@
   });
   const vectorRenderer = L.svg({ padding: 0.5 });
 
-  const mapContainer = map.getContainer();
-  function syncZoomUiMode() {
-    const cuOnly = map.getZoom() <= 10;
-    mapContainer.classList.toggle("zoom-cu-only", cuOnly);
-    if (badgesReady) rebuildBadges();
-  }
-  map.on("zoomend", syncZoomUiMode);
-  syncZoomUiMode();
+  const syncZoomUiMode = bindZoomUiMode(map, () => { if (badgesReady) rebuildBadges(); });
 
   await loadCurrentUser();
   if (editRouteLink) {

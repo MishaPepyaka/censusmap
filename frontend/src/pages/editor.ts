@@ -22,7 +22,7 @@
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { describeOfflineSnapshotMetadata, describeOfflineSnapshotState, loadRegionSnapshot, partitionRegionFeatures } = window.CensusMapRegion;
   const { buildMapActionButtons } = window.CensusMapActions;
-  const { createCommonMapShell, getBlockFillOpacity, getFeatureLayerCenter } = window.CensusMapRuntime;
+  const { bindZoomUiMode, createCommonMapShell, getBlockFillOpacity, getFeatureLayerCenter } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
@@ -236,14 +236,7 @@
   userLocationPane.style.zIndex = "650";
   userLocationPane.style.pointerEvents = "none";
   const vectorRenderer = L.svg({ padding: 0.5 });
-  const mapContainer = map.getContainer();
-  function syncZoomUiMode() {
-    const cuOnly = map.getZoom() <= 10;
-    mapContainer.classList.toggle("zoom-cu-only", cuOnly);
-    if (badgesReady) rebuildBadges();
-  }
-  map.on("zoomend", syncZoomUiMode);
-  syncZoomUiMode();
+  const syncZoomUiMode = bindZoomUiMode(map, () => { if (badgesReady) rebuildBadges(); });
   await window.CldOfflineStore?.hydratePendingMutations(cld);
   const data = await getMapData();
   const blocks = data.blocks;

@@ -105,6 +105,7 @@ implementation.
 - [ ] R122 Create a common map shell.
   - [x] Share map initialisation, URL state, base maps, tile status, and geolocation between viewer and editor.
   - [x] Share GeoJSON collection construction, feature-layer centering, and zoom-based block opacity rules.
+  - [x] Share zoom-driven CU-only rendering mode between viewer and editor.
   - [x] Share dwelling search indexing between viewer and StatCan.
   - [ ] Share feature rendering and dwelling search indexing.
   - Keep viewer and editor as mode-specific controllers over the same shell.

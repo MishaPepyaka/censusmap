@@ -176,6 +176,17 @@ export function getBlockFillOpacity(zoom: number, selected: boolean, options: Bl
   return (selected ? selectedValues : unselectedValues)[index];
 }
 
+export function bindZoomUiMode(map: MapLike & { getContainer: () => HTMLElement }, onChange?: (cuOnly: boolean) => void) {
+  function sync(): void {
+    const cuOnly = map.getZoom() <= 10;
+    map.getContainer().classList.toggle("zoom-cu-only", cuOnly);
+    onChange?.(cuOnly);
+  }
+  map.on("zoomend", sync);
+  sync();
+  return sync;
+}
+
 export function createUserLocationTracker(map: MapLike, markerOptions: Record<string, unknown> = {}) {
   let marker: Marker | null = null;
   let accuracyCircle: Circle | null = null;
