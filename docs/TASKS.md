@@ -78,6 +78,7 @@ implementation.
   - Keep generated static assets as the only runtime files under `backend/public/`.
   - [ ] Convert shared domain, API, map, and offline modules before converting page-specific UI.
     - [x] Convert the shared API client while preserving `window.CensusMapApi` for existing pages.
+    - [x] Convert shared map-data helpers while preserving `window.CensusMapData` for existing pages.
 
 - [ ] R121 Create one region data client.
   - Centralise CLD loading, canonical feature parsing, caching, and error handling.

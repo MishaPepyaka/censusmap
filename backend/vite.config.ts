@@ -1,16 +1,22 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const entryName = mode === "map-data-helpers" ? "map-data-helpers" : "api-client";
+  const entry = entryName === "map-data-helpers"
+    ? resolve(import.meta.dirname, "../frontend/src/entries/map-data-helpers.ts")
+    : resolve(import.meta.dirname, "../frontend/src/entries/api-client.ts");
+  return {
   publicDir: false,
   build: {
     emptyOutDir: false,
     lib: {
-      entry: resolve(import.meta.dirname, "../frontend/src/entries/api-client.ts"),
+      entry,
       formats: ["iife"],
       name: "CensusMapApiBundle",
-      fileName: () => "api-client.js"
+      fileName: () => `${entryName}.js`
     },
     outDir: "public"
   }
+  };
 });
