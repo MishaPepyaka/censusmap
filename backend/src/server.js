@@ -1,12 +1,38 @@
-import express from "express";
-import helmet from "helmet";
-import morgan from "morgan";
 import { Pool } from "pg";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { createApp, registerErrorHandler, registerPublicAssets } from "./app.js";
+import { registerSystemRoutes } from "./routes/system-routes.js";
+import { registerRegionRoutes } from "./routes/region-routes.js";
+import { registerTileRoutes } from "./routes/tile-routes.js";
+import { registerAuthRoutes } from "./routes/auth-routes.js";
+import { registerUserRoutes } from "./routes/user-routes.js";
+import { assertDwellingNoUnique, classifyRegionFeature, createRegionMutationService, summarizeRegion } from "./services/region-service.js";
+import { registerPageRoutes } from "./routes/page-routes.js";
+import { registerLegacyFeatureRoutes } from "./routes/legacy-feature-routes.js";
+import { createRegionRepository, createRegionStorageAdapter } from "./repositories/region-repository.js";
+import { createPostgisRegionRepository } from "./repositories/postgis-region-repository.js";
+import { createFileRegionRepository } from "./repositories/file-region-repository.js";
+import { createUserRepository } from "./repositories/user-repository.js";
+import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
+import {
+  buildFeatureCollection,
+  extractClDFromProperties,
+  extractCuCode,
+  featureFileNames,
+  hasText,
+  normalizeClD,
+  normalizeDwellingNo,
+  normalizeFeatures,
+  normalizeRegionFeature,
+  normalizeSsid,
+  uniqueSorted
+} from "./domain/region-feature.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -14,15 +40,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..", "..");
 const publicDir = path.join(__dirname, "..", "public");
-const dataDir = path.join(repoRoot, "data");
+const dataDir = path.resolve(process.env.DATA_DIR || path.join(repoRoot, "data"));
 const cldRootDir = path.join(dataDir, "cld");
 
-const app = express();
+export const app = createApp({
+  cldRootDir,
+  nodeModulesDir: path.join(__dirname, "..", "node_modules")
+});
 const port = Number(process.env.PORT || 8080);
 const useFileStore = String(process.env.USE_FILE_STORE || "false").toLowerCase() === "true";
 const fileStorePath = process.env.FILE_STORE_PATH || path.join(dataDir, "file-store.json");
-const editUsername = String(process.env.EDIT_USERNAME || "admin").trim();
-const editPassword = String(process.env.EDIT_PASSWORD || "").trim();
+const jwtSecret = process.env.JWT_SECRET || "census-map-secret-key-2026";
 
 const pool = useFileStore
   ? null
@@ -33,6 +61,15 @@ const pool = useFileStore
       user: process.env.POSTGRES_USER || "maps",
       password: process.env.POSTGRES_PASSWORD || "maps"
     });
+const postgisRegionRepository = useFileStore ? null : createPostgisRegionRepository(pool);
+const fileRegionRepository = useFileStore ? createFileRegionRepository(cldRootDir) : null;
+const userRepository = useFileStore ? null : createUserRepository(pool);
+const regionStorage = createRegionStorageAdapter({
+  fileRepository: fileRegionRepository,
+  postgisRepository: postgisRegionRepository,
+  ensurePostgisMediaDirs,
+  useFileStore
+});
 
 const mapConfig = {
   baseTileUrl: process.env.BASE_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -59,188 +96,231 @@ const mapConfig = {
   }
 };
 
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(morgan("combined"));
-app.use(express.json({ limit: "25mb" }));
-app.use("/vendor/leaflet", express.static(path.join(__dirname, "..", "node_modules", "leaflet", "dist")));
-app.use("/vendor/leaflet-draw", express.static(path.join(__dirname, "..", "node_modules", "leaflet-draw", "dist")));
-app.use("/vendor/esri-leaflet", express.static(path.join(__dirname, "..", "node_modules", "esri-leaflet", "dist")));
-app.use("/media/cld", express.static(cldRootDir));
+const AUTH_COOKIE = "census_session";
+const USER_ROLES = new Set(["admin", "crew_leader", "enumerator"]);
 
-function hasText(value) {
-  return value !== undefined && value !== null && String(value).trim().length > 0;
+function normalizeUserRole(value) {
+  const role = String(value || "").trim().toLowerCase();
+  if (USER_ROLES.has(role)) return role;
+  return "enumerator";
 }
 
-function normalizeClD(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-  return digits || "";
+function isAdminUser(user) {
+  return Boolean(user?.isAdmin || user?.role === "admin");
 }
 
-function normalizeSsid(value) {
-  return String(value || "").trim().toUpperCase();
+async function loadUserById(userId) {
+  if (!Number.isFinite(Number(userId))) return null;
+  const row = await userRepository.findById(userId);
+  if (!row) return null;
+  const allowedClds = await getDirectAllowedClds(row.id);
+  const crewLeaderIds = await getCrewLeaderIdsForUser(row.id);
+  return {
+    id: row.id,
+    username: row.username,
+    isAdmin: Boolean(row.is_admin || row.role === "admin"),
+    role: normalizeUserRole(row.role || (row.is_admin ? "admin" : "enumerator")),
+    createdAt: row.created_at,
+    allowedClds,
+    crewLeaderIds
+  };
 }
 
-function normalizeDwellingNo(value) {
-  if (!hasText(value)) return null;
-  const digits = String(value).replace(/\D/g, "");
-  if (!digits) return null;
-  return digits.padStart(4, "0").slice(-4);
-}
-
-function readBasicAuthCredentials(headerValue) {
-  if (!hasText(headerValue) || !String(headerValue).startsWith("Basic ")) return "";
+function getSessionUser(req) {
+  const token = req.cookies?.[AUTH_COOKIE];
+  if (!token) return null;
   try {
-    const decoded = Buffer.from(String(headerValue).slice(6), "base64").toString("utf8");
-    const separatorIndex = decoded.indexOf(":");
-    if (separatorIndex === -1) {
-      return { username: decoded, password: "" };
+    const user = jwt.verify(token, jwtSecret);
+    return user;
+  } catch (err) {
+    console.error("JWT verification failed:", err.message);
+    return null;
+  }
+}
+
+async function getUser(req) {
+  const session = getSessionUser(req);
+  if (!session?.id) return null;
+  const user = await loadUserById(session.id);
+  if (!user) return null;
+  return user;
+}
+
+async function requireAuth(req, res, next) {
+  const user = await getUser(req);
+  if (!user) {
+    console.log(`Auth required for ${req.path}`);
+    if (req.xhr || req.headers.accept?.includes("application/json") || req.path.startsWith("/api/")) {
+      return res.status(401).json({ error: "Authentication required" });
     }
-    return {
-      username: decoded.slice(0, separatorIndex),
-      password: decoded.slice(separatorIndex + 1)
-    };
-  } catch {
-    return { username: "", password: "" };
+    return res.redirect("/login");
   }
+  req.user = user;
+  next();
 }
 
-function requireEditAuth(req, res, next) {
-  if (!editPassword) return next();
-  const provided = readBasicAuthCredentials(req.headers.authorization);
-  if (provided.username === editUsername && provided.password === editPassword) return next();
-  res.setHeader("WWW-Authenticate", 'Basic realm="CLD Editor"');
-  return res.status(401).json({ error: "Editor authentication required" });
-}
-
-function buildFeatureCollection(features) {
-  return {
-    type: "FeatureCollection",
-    features: Array.isArray(features) ? features : []
-  };
-}
-
-function normalizeFeatures(payload) {
-  if (!payload) return [];
-  if (payload.type === "FeatureCollection" && Array.isArray(payload.features)) {
-    return payload.features;
+async function requireAdmin(req, res, next) {
+  const user = await getUser(req);
+  if (!user || !isAdminUser(user)) {
+    console.log(`Admin access denied for ${user?.username || "anonymous"} at ${req.path}`);
+    if (req.xhr || req.headers.accept?.includes("application/json") || req.path.startsWith("/api/")) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    return res.redirect("/");
   }
-  if (payload.type === "Feature") {
-    return [payload];
+  req.user = user;
+  next();
+}
+
+async function requireUserManagementAccess(req, res, next) {
+  const user = await getUser(req);
+  if (!user || !(isAdminUser(user) || user.role === "crew_leader")) {
+    return res.status(403).json({ error: "User management access required" });
   }
-  if (Array.isArray(payload)) {
-    return payload.filter((item) => item?.type === "Feature");
+  req.user = user;
+  next();
+}
+
+async function getDirectAllowedClds(userId) {
+  return userRepository.listDirectAllowedClds(userId);
+}
+
+async function getCrewLeaderIdsForUser(userId) {
+  return userRepository.listCrewLeaderIds(userId);
+}
+
+async function getCrewLeaderUsersForUser(userId) {
+  return userRepository.listCrewLeaderUsers(userId);
+}
+
+async function resolveUserIdsFromRefs(values) {
+  const refs = Array.isArray(values)
+    ? values
+    : String(values || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+  const ids = new Set();
+  for (const ref of refs) {
+    const maybeId = Number(ref);
+    if (Number.isFinite(maybeId)) {
+      ids.add(maybeId);
+      continue;
+    }
+    const user = await userRepository.findByUsername(ref);
+    if (user) ids.add(user.id);
   }
-  return [];
+  return [...ids];
 }
 
-function extractCuCode(properties) {
-  if (!properties || typeof properties !== "object") return "";
-  if (hasText(properties.CUID)) return String(properties.CUID).trim();
-  if (hasText(properties.cu)) return String(properties.cu).trim();
-  if (hasText(properties.name)) return String(properties.name).split("/")[0].trim();
-  if (hasText(properties.label)) return String(properties.label).split("/")[0].trim();
-  return "";
+async function getManagedUsersForCrewLeader(userId) {
+  return userRepository.listManagedUserIds(userId);
 }
 
-function extractClDFromProperties(properties) {
-  if (!properties || typeof properties !== "object") return "";
-  const raw = properties.CLD ?? properties.cld ?? properties.CFOP_CLD_ID ?? properties.cfopCldId;
-  return normalizeClD(raw);
-}
-
-function isPolygonGeometry(geometry) {
-  return geometry?.type === "Polygon" || geometry?.type === "MultiPolygon";
-}
-
-function isPointGeometry(geometry) {
-  return geometry?.type === "Point";
-}
-
-function isCuFeature(properties, geometry = null) {
-  if (!properties || typeof properties !== "object") return false;
-  if (!isPolygonGeometry(geometry)) return false;
-  const group = String(properties._group || "").trim().toLowerCase();
-  if (group === "cu" || group === "cus") return true;
-  return hasText(properties.CU_TYPE) && !hasText(properties.COLB_UID) && !hasText(properties.CB_COLCODE);
-}
-
-function isBlockFeature(properties, geometry = null) {
-  if (!properties || typeof properties !== "object") return false;
-  if (!isPolygonGeometry(geometry)) return false;
-  const group = String(properties._group || "").trim().toLowerCase();
-  if (group === "blocks" || group === "block") return true;
-  return hasText(properties.COLB_UID) || hasText(properties.CB_COLCODE);
-}
-
-function isDwellingFeature(properties, geometry = null) {
-  if (!properties || typeof properties !== "object") return false;
-  if (!isPointGeometry(geometry)) return false;
-  const group = String(properties._group || "").trim().toLowerCase();
-  if (group === "dwellings" || group === "dwelling") return true;
-  const rawDwellingNo = properties.dwellingNo ?? properties.DWELLING_NO ?? properties.vrNumber ?? properties.VR_NUMBER;
-  return hasText(rawDwellingNo);
-}
-
-function classifyFeature(feature) {
-  const properties = feature?.properties || {};
-  const geometry = feature?.geometry || {};
-  if (isDwellingFeature(properties, geometry)) return "dwellings";
-  if (isBlockFeature(properties, geometry)) return "blocks";
-  if (isCuFeature(properties, geometry)) return "cu";
-  return "other";
-}
-
-function normalizeRegionFeature(feature) {
-  const properties = feature?.properties && typeof feature.properties === "object"
-    ? { ...feature.properties }
-    : {};
-  return {
-    type: "Feature",
-    ...(feature?.id !== undefined ? { id: feature.id } : {}),
-    properties,
-    geometry: feature?.geometry || null
-  };
-}
-
-function featureFileNames() {
-  return {
-    cu: "cu.geojson",
-    blocks: "blocks.geojson",
-    dwellings: "dwellings.geojson"
-  };
-}
-
-async function exists(targetPath) {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch {
-    return false;
+async function getManagedUserIds(user) {
+  if (!user) return [];
+  if (isAdminUser(user)) {
+    return userRepository.listAllUserIds();
   }
-}
-
-async function ensureDir(targetPath) {
-  await fs.mkdir(targetPath, { recursive: true });
-}
-
-async function readJsonFile(filePath, fallback = null) {
-  try {
-    const raw = await fs.readFile(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
+  if (user.role === "crew_leader") {
+    return userRepository.listManagedUserIdsIncludingSelf(user.id);
   }
+  return [Number(user.id)];
 }
 
-async function writeJsonFile(filePath, value) {
-  await ensureDir(path.dirname(filePath));
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
+async function hasClDAccess(user, cld) {
+  if (!user) return false;
+  if (isAdminUser(user)) return true;
+  return userRepository.hasClDAccess(user.id, cld);
+}
+
+async function requireClDAccess(req, res, next) {
+  const cld = normalizeClD(req.params.cld || req.query.cld || "");
+  if (!cld) return next();
+  const allowed = await hasClDAccess(req.user, cld);
+  if (!allowed) {
+    return res.status(403).json({ error: `Access to CLD ${cld} denied` });
+  }
+  next();
 }
 
 async function initDb() {
   const client = await pool.connect();
   try {
     await client.query("CREATE EXTENSION IF NOT EXISTS postgis;");
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+        role TEXT NOT NULL DEFAULT 'enumerator',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'enumerator';
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_clds (
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        cld TEXT NOT NULL,
+        PRIMARY KEY (user_id, cld)
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_crew_leaders (
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        crew_leader_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, crew_leader_id)
+      );
+    `);
+    await client.query("CREATE INDEX IF NOT EXISTS idx_user_crew_leaders_crew_leader_id ON user_crew_leaders (crew_leader_id);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_user_crew_leaders_user_id ON user_crew_leaders (user_id);");
+    await client.query("UPDATE users SET role = 'admin' WHERE is_admin = TRUE;");
+    await client.query("UPDATE users SET role = 'enumerator' WHERE is_admin = FALSE AND (role IS NULL OR role = '');");
+    await client.query("UPDATE users SET role = CASE WHEN is_admin THEN 'admin' ELSE role END;");
+    
+    // Create admin user if it doesn't exist
+    const { rows } = await client.query("SELECT 1 FROM users WHERE username = 'misha' LIMIT 1;");
+    if (rows.length === 0) {
+      const hash = await bcrypt.hash("pepka", 10);
+      await client.query(
+        "INSERT INTO users (username, password_hash, is_admin, role) VALUES ('misha', $1, TRUE, 'admin');",
+        [hash]
+      );
+      console.log("Admin user 'misha' created.");
+    }
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cld_regions (
+        cld TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        ssids TEXT[] NOT NULL DEFAULT '{}',
+        cu_codes TEXT[] NOT NULL DEFAULT '{}',
+        revision BIGINT NOT NULL DEFAULT 1,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query("ALTER TABLE cld_regions ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 1;");
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS region_features (
+        id BIGSERIAL PRIMARY KEY,
+        cld TEXT NOT NULL REFERENCES cld_regions(cld) ON DELETE CASCADE,
+        feature_type TEXT NOT NULL CHECK (feature_type IN ('cu', 'blocks', 'dwellings')),
+        properties JSONB NOT NULL DEFAULT '{}'::jsonb,
+        geom geometry(Geometry, 4326) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query("CREATE INDEX IF NOT EXISTS idx_region_features_cld_type ON region_features (cld, feature_type);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_region_features_geom ON region_features USING GIST (geom);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_region_features_properties ON region_features USING GIN (properties);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_cld_regions_cu_codes ON cld_regions USING GIN (cu_codes);");
+    await client.query("CREATE INDEX IF NOT EXISTS idx_cld_regions_ssids ON cld_regions USING GIN (ssids);");
     await client.query(`
       CREATE TABLE IF NOT EXISTS map_features (
         id BIGSERIAL PRIMARY KEY,
@@ -254,6 +334,12 @@ async function initDb() {
   } finally {
     client.release();
   }
+}
+
+async function ensurePostgisMediaDirs(cld) {
+  const regionDir = path.join(cldRootDir, cld);
+  await ensureDir(path.join(regionDir, "media", "dwellings"));
+  await ensureDir(path.join(regionDir, "media", "uploads"));
 }
 
 async function ensureFileStore() {
@@ -320,35 +406,6 @@ function extractClDForFeature(feature, cuToClDMap) {
   return "";
 }
 
-async function ensureEmptyRegionFiles(cld) {
-  const regionDir = path.join(cldRootDir, cld);
-  const names = featureFileNames();
-  await ensureDir(path.join(regionDir, "media", "dwellings"));
-  await ensureDir(path.join(regionDir, "media", "uploads"));
-  const initialFiles = [
-    path.join(regionDir, names.cu),
-    path.join(regionDir, names.blocks),
-    path.join(regionDir, names.dwellings)
-  ];
-  for (const filePath of initialFiles) {
-    if (!(await exists(filePath))) {
-      await writeJsonFile(filePath, buildFeatureCollection([]));
-    }
-  }
-  const indexPath = path.join(regionDir, "index.json");
-  if (!(await exists(indexPath))) {
-    await writeJsonFile(indexPath, {
-      cld,
-      label: `CLD ${cld}`,
-      ssids: [],
-      cuCodes: [],
-      nextFeatureId: 1,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-  }
-}
-
 async function migrateLegacyDataToClDStore() {
   await ensureDir(cldRootDir);
   const existingEntries = await fs.readdir(cldRootDir, { withFileTypes: true }).catch(() => []);
@@ -372,7 +429,7 @@ async function migrateLegacyDataToClDStore() {
     }
     const bucket = grouped.get(cld);
     const normalized = normalizeRegionFeature(feature);
-    const featureType = classifyFeature(normalized);
+    const featureType = classifyRegionFeature(normalized);
     const featureId = Number(normalized.id);
     if (Number.isFinite(featureId)) {
       bucket.maxId = Math.max(bucket.maxId, featureId);
@@ -393,6 +450,7 @@ async function migrateLegacyDataToClDStore() {
       label: `CLD ${cld}`,
       ssids: [],
       cuCodes: [...bucket.cuCodes].sort(),
+      revision: 1,
       nextFeatureId: bucket.maxId + 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -403,233 +461,18 @@ async function migrateLegacyDataToClDStore() {
   }
 }
 
-async function listClDNumbers() {
-  await ensureDir(cldRootDir);
-  const entries = await fs.readdir(cldRootDir, { withFileTypes: true }).catch(() => []);
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => /^[0-9]+$/.test(name))
-    .sort();
-}
-
-async function readRegionIndex(cld) {
-  const regionDir = path.join(cldRootDir, cld);
-  const index = await readJsonFile(path.join(regionDir, "index.json"), null);
-  if (!index) {
-    throw new Error(`Unknown CLD ${cld}`);
-  }
-  return index;
-}
-
-async function writeRegionIndex(cld, index) {
-  const regionDir = path.join(cldRootDir, cld);
-  await writeJsonFile(path.join(regionDir, "index.json"), {
-    ...index,
-    cld,
-    updatedAt: new Date().toISOString()
-  });
-}
-
-async function readRegionFeatures(cld, type) {
-  const names = featureFileNames();
-  const fileName = names[type];
-  if (!fileName) throw new Error(`Unsupported region file type: ${type}`);
-  const filePath = path.join(cldRootDir, cld, fileName);
-  const parsed = await readJsonFile(filePath, buildFeatureCollection([]));
-  const features = Array.isArray(parsed?.features) ? parsed.features : [];
-  return features.map((feature) => normalizeRegionFeature(feature));
-}
-
-async function writeRegionFeatures(cld, type, features) {
-  const names = featureFileNames();
-  const fileName = names[type];
-  if (!fileName) throw new Error(`Unsupported region file type: ${type}`);
-  const filePath = path.join(cldRootDir, cld, fileName);
-  await writeJsonFile(filePath, buildFeatureCollection(features.map((feature) => normalizeRegionFeature(feature))));
-}
-
-async function readRegionBundle(cld) {
-  await ensureEmptyRegionFiles(cld);
-  const [index, cu, blocks, dwellings] = await Promise.all([
-    readRegionIndex(cld),
-    readRegionFeatures(cld, "cu"),
-    readRegionFeatures(cld, "blocks"),
-    readRegionFeatures(cld, "dwellings")
-  ]);
-  return { index, cu, blocks, dwellings };
-}
-
-function extractDwellingIdentity(properties) {
-  if (!properties || typeof properties !== "object") return null;
-  const dwellingNo = normalizeDwellingNo(
-    properties.dwellingNo ?? properties.DWELLING_NO ?? properties.vrNumber ?? properties.VR_NUMBER
-  );
-  const cuCode = extractCuCode(properties);
-  const rawGroup = hasText(properties._group) ? String(properties._group).trim().toLowerCase() : "";
-  const looksLikeDwelling = rawGroup === "dwellings" || hasText(dwellingNo);
-  if (!looksLikeDwelling || !cuCode || !dwellingNo) return null;
-  return { cuCode, dwellingNo };
-}
-
-function buildDwellingDuplicateError(cuCode, dwellingNo, conflictingId) {
-  const suffix = Number.isFinite(conflictingId) ? ` (feature id ${conflictingId})` : "";
-  return new Error(`Dwelling ${dwellingNo} already exists in CU ${cuCode}${suffix}`);
-}
-
-async function assertDwellingNoUnique(feature, dwellings, excludeId = null) {
-  const identity = extractDwellingIdentity(feature?.properties || {});
-  if (!identity) return;
-  const { cuCode, dwellingNo } = identity;
-  const conflict = dwellings.find((item) => {
-    const itemId = Number(item?.id);
-    if (Number.isFinite(excludeId) && itemId === Number(excludeId)) return false;
-    const itemIdentity = extractDwellingIdentity(item?.properties || {});
-    if (!itemIdentity) return false;
-    return itemIdentity.cuCode === cuCode && itemIdentity.dwellingNo === dwellingNo;
-  });
-  if (conflict) {
-    throw buildDwellingDuplicateError(cuCode, dwellingNo, Number(conflict.id));
-  }
-}
-
-function summarizeRegion(index, bundle) {
-  return {
+async function buildLookupRecords() {
+  const indexes = await regionStorage.listIndexes();
+  return indexes.map((index) => ({
     cld: index.cld,
     label: index.label || `CLD ${index.cld}`,
     ssids: Array.isArray(index.ssids) ? index.ssids : [],
-    cuCodes: Array.isArray(index.cuCodes) ? index.cuCodes : [],
-    counts: {
-      cu: bundle.cu.length,
-      blocks: bundle.blocks.length,
-      dwellings: bundle.dwellings.length
-    }
-  };
-}
-
-function inferFileTypeFromFeature(feature) {
-  const featureType = classifyFeature(feature);
-  if (featureType === "cu" || featureType === "blocks" || featureType === "dwellings") {
-    return featureType;
-  }
-  throw new Error("Unsupported feature type");
-}
-
-async function findRegionFeatureById(cld, id) {
-  const bundle = await readRegionBundle(cld);
-  for (const type of ["cu", "blocks", "dwellings"]) {
-    const collection = bundle[type];
-    const feature = collection.find((item) => Number(item?.id) === Number(id));
-    if (feature) {
-      return { type, feature, bundle };
-    }
-  }
-  return { type: null, feature: null, bundle };
-}
-
-async function createRegionFeature(cld, feature) {
-  const normalized = normalizeRegionFeature(feature);
-  if (!normalized.geometry) {
-    throw new Error("Feature geometry is required");
-  }
-
-  const index = await readRegionIndex(cld);
-  const type = inferFileTypeFromFeature(normalized);
-  const collection = await readRegionFeatures(cld, type);
-  const dwellings = type === "dwellings" ? collection : await readRegionFeatures(cld, "dwellings");
-  await assertDwellingNoUnique(normalized, dwellings);
-
-  const nextId = Number.isFinite(Number(index.nextFeatureId)) ? Number(index.nextFeatureId) : 1;
-  normalized.id = nextId;
-  collection.push(normalized);
-  await writeRegionFeatures(cld, type, collection);
-
-  if (type !== "dwellings") {
-    const cuCodes = new Set(Array.isArray(index.cuCodes) ? index.cuCodes : []);
-    const cuCode = extractCuCode(normalized.properties || {});
-    if (cuCode) cuCodes.add(cuCode);
-    index.cuCodes = [...cuCodes].sort();
-  }
-  index.nextFeatureId = nextId + 1;
-  await writeRegionIndex(cld, index);
-  return nextId;
-}
-
-async function updateRegionFeature(cld, id, feature) {
-  if (!Number.isFinite(Number(id))) throw new Error("Invalid feature id");
-  const normalized = normalizeRegionFeature(feature);
-  if (!normalized.geometry) throw new Error("Feature geometry is required");
-
-  const existing = await findRegionFeatureById(cld, id);
-  if (!existing.type) return false;
-
-  const collection = await readRegionFeatures(cld, existing.type);
-  const targetIndex = collection.findIndex((item) => Number(item?.id) === Number(id));
-  if (targetIndex === -1) return false;
-
-  normalized.id = Number(id);
-  const candidateType = inferFileTypeFromFeature(normalized);
-  if (candidateType !== existing.type) {
-    throw new Error("Changing feature type is not supported");
-  }
-
-  const dwellings = existing.type === "dwellings" ? collection : await readRegionFeatures(cld, "dwellings");
-  await assertDwellingNoUnique(normalized, dwellings, Number(id));
-  collection[targetIndex] = normalized;
-  await writeRegionFeatures(cld, existing.type, collection);
-  return true;
-}
-
-async function deleteRegionFeature(cld, id) {
-  if (!Number.isFinite(Number(id))) throw new Error("Invalid feature id");
-  const existing = await findRegionFeatureById(cld, id);
-  if (!existing.type) return false;
-  const collection = await readRegionFeatures(cld, existing.type);
-  const next = collection.filter((item) => Number(item?.id) !== Number(id));
-  if (next.length === collection.length) return false;
-  await writeRegionFeatures(cld, existing.type, next);
-  return true;
-}
-
-async function buildLookupRecords() {
-  const clds = await listClDNumbers();
-  const records = [];
-  for (const cld of clds) {
-    const index = await readJsonFile(path.join(cldRootDir, cld, "index.json"), null);
-    if (!index) continue;
-    records.push({
-      cld,
-      label: index.label || `CLD ${cld}`,
-      ssids: Array.isArray(index.ssids) ? index.ssids : [],
-      cuCodes: Array.isArray(index.cuCodes) ? index.cuCodes : []
-    });
-  }
-  return records;
+    cuCodes: Array.isArray(index.cuCodes) ? index.cuCodes : []
+  }));
 }
 
 async function resolveClDFromLookup(queryValue) {
-  const normalizedDigits = normalizeClD(queryValue);
-  const normalizedText = normalizeSsid(queryValue);
-  const records = await buildLookupRecords();
-
-  const directClD = records.find((record) => record.cld === normalizedDigits);
-  if (directClD) {
-    return { cld: directClD.cld, matchedBy: "cld", label: directClD.label };
-  }
-
-  const byCu = records.find((record) => record.cuCodes.includes(normalizedDigits));
-  if (byCu) {
-    return { cld: byCu.cld, matchedBy: "cu", label: byCu.label };
-  }
-
-  const bySsid = records.find((record) =>
-    record.ssids.some((ssid) => normalizeSsid(ssid) === normalizedText)
-  );
-  if (bySsid) {
-    return { cld: bySsid.cld, matchedBy: "ssid", label: bySsid.label };
-  }
-
-  return null;
+  return regionStorage.resolveLookup(queryValue);
 }
 
 function mediaUrlFromFilePath(filePath) {
@@ -743,445 +586,127 @@ function extractProxyTargetUrl(req) {
   }
 }
 
-app.get("/health", async (_req, res) => {
-  try {
-    if (useFileStore) {
-      await ensureFileStore();
-      return res.json({ ok: true, mode: "file" });
-    }
-    await pool.query("SELECT 1;");
-    return res.json({ ok: true, mode: "postgis" });
-  } catch (error) {
-    return res.status(500).json({ ok: false, error: error.message });
-  }
+registerSystemRoutes(app, {
+  buildLookupRecords,
+  ensureFileStore,
+  pool,
+  resolveClDFromLookup,
+  useFileStore
 });
 
-app.get("/api/config", (_req, res) => {
-  res.json({
-    ...mapConfig,
-    auth: {
-      editProtected: Boolean(editPassword)
-    }
-  });
+registerAuthRoutes(app, {
+  authCookie: AUTH_COOKIE,
+  bcrypt,
+  getUser,
+  isAdminUser,
+  jwt,
+  jwtSecret,
+  loadUserById,
+  findUserByUsername: userRepository ? (username) => userRepository.findByUsername(username) : null,
+  mapConfig,
+  normalizeUserRole,
+  requireAuth,
+  secureCookies: process.env.NODE_ENV === "production"
 });
 
-app.get("/api/lookup", async (req, res) => {
-  const queryValue = String(req.query.q || "").trim();
-  if (!queryValue) {
-    return res.status(400).json({ error: "Lookup query is required" });
-  }
-  const result = await resolveClDFromLookup(queryValue);
-  if (!result) {
-    return res.status(404).json({ error: "CLD not found" });
-  }
-  return res.json(result);
+
+registerUserRoutes(app, {
+  bcrypt, getManagedUserIds, isAdminUser, normalizeUserRole, requireUserManagementAccess,
+  resolveUserIdsFromRefs, userRepository
 });
 
-app.get("/api/regions", async (_req, res) => {
-  const records = await buildLookupRecords();
-  res.json({ regions: records });
+
+
+const regionMutations = createRegionMutationService(regionStorage);
+const {
+  createFeature: createRegionFeature,
+  deleteFeature: deleteRegionFeature,
+  updateFeature: updateRegionFeature
+} = regionMutations;
+
+const regionRepository = createRegionRepository({
+  createFeature: createRegionFeature,
+  createImageUpload,
+  deleteFeature: deleteRegionFeature,
+  ensureMediaDirs: regionStorage.ensureMediaDirs,
+  exists: regionStorage.exists,
+  readBundle: regionStorage.readBundle,
+  updateFeature: updateRegionFeature
 });
 
-app.get("/api/cld/:cld", async (req, res) => {
-  const cld = normalizeClD(req.params.cld);
-  if (!cld) {
-    return res.status(400).json({ error: "Invalid CLD" });
-  }
-  try {
-    const bundle = await readRegionBundle(cld);
-    return res.json(summarizeRegion(bundle.index, bundle));
-  } catch (error) {
-    return res.status(404).json({ error: error.message });
-  }
+registerRegionRoutes(app, {
+  buildFeatureCollection,
+  extractCuCode,
+  normalizeClD,
+  normalizeDwellingNo,
+  normalizeFeatures,
+  pool,
+  repository: regionRepository,
+  requireAuth,
+  requireClDAccess,
+  summarizeRegion,
+  useFileStore
 });
 
-app.get("/api/cld/:cld/features", async (req, res) => {
-  const cld = normalizeClD(req.params.cld);
-  if (!cld) {
-    return res.status(400).json({ error: "Invalid CLD" });
-  }
-  try {
-    const bundle = await readRegionBundle(cld);
-    return res.json(buildFeatureCollection([
-      ...bundle.cu,
-      ...bundle.blocks,
-      ...bundle.dwellings
-    ]));
-  } catch (error) {
-    return res.status(404).json({ error: error.message });
-  }
+
+registerTileRoutes(app, {
+  arcgisCookie: process.env.CMP_ARCGIS_COOKIE,
+  extractProxyTargetUrl,
+  mapConfig,
+  tileProxyUserAgent: process.env.TILE_PROXY_USER_AGENT
 });
 
-app.post("/api/cld/:cld/features", requireEditAuth, async (req, res) => {
-  const cld = normalizeClD(req.params.cld);
-  if (!cld) {
-    return res.status(400).json({ error: "Invalid CLD" });
-  }
 
-  try {
-    const features = normalizeFeatures(req.body);
-    if (features.length !== 1) {
-      return res.status(400).json({ error: "Send exactly one GeoJSON Feature in request body" });
-    }
-    const id = await createRegionFeature(cld, features[0]);
-    return res.status(201).json({ ok: true, inserted: 1, ids: [id] });
-  } catch (error) {
-    return res.status(400).json({ error: error.message });
-  }
+registerLegacyFeatureRoutes(app, {
+  assertDwellingNoUnique, buildFeatureCollection, createRegionFeature, normalizeClD,
+  normalizeFeatures, normalizeRegionFeature, pool, readFileStore, useFileStore, writeFileStore
 });
 
-app.put("/api/cld/:cld/features/:id", requireEditAuth, async (req, res) => {
-  const cld = normalizeClD(req.params.cld);
-  const id = Number(req.params.id);
-  if (!cld) {
-    return res.status(400).json({ error: "Invalid CLD" });
-  }
-  if (!Number.isFinite(id)) {
-    return res.status(400).json({ error: "Invalid feature id" });
-  }
-  try {
-    const features = normalizeFeatures(req.body);
-    if (features.length !== 1) {
-      return res.status(400).json({ error: "Send exactly one GeoJSON Feature in request body" });
-    }
-    const updated = await updateRegionFeature(cld, id, features[0]);
-    if (!updated) {
-      return res.status(404).json({ error: "Feature not found" });
-    }
-    return res.json({ ok: true, updatedId: id });
-  } catch (error) {
-    return res.status(400).json({ error: error.message });
-  }
+
+const registerViewerRoute = registerPageRoutes(app, {
+  getUser, normalizeClD, publicDir, regionExists: regionStorage.exists, requireAdmin, requireAuth,
+  requireClDAccess, requireUserManagementAccess
 });
 
-app.delete("/api/cld/:cld/features/:id", requireEditAuth, async (req, res) => {
-  const cld = normalizeClD(req.params.cld);
-  const id = Number(req.params.id);
-  if (!cld) {
-    return res.status(400).json({ error: "Invalid CLD" });
-  }
-  if (!Number.isFinite(id)) {
-    return res.status(400).json({ error: "Invalid feature id" });
-  }
-  try {
-    const deleted = await deleteRegionFeature(cld, id);
-    if (!deleted) {
-      return res.status(404).json({ error: "Feature not found" });
-    }
-    return res.json({ ok: true, deletedId: id });
-  } catch (error) {
-    return res.status(400).json({ error: error.message });
-  }
-});
 
-app.post("/api/cld/:cld/uploads", requireEditAuth, async (req, res) => {
-  const cld = normalizeClD(req.params.cld);
-  if (!cld) {
-    return res.status(400).json({ error: "Invalid CLD" });
-  }
-  try {
-    await ensureEmptyRegionFiles(cld);
-    const upload = await createImageUpload(cld, req.body || {});
-    return res.status(201).json({ ok: true, upload });
-  } catch (error) {
-    return res.status(400).json({ error: error.message });
-  }
-});
+registerPublicAssets(app, publicDir);
 
-app.get("/api/arcgis-proxy*", async (req, res) => {
-  const targetUrl = extractProxyTargetUrl(req);
-  if (!targetUrl) {
-    return res.status(400).json({ error: "Proxy target URL is required" });
-  }
-
-  let parsed;
-  try {
-    parsed = new URL(targetUrl);
-  } catch {
-    return res.status(400).json({ error: "Invalid target URL" });
-  }
-
-  const allowedHosts = new Set(["geoprod.statcan.gc.ca", "geo.statcan.gc.ca"]);
-  if (mapConfig.cmp.arcgis.url) {
-    try {
-      allowedHosts.add(new URL(mapConfig.cmp.arcgis.url).hostname);
-    } catch {
-      // Ignore invalid configured proxy host.
-    }
-  }
-  if (!allowedHosts.has(parsed.hostname)) {
-    return res.status(403).json({ error: "Target host is not allowed" });
-  }
-
-  const upstreamHeaders = {
-    "user-agent": req.headers["user-agent"] || "selfhost-map-cmp-proxy/1.0",
-    accept: req.headers.accept || "*/*"
-  };
-  if (process.env.CMP_ARCGIS_COOKIE) {
-    upstreamHeaders.cookie = process.env.CMP_ARCGIS_COOKIE;
-  }
-
-  try {
-    const upstream = await fetch(targetUrl, { method: "GET", headers: upstreamHeaders });
-    const buffer = Buffer.from(await upstream.arrayBuffer());
-    const contentType = upstream.headers.get("content-type");
-    if (contentType) {
-      res.setHeader("content-type", contentType);
-    }
-    const cacheControl = upstream.headers.get("cache-control");
-    if (cacheControl) {
-      res.setHeader("cache-control", cacheControl);
-    }
-    return res.status(upstream.status).send(buffer);
-  } catch (error) {
-    return res.status(502).json({ error: `Proxy request failed: ${error.message}` });
-  }
-});
-
-app.get("/api/features", async (_req, res) => {
-  if (useFileStore) {
-    const store = await readFileStore();
-    const features = store.features.map((row) => ({
-      type: "Feature",
-      id: row.id,
-      properties: {
-        ...(row.properties || {}),
-        _id: row.id,
-        _name: row.name,
-        _createdAt: row.createdAt,
-        _updatedAt: row.updatedAt
-      },
-      geometry: row.geometry
-    }));
-    return res.json(buildFeatureCollection(features));
-  }
-
-  const query = `
-    SELECT
-      id,
-      name,
-      properties,
-      ST_AsGeoJSON(geom)::json AS geometry,
-      created_at,
-      updated_at
-    FROM map_features
-    ORDER BY id;
-  `;
-  const { rows } = await pool.query(query);
-  const features = rows.map((row) => ({
-    type: "Feature",
-    id: row.id,
-    properties: {
-      ...(row.properties || {}),
-      _id: row.id,
-      _name: row.name,
-      _createdAt: row.created_at,
-      _updatedAt: row.updated_at
-    },
-    geometry: row.geometry
-  }));
-  return res.json(buildFeatureCollection(features));
-});
-
-app.post("/api/features", async (req, res) => {
-  try {
-    const features = normalizeFeatures(req.body);
-    if (features.length === 0) {
-      return res.status(400).json({ error: "Send GeoJSON Feature or FeatureCollection in request body" });
-    }
-
-    if (useFileStore) {
-      const store = await readFileStore();
-      const ids = [];
-      for (const feature of features) {
-        const normalized = normalizeRegionFeature(feature);
-        if (!normalized.geometry) throw new Error("Feature geometry is required");
-        await assertDwellingNoUnique(normalized, store.features);
-        const properties = normalized.properties || {};
-        const now = new Date().toISOString();
-        const id = store.nextId;
-        store.nextId += 1;
-        store.features.push({
-          id,
-          name: typeof properties.name === "string" ? properties.name : null,
-          properties,
-          geometry: normalized.geometry,
-          createdAt: now,
-          updatedAt: now
-        });
-        ids.push(id);
-      }
-      await writeFileStore(store);
-      return res.status(201).json({ inserted: ids.length, ids });
-    }
-
-    const ids = [];
-    for (const feature of features) {
-      if (!feature?.geometry) throw new Error("Feature geometry is required");
-      const properties = feature.properties && typeof feature.properties === "object" ? feature.properties : {};
-      const name = typeof properties.name === "string"
-        ? properties.name
-        : (typeof properties._name === "string" ? properties._name : null);
-      const query = `
-        INSERT INTO map_features (name, properties, geom)
-        VALUES ($1, $2::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))
-        RETURNING id;
-      `;
-      const values = [name, JSON.stringify(properties), JSON.stringify(feature.geometry)];
-      const { rows } = await pool.query(query, values);
-      ids.push(rows[0].id);
-    }
-    return res.status(201).json({ inserted: ids.length, ids });
-  } catch (error) {
-    return res.status(400).json({ error: error.message });
-  }
-});
-
-app.post("/api/import/geojson", async (req, res) => {
-  try {
-    const features = normalizeFeatures(req.body);
-    if (features.length === 0) {
-      return res.status(400).json({ ok: false, error: "Body must be GeoJSON Feature or FeatureCollection" });
-    }
-    const targetClD = normalizeClD(req.query.cld || req.body?.cld || "");
-    if (targetClD) {
-      const ids = [];
-      for (const feature of features) {
-        ids.push(await createRegionFeature(targetClD, feature));
-      }
-      return res.status(201).json({ ok: true, imported: ids.length, ids, cld: targetClD });
-    }
-
-    return res.status(400).json({
-      ok: false,
-      error: "Provide ?cld=<CLD_number> to import into a CLD region file"
-    });
-  } catch (error) {
-    return res.status(400).json({ ok: false, error: error.message });
-  }
-});
-
-app.delete("/api/features/:id", async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id)) {
-    return res.status(400).json({ error: "Invalid feature id" });
-  }
-  if (useFileStore) {
-    const store = await readFileStore();
-    const before = store.features.length;
-    store.features = store.features.filter((item) => Number(item.id) !== id);
-    if (store.features.length === before) {
-      return res.status(404).json({ error: "Feature not found" });
-    }
-    await writeFileStore(store);
-    return res.json({ ok: true, deletedId: id });
-  }
-  const { rowCount } = await pool.query("DELETE FROM map_features WHERE id = $1;", [id]);
-  if (rowCount === 0) {
-    return res.status(404).json({ error: "Feature not found" });
-  }
-  return res.json({ ok: true, deletedId: id });
-});
-
-app.put("/api/features/:id", async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isFinite(id)) {
-    return res.status(400).json({ error: "Invalid feature id" });
-  }
-  try {
-    const features = normalizeFeatures(req.body);
-    if (features.length !== 1) {
-      return res.status(400).json({ error: "Send exactly one GeoJSON Feature in request body" });
-    }
-    if (useFileStore) {
-      const store = await readFileStore();
-      const row = store.features.find((feature) => Number(feature.id) === id);
-      if (!row) {
-        return res.status(404).json({ error: "Feature not found" });
-      }
-      await assertDwellingNoUnique(features[0], store.features, id);
-      row.properties = features[0].properties || {};
-      row.geometry = features[0].geometry;
-      row.updatedAt = new Date().toISOString();
-      await writeFileStore(store);
-      return res.json({ ok: true, updatedId: id });
-    }
-
-    const properties = features[0].properties && typeof features[0].properties === "object"
-      ? features[0].properties
-      : {};
-    const name = typeof properties.name === "string" ? properties.name : null;
-    const query = `
-      UPDATE map_features
-      SET
-        name = $2,
-        properties = $3::jsonb,
-        geom = ST_SetSRID(ST_GeomFromGeoJSON($4), 4326),
-        updated_at = NOW()
-      WHERE id = $1;
-    `;
-    const values = [id, name, JSON.stringify(properties), JSON.stringify(features[0].geometry)];
-    const { rowCount } = await pool.query(query, values);
-    if (rowCount === 0) {
-      return res.status(404).json({ error: "Feature not found" });
-    }
-    return res.json({ ok: true, updatedId: id });
-  } catch (error) {
-    return res.status(400).json({ error: error.message });
-  }
-});
-
-app.delete("/api/features", async (_req, res) => {
-  if (useFileStore) {
-    await writeFileStore({ nextId: 1, features: [] });
-    return res.json({ ok: true });
-  }
-  await pool.query("TRUNCATE TABLE map_features RESTART IDENTITY;");
-  return res.json({ ok: true });
-});
-
-app.get("/statcan", (_req, res) => {
-  res.sendFile(path.join(publicDir, "statcan.html"));
-});
-
-app.get("/", (_req, res) => {
-  res.sendFile(path.join(publicDir, "landing.html"));
-});
-
-app.get("/:cld/edit", requireEditAuth, async (req, res, next) => {
-  const cld = normalizeClD(req.params.cld);
-  if (!cld) return next();
-  if (!(await exists(path.join(cldRootDir, cld, "index.json")))) {
-    return res.status(404).sendFile(path.join(publicDir, "landing.html"));
-  }
-  return res.sendFile(path.join(publicDir, "edit.html"));
-});
-
-app.use(express.static(publicDir));
-
-app.get("/:cld", async (req, res, next) => {
-  const cld = normalizeClD(req.params.cld);
-  if (!cld) return next();
-  if (!(await exists(path.join(cldRootDir, cld, "index.json")))) {
-    return res.status(404).sendFile(path.join(publicDir, "landing.html"));
-  }
-  return res.sendFile(path.join(publicDir, "index.html"));
-});
+registerViewerRoute(app);
 
 app.get("*", (_req, res) => {
   res.redirect("/");
 });
 
-const startup = useFileStore ? ensureFileStore() : initDb();
+registerErrorHandler(app);
 
-startup
-  .then(async () => {
+async function initializeApp() {
+  if (useFileStore) {
+    await ensureFileStore();
     await migrateLegacyDataToClDStore();
-    app.listen(port, () => {
-      console.log(`Map app is running on port ${port} (${useFileStore ? "file-store mode" : "postgis mode"})`);
+    return;
+  }
+  await initDb();
+}
+
+export async function startServer({ listenPort = port } = {}) {
+  await initializeApp();
+  return new Promise((resolve, reject) => {
+    const server = app.listen(listenPort, () => {
+      console.log(`Map app is running on port ${listenPort} (${useFileStore ? "file-store mode" : "postgis mode"})`);
+      resolve(server);
     });
-  })
-  .catch((error) => {
+    server.once("error", reject);
+  });
+}
+
+export async function stopServer(server) {
+  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  if (pool) await pool.end();
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  startServer().catch((error) => {
     console.error("Failed to initialize app:", error);
     process.exit(1);
   });
+}

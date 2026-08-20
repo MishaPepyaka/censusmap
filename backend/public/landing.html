@@ -4,38 +4,42 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Find CLD</title>
-    <link rel="icon" type="image/svg+xml" href="/flag-logo.svg?v=20260618a" />
-    <link rel="apple-touch-icon" href="/flag-logo.svg?v=20260618a" />
-    <link rel="stylesheet" href="/styles.css?v=20260618a" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
+    <link rel="stylesheet" href="/styles.css?v=20260729a" />
   </head>
   <body class="landing-body">
-    <div class="app-version-badge">v20260618a</div>
+    <div class="app-version-badge">v20260721b</div>
+    <div id="user-widget-root"></div>
+
+    <footer class="app-attribution">
+      <a href="https://geoprod.statcan.gc.ca/camv1/index.html" target="_blank" rel="noreferrer">Publicly Available Map Source</a>.
+      Maps are used under <a href="https://www.statcan.gc.ca/en/reference/licence" target="_blank" rel="noreferrer">Statistics Canada Open Licence</a>.
+    </footer>
+
     <main class="landing-shell">
       <section class="landing-card">
         <p class="landing-eyebrow">Dedicated CLD Viewer</p>
-        <h1 class="landing-title">Enter a CLD number or SSID</h1>
+        <h1 class="landing-title">Enter a CLD number</h1>
         <p class="landing-copy">
-          The app resolves the entry to the correct CLD and opens the region viewer.
+          The app opens the region viewer for the selected CLD.
         </p>
         <form id="lookup-form" class="lookup-form">
-          <label class="landing-label" for="lookup-input">CLD or SSID</label>
+          <label class="landing-label" for="lookup-input">CLD</label>
           <input
             id="lookup-input"
             class="landing-input"
             type="text"
             autocomplete="off"
             inputmode="text"
-            placeholder="3039 or SSID"
+            placeholder="3039"
           />
           <button id="lookup-submit" class="landing-submit" type="submit">Open Region</button>
           <div id="lookup-status" class="landing-status" aria-live="polite"></div>
         </form>
-        <section class="landing-list-wrap" aria-label="Available regions">
-          <div class="landing-list-title">Known CLDs</div>
-          <div id="region-list" class="landing-list"></div>
-        </section>
       </section>
     </main>
-    <script src="/app-landing.js?v=20260618a"></script>
+    <script src="/api-client.js?v=20260804a"></script>
+    <script src="/app-auth.js?v=20260820a"></script>
+    <script src="/app-landing.js?v=20260820a"></script>
   </body>
 </html>

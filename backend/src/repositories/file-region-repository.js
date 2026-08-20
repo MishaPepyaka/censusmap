@@ -1,0 +1,184 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { buildFeatureCollection, extractCuCode, featureFileNames, normalizeClD, normalizeRegionFeature, normalizeSsid } from "../domain/region-feature.js";
+import { ensureDir, exists, readJsonFile, writeJsonFile } from "../infrastructure/json-files.js";
+import { RegionRevisionConflictError } from "../domain/region-revision.js";
+
+export function createFileRegionRepository(cldRootDir) {
+  const regionLocks = new Map();
+  const revisionOf = (index) => Number.isFinite(Number(index?.revision)) ? Number(index.revision) : 1;
+  const assertRevision = (index, expectedRevision) => {
+    if (expectedRevision !== undefined && Number(expectedRevision) !== revisionOf(index)) {
+      throw new RegionRevisionConflictError(revisionOf(index));
+    }
+  };
+  const indexPath = (cld) => path.join(cldRootDir, cld, "index.json");
+  const featurePath = (cld, type) => {
+    const fileName = featureFileNames()[type];
+    if (!fileName) throw new Error(`Unsupported region file type: ${type}`);
+    return path.join(cldRootDir, cld, fileName);
+  };
+
+  async function withRegionLock(cld, operation) {
+    const previous = regionLocks.get(cld) || Promise.resolve();
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const queued = previous.then(() => gate);
+    regionLocks.set(cld, queued);
+
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (regionLocks.get(cld) === queued) regionLocks.delete(cld);
+    }
+  }
+
+  async function readIndex(cld) {
+    const index = await readJsonFile(indexPath(cld), null);
+    if (!index) throw new Error(`Unknown CLD ${cld}`);
+    return index;
+  }
+
+  async function readFeatures(cld, type) {
+    const parsed = await readJsonFile(featurePath(cld, type), buildFeatureCollection([]));
+    return (Array.isArray(parsed?.features) ? parsed.features : []).map(normalizeRegionFeature);
+  }
+
+  async function ensureMediaDirs(cld) {
+    const regionDir = path.join(cldRootDir, cld);
+    await Promise.all([
+      ensureDir(path.join(regionDir, "media", "dwellings")),
+      ensureDir(path.join(regionDir, "media", "uploads"))
+    ]);
+  }
+
+  async function listIndexes() {
+    await ensureDir(cldRootDir);
+    const entries = await fs.readdir(cldRootDir, { withFileTypes: true }).catch(() => []);
+    const clds = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((name) => /^[0-9]+$/.test(name))
+      .sort();
+    const indexes = await Promise.all(clds.map((cld) => readJsonFile(indexPath(cld), null)));
+    return indexes.filter(Boolean);
+  }
+
+  async function resolveLookup(queryValue) {
+    const normalizedDigits = normalizeClD(queryValue);
+    const normalizedText = normalizeSsid(queryValue);
+    const records = await listIndexes();
+    const directClD = records.find((record) => record.cld === normalizedDigits);
+    if (directClD) return { cld: directClD.cld, matchedBy: "cld", label: directClD.label || `CLD ${directClD.cld}` };
+    const byCu = records.find((record) => (Array.isArray(record.cuCodes) ? record.cuCodes : []).includes(normalizedDigits));
+    if (byCu) return { cld: byCu.cld, matchedBy: "cu", label: byCu.label || `CLD ${byCu.cld}` };
+    const bySsid = records.find((record) => (Array.isArray(record.ssids) ? record.ssids : []).some((ssid) => normalizeSsid(ssid) === normalizedText));
+    return bySsid ? { cld: bySsid.cld, matchedBy: "ssid", label: bySsid.label || `CLD ${bySsid.cld}` } : null;
+  }
+
+  return Object.freeze({
+    exists(cld) {
+      return exists(indexPath(cld));
+    },
+    async ensureRegion(cld) {
+      await ensureMediaDirs(cld);
+      await Promise.all(Object.keys(featureFileNames()).map(async (type) => {
+        const filePath = featurePath(cld, type);
+        if (!(await exists(filePath))) {
+          await writeJsonFile(filePath, buildFeatureCollection([]));
+        }
+      }));
+      if (!(await exists(indexPath(cld)))) {
+        await writeJsonFile(indexPath(cld), {
+          cld,
+          label: `CLD ${cld}`,
+          ssids: [],
+          cuCodes: [],
+          revision: 1,
+          nextFeatureId: 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+    },
+    ensureMediaDirs,
+    listIndexes,
+    resolveLookup,
+    readIndex,
+    readFeatures,
+    async findFeature(cld, id) {
+      const bundle = await this.readBundle(cld);
+      for (const type of ["cu", "blocks", "dwellings"]) {
+        const feature = bundle[type].find((item) => Number(item?.id) === Number(id));
+        if (feature) return { type, feature };
+      }
+      return null;
+    },
+    async createFeature(cld, type, feature, expectedRevision) {
+      return withRegionLock(cld, async () => {
+        const index = await readIndex(cld);
+        assertRevision(index, expectedRevision);
+        const nextId = Number.isFinite(Number(index.nextFeatureId)) ? Number(index.nextFeatureId) : 1;
+        const normalized = normalizeRegionFeature({ ...feature, id: nextId });
+        const features = await readFeatures(cld, type);
+        features.push(normalized);
+        await writeJsonFile(featurePath(cld, type), buildFeatureCollection(features));
+        if (type !== "dwellings") {
+          const cuCodes = new Set(Array.isArray(index.cuCodes) ? index.cuCodes : []);
+          const cuCode = extractCuCode(normalized.properties || {});
+          if (cuCode) cuCodes.add(cuCode);
+          index.cuCodes = [...cuCodes].sort();
+        }
+        index.nextFeatureId = nextId + 1;
+        index.revision = revisionOf(index) + 1;
+        await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
+        return nextId;
+      });
+    },
+    async updateFeature(cld, type, id, feature, expectedRevision) {
+      return withRegionLock(cld, async () => {
+        const index = await readIndex(cld);
+        assertRevision(index, expectedRevision);
+        const features = await readFeatures(cld, type);
+        const targetIndex = features.findIndex((item) => Number(item?.id) === Number(id));
+        if (targetIndex === -1) return false;
+        features[targetIndex] = normalizeRegionFeature({ ...feature, id: Number(id) });
+        await writeJsonFile(featurePath(cld, type), buildFeatureCollection(features));
+        index.revision = revisionOf(index) + 1;
+        await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
+        return true;
+      });
+    },
+    async deleteFeature(cld, type, id, expectedRevision) {
+      return withRegionLock(cld, async () => {
+        const index = await readIndex(cld);
+        assertRevision(index, expectedRevision);
+        const features = await readFeatures(cld, type);
+        const next = features.filter((item) => Number(item?.id) !== Number(id));
+        if (next.length === features.length) return false;
+        await writeJsonFile(featurePath(cld, type), buildFeatureCollection(next));
+        index.revision = revisionOf(index) + 1;
+        await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
+        return true;
+      });
+    },
+    async readBundle(cld) {
+      const [index, cu, blocks, dwellings] = await Promise.all([
+        readIndex(cld), readFeatures(cld, "cu"), readFeatures(cld, "blocks"), readFeatures(cld, "dwellings")
+      ]);
+      return { index, cu, blocks, dwellings };
+    },
+    async writeIndex(cld, index) {
+      await writeJsonFile(indexPath(cld), {
+        ...index,
+        cld,
+        updatedAt: new Date().toISOString()
+      });
+    },
+    writeFeatures(cld, type, features) {
+      return writeJsonFile(featurePath(cld, type), buildFeatureCollection(features.map((feature) => normalizeRegionFeature(feature))));
+    }
+  });
+}

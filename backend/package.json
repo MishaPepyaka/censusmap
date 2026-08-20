@@ -1,18 +1,33 @@
 {
   "name": "selfhost-map-cmp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "build:frontend": "vite build --config vite.config.ts && vite build --config vite.config.ts --mode map-data-helpers && vite build --config vite.config.ts --mode offline-data && vite build --config vite.config.ts --mode map-actions && vite build --config vite.config.ts --mode map-runtime && vite build --config vite.config.ts --mode region-client && vite build --config vite.config.ts --mode dwelling-search && vite build --config vite.config.ts --mode app-viewer && vite build --config vite.config.ts --mode app-editor && vite build --config vite.config.ts --mode app-geometry-editor && vite build --config vite.config.ts --mode app-landing && vite build --config vite.config.ts --mode app-auth && vite build --config vite.config.ts --mode app-login",
+    "import:cld:db": "node scripts/import-cld-files-to-db.mjs",
+    "test": "node --test",
+    "test:unit": "node --test test/*.test.js test/domain/*.test.js test/infrastructure/*.test.js test/repositories/*.test.js test/services/*.test.js",
+    "test:api": "node --test test/api/*.test.js",
+    "test:browser": "node --test test/api/server.integration.test.js",
+    "typecheck:frontend": "tsc --noEmit --project ../frontend/tsconfig.json"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
     "esri-leaflet": "^3.0.14",
     "express": "^4.19.2",
     "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
     "morgan": "^1.10.0",
-    "pg": "^8.11.5"
+    "pg": "^8.11.5",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
   }
 }

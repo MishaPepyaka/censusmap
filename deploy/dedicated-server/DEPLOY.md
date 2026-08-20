@@ -13,7 +13,10 @@ cp .env.example .env
 Edit `.env`:
 
 ```env
-USE_FILE_STORE=true
+USE_FILE_STORE=false
+POSTGRES_DB=maps
+POSTGRES_USER=maps
+POSTGRES_PASSWORD=change-me
 EDIT_USERNAME=admin
 EDIT_PASSWORD=change-me
 APP_PORT=8080
@@ -27,11 +30,17 @@ If needed, also configure `CMP_*` values.
 docker compose up --build -d
 ```
 
-## 4. Reverse proxy
+## 4. Import existing CLD files into Postgres
+
+```bash
+docker compose exec app npm run import:cld:db
+```
+
+## 5. Reverse proxy
 
 Copy `deploy/dedicated-server/nginx.conf` to your nginx site config, then reload nginx.
 
-## 5. Backups
+## 6. Backups
 
 Run:
 
@@ -41,7 +50,7 @@ Run:
 
 Archive output is written to `data/backups/`.
 
-## 6. Publish CLD data
+## 7. Publish CLD data
 
 From the local project:
 

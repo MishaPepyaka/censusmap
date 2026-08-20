@@ -1,0 +1,275 @@
+import { extractCuCode, normalizeClD, normalizeRegionFeature, normalizeSsid, uniqueSorted } from "../domain/region-feature.js";
+import { RegionRevisionConflictError } from "../domain/region-revision.js";
+
+function toRegionIndex(row) {
+  return {
+    cld: row.cld, label: row.label || `CLD ${row.cld}`,
+    ssids: Array.isArray(row.ssids) ? row.ssids : [],
+    cuCodes: Array.isArray(row.cu_codes) ? row.cu_codes : [],
+    revision: Number.isFinite(Number(row.revision)) ? Number(row.revision) : 1,
+    createdAt: row.created_at, updatedAt: row.updated_at
+  };
+}
+
+export function toRegionFeature(row) {
+  return normalizeRegionFeature({ type: "Feature", id: row.id, properties: row.properties || {}, geometry: row.geometry });
+}
+
+export function createPostgisRegionRepository(pool) {
+  async function advanceRevision(client, cld, expectedRevision) {
+    const { rows } = await client.query(
+      `
+        UPDATE cld_regions
+        SET revision = revision + 1, updated_at = NOW()
+        WHERE cld = $1 AND ($2::bigint IS NULL OR revision = $2)
+        RETURNING revision;
+      `,
+      [cld, expectedRevision ?? null]
+    );
+    if (rows.length > 0) return Number(rows[0].revision);
+
+    const current = await client.query("SELECT revision FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);
+    if (current.rows.length > 0) throw new RegionRevisionConflictError(current.rows[0].revision);
+    throw new Error(`Unknown CLD ${cld}`);
+  }
+
+  return Object.freeze({
+    async exists(cld) {
+      const { rows } = await pool.query("SELECT 1 FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);
+      return rows.length > 0;
+    },
+    async ensureRegion(cld, label = `CLD ${cld}`) {
+      await pool.query(
+        `
+          INSERT INTO cld_regions (cld, label)
+          VALUES ($1, $2)
+          ON CONFLICT (cld) DO NOTHING;
+        `,
+        [cld, label]
+      );
+    },
+    async listIndexes() {
+      const { rows } = await pool.query(
+        "SELECT cld, label, ssids, cu_codes, revision, created_at, updated_at FROM cld_regions ORDER BY cld;"
+      );
+      return rows.map(toRegionIndex);
+    },
+    async resolveLookup(queryValue) {
+      const normalizedDigits = normalizeClD(queryValue);
+      const normalizedText = normalizeSsid(queryValue);
+      if (normalizedDigits) {
+        const { rows: directRows } = await pool.query(
+          "SELECT cld, label FROM cld_regions WHERE cld = $1 LIMIT 1;",
+          [normalizedDigits]
+        );
+        if (directRows.length > 0) return { cld: directRows[0].cld, matchedBy: "cld", label: directRows[0].label };
+        const { rows: cuRows } = await pool.query(
+          "SELECT cld, label FROM cld_regions WHERE $1 = ANY(cu_codes) LIMIT 1;",
+          [normalizedDigits]
+        );
+        if (cuRows.length > 0) return { cld: cuRows[0].cld, matchedBy: "cu", label: cuRows[0].label };
+      }
+      if (!normalizedText) return null;
+      const { rows: ssidRows } = await pool.query(
+        `
+          SELECT cld, label
+          FROM cld_regions
+          WHERE EXISTS (
+            SELECT 1
+            FROM unnest(ssids) AS ssid
+            WHERE UPPER(BTRIM(ssid)) = $1
+          )
+          LIMIT 1;
+        `,
+        [normalizedText]
+      );
+      return ssidRows.length > 0 ? { cld: ssidRows[0].cld, matchedBy: "ssid", label: ssidRows[0].label } : null;
+    },
+    async readIndex(cld) {
+      const { rows } = await pool.query("SELECT cld, label, ssids, cu_codes, revision, created_at, updated_at FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);
+      if (rows.length === 0) throw new Error(`Unknown CLD ${cld}`);
+      return toRegionIndex(rows[0]);
+    },
+    async readFeatures(cld, type) {
+      const { rows } = await pool.query("SELECT id, properties, ST_AsGeoJSON(geom)::json AS geometry FROM region_features WHERE cld = $1 AND feature_type = $2 ORDER BY id;", [cld, type]);
+      return rows.map(toRegionFeature);
+    },
+    async readBundle(cld) {
+      const [index, cu, blocks, dwellings] = await Promise.all([
+        this.readIndex(cld), this.readFeatures(cld, "cu"), this.readFeatures(cld, "blocks"), this.readFeatures(cld, "dwellings")
+      ]);
+      return { index, cu, blocks, dwellings };
+    },
+    async findFeature(cld, id) {
+      const { rows } = await pool.query(
+        `
+          SELECT id, feature_type, properties, ST_AsGeoJSON(geom)::json AS geometry
+          FROM region_features
+          WHERE cld = $1 AND id = $2
+          LIMIT 1;
+        `,
+        [cld, Number(id)]
+      );
+      if (rows.length === 0) return null;
+      return { type: rows[0].feature_type, feature: toRegionFeature(rows[0]) };
+    },
+    async createFeature(cld, type, feature, expectedRevision) {
+      const normalized = normalizeRegionFeature(feature);
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await advanceRevision(client, cld, expectedRevision);
+        const { rows } = await client.query(
+          `
+            INSERT INTO region_features (cld, feature_type, properties, geom)
+            VALUES ($1, $2, $3::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326))
+            RETURNING id;
+          `,
+          [cld, type, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
+        );
+        await client.query("COMMIT");
+        return rows[0].id;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async updateFeature(cld, id, feature, expectedRevision) {
+      const normalized = normalizeRegionFeature(feature);
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await advanceRevision(client, cld, expectedRevision);
+        const result = await client.query(
+          `
+            UPDATE region_features
+            SET
+              properties = $3::jsonb,
+              geom = ST_SetSRID(ST_GeomFromGeoJSON($4), 4326),
+              updated_at = NOW()
+            WHERE id = $1 AND cld = $2;
+          `,
+          [id, cld, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
+        );
+        if (result.rowCount === 0) {
+          await client.query("ROLLBACK");
+          return false;
+        }
+        await client.query("COMMIT");
+        return true;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async deleteFeature(cld, id, expectedRevision) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await advanceRevision(client, cld, expectedRevision);
+        const result = await client.query("DELETE FROM region_features WHERE id = $1 AND cld = $2;", [id, cld]);
+        if (result.rowCount === 0) {
+          await client.query("ROLLBACK");
+          return false;
+        }
+        await client.query("COMMIT");
+        return true;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async syncCuCodes(cld) {
+      const { rows } = await pool.query(
+        `
+          SELECT DISTINCT COALESCE(properties->>'CUID', properties->>'cu') AS cu_code
+          FROM region_features
+          WHERE cld = $1 AND feature_type = 'cu'
+          ORDER BY cu_code;
+        `,
+        [cld]
+      );
+      const cuCodes = rows.map((row) => String(row.cu_code || "").trim()).filter(Boolean);
+      await pool.query(
+        `
+          UPDATE cld_regions
+          SET cu_codes = $2::text[], updated_at = NOW()
+          WHERE cld = $1;
+        `,
+        [cld, cuCodes]
+      );
+    },
+    async writeIndex(cld, index) {
+      await pool.query(
+        `
+          UPDATE cld_regions
+          SET
+            label = $2,
+            ssids = $3::text[],
+            cu_codes = $4::text[],
+            updated_at = NOW()
+          WHERE cld = $1;
+        `,
+        [
+          cld,
+          index.label || `CLD ${cld}`,
+          Array.isArray(index.ssids) ? index.ssids : [],
+          Array.isArray(index.cuCodes) ? index.cuCodes : []
+        ]
+      );
+    },
+    async writeFeatures(cld, type, features) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("DELETE FROM region_features WHERE cld = $1 AND feature_type = $2;", [cld, type]);
+        for (const feature of features) {
+          const normalized = normalizeRegionFeature(feature);
+          if (!normalized.geometry) continue;
+          if (Number.isFinite(Number(normalized.id))) {
+            await client.query(
+              `
+                INSERT INTO region_features (id, cld, feature_type, properties, geom)
+                VALUES ($1, $2, $3, $4::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($5), 4326))
+                ON CONFLICT (id) DO UPDATE SET
+                  cld = EXCLUDED.cld,
+                  feature_type = EXCLUDED.feature_type,
+                  properties = EXCLUDED.properties,
+                  geom = EXCLUDED.geom,
+                  updated_at = NOW();
+              `,
+              [Number(normalized.id), cld, type, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
+            );
+          } else {
+            await client.query(
+              `
+                INSERT INTO region_features (cld, feature_type, properties, geom)
+                VALUES ($1, $2, $3::jsonb, ST_SetSRID(ST_GeomFromGeoJSON($4), 4326));
+              `,
+              [cld, type, JSON.stringify(normalized.properties || {}), JSON.stringify(normalized.geometry)]
+            );
+          }
+        }
+        if (type === "cu") {
+          const cuCodes = uniqueSorted(features.map((feature) => extractCuCode(feature?.properties || {})));
+          await client.query(
+            "UPDATE cld_regions SET cu_codes = $2::text[], updated_at = NOW() WHERE cld = $1;",
+            [cld, cuCodes]
+          );
+        }
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+  });
+}

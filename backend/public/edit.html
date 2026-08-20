@@ -4,46 +4,47 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CLD Region Editor</title>
-    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260618a" />
-    <link rel="stylesheet" href="/vendor/leaflet-draw/leaflet.draw.css?v=20260618a" />
-    <link rel="stylesheet" href="/styles.css?v=20260618a" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css?v=20260720a" />
+    <link rel="stylesheet" href="/styles.css?v=20260817e" />
   </head>
   <body>
     <main id="map"></main>
-    <div class="app-version-badge">v20260618a</div>
+    <div id="tile-cache-status" class="tile-cache-status" role="status" aria-live="polite">Tiles: checking…</div>
+    <div class="app-version-badge">v20260728e</div>
+
+    <footer class="app-attribution">
+      <a href="https://geoprod.statcan.gc.ca/camv1/index.html" target="_blank" rel="noreferrer">Publicly Available Map Source</a>.
+      Maps are used under <a href="https://www.statcan.gc.ca/en/reference/licence" target="_blank" rel="noreferrer">Statistics Canada Open Licence</a>.
+    </footer>
 
     <div id="map-ui">
+      <div id="user-widget-root"></div>
       <button id="locate-btn" class="map-action-btn" type="button" aria-label="Focus on my location" title="Focus on my location"></button>
       <button id="basemap-btn" class="map-action-btn map-action-btn-leaf" type="button" aria-label="Switch base map (current: Satellite)" title="Switch base map (current: Satellite)"></button>
     </div>
 
     <section id="editor-panel">
       <div class="editor-route-head">
-        <div id="editor-route-label">Loading editor...</div>
+        <div>
+          <div id="editor-route-label">Loading editor...</div>
+          <div id="editor-route-summary" class="editor-route-summary" aria-live="polite"></div>
+          <div id="editor-sync-status" class="editor-sync-status" aria-live="polite">Saved</div>
+        </div>
         <div class="editor-route-links">
           <a id="editor-view-link" class="route-link-btn" href="#">Viewer</a>
+          <button id="upload-refresh-btn" type="button" class="route-link-btn route-link-btn-accent">Upload and refresh</button>
+          <button id="dwelling-move-toggle" type="button" class="route-link-btn dwelling-move-toggle" aria-label="Switch editor mode" title="Switch editor mode">Editing mode</button>
+          <a id="geometry-editor-link" class="route-link-btn" href="#" hidden>Edit geometry</a>
           <a class="route-link-btn" href="/">Find CLD</a>
         </div>
       </div>
 
-      <button id="dwellings-collapse-btn" type="button" class="editor-collapse-btn" aria-expanded="true">Region Editor</button>
-      <div id="dwellings-form-wrap">
-        <div class="editor-help">
-          Tap a `CU` or `Block` to select it. Use `Add a dwelling` for the iPhone camera flow, or `Upload photos` to attach media without creating a new dwelling.
+      <button id="dwellings-collapse-btn" type="button" class="editor-collapse-btn" aria-expanded="false">Dwellings Editor</button>
+      <div id="dwellings-form-wrap" class="collapsed">
+        <div id="editor-mode-help" class="editor-help">
+          Edit house and special-location information. Adding and moving are disabled.
         </div>
-
-        <details class="editor-group" open>
-          <summary class="editor-group-title">Quick Actions</summary>
-          <div class="editor-group-body">
-            <div class="editor-row-actions editor-row-actions-two">
-              <button id="dwelling-add-btn" type="button" class="editor-save-btn">Add a dwelling</button>
-              <button id="photo-upload-btn" type="button" class="editor-save-btn">Upload photos</button>
-            </div>
-            <input id="dwelling-photo-capture-input" type="file" accept="image/*" capture="environment" hidden />
-            <input id="editor-photo-upload-input" type="file" accept="image/*" multiple hidden />
-            <div id="upload-status" class="editor-inline-status"></div>
-          </div>
-        </details>
 
         <details class="editor-group" open>
           <summary class="editor-group-title">Dwelling Details</summary>
@@ -57,34 +58,22 @@
             <label class="editor-label">Dwelling No
               <input id="dwelling-no" class="editor-input" type="text" placeholder="0001" />
             </label>
-            <label class="editor-label">Type
-              <input id="dwelling-type" class="editor-input" type="text" placeholder="1" />
-            </label>
-            <label class="editor-label">Civic
-              <input id="dwelling-civic" class="editor-input" type="text" placeholder="Optional" />
-            </label>
             <label class="editor-label">Status
-              <input id="dwelling-status" class="editor-input" type="text" placeholder="Optional" />
-            </label>
-            <label class="editor-label">Contact
-              <input id="dwelling-contact" class="editor-input" type="text" placeholder="Optional" />
-            </label>
-            <label class="editor-label">External Link
-              <input id="dwelling-link" class="editor-input" type="url" placeholder="https://..." />
-            </label>
-            <label class="editor-label">Photo URL
-              <input id="dwelling-photo" class="editor-input" type="url" placeholder="/media/cld/..." />
-            </label>
-            <label class="editor-label">Description
-              <textarea id="dwelling-description" class="editor-input editor-textarea" rows="3" placeholder="Description"></textarea>
+              <select id="dwelling-status" class="editor-input">
+                <option value="429">429</option>
+                <option value="400">400</option>
+                <option value="402">402</option>
+                <option value="701">701</option>
+                <option value="500">500</option>
+                <option value="312">312</option>
+                <option value="324">324</option>
+                <option value="000">000</option>
+                <option value="001">001</option>
+                <option value="601">601</option>
+              </select>
             </label>
             <label class="editor-label">Notes
               <textarea id="dwelling-notes" class="editor-input editor-textarea" rows="2" placeholder="Notes"></textarea>
-            </label>
-
-            <label class="editor-checkbox-row">
-              <input id="dwelling-occupied" type="checkbox" checked />
-              <span>Occupied</span>
             </label>
 
             <div class="editor-row-actions">
@@ -95,27 +84,113 @@
           </div>
         </details>
 
-        <details class="editor-group" open>
-          <summary class="editor-group-title">Bulk Actions</summary>
+        <details id="special-location-group" class="editor-group">
+          <summary class="editor-group-title">Special Locations</summary>
           <div class="editor-group-body">
-            <div class="editor-help">Save all pending dwelling changes at once.</div>
-            <button id="dwelling-save-all-btn" type="button" class="editor-save-btn" disabled>Save All Dwellings</button>
+            <label class="editor-label">Type
+              <select id="special-location-type" class="editor-input">
+                <option value="band_hall">Band hall</option>
+                <option value="stadium">Stadium</option>
+                <option value="cafe">Café</option>
+                <option value="gas_station">Gas station</option>
+                <option value="arena">Arena</option>
+                <option value="cultural">Cultural centre</option>
+                <option value="church">Church</option>
+                <option value="band_office">Band office</option>
+                <option value="health_office">Health office</option>
+                <option value="radio_tower">Radio tower</option>
+                <option value="school">School</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label class="editor-label">Name
+              <input id="special-location-name" class="editor-input" type="text" placeholder="Optional name" />
+            </label>
+            <label class="editor-label">Notes
+              <textarea id="special-location-notes" class="editor-input editor-textarea" rows="2" placeholder="Optional notes"></textarea>
+            </label>
+            <div class="editor-row-actions">
+              <button id="special-location-place-btn" type="button" class="editor-save-btn">New</button>
+              <button id="special-location-save-btn" type="button" class="editor-save-btn">Save</button>
+              <button id="special-location-delete-btn" type="button" class="editor-danger-btn">Delete</button>
+            </div>
           </div>
         </details>
 
-        <details class="editor-group" open>
-          <summary class="editor-group-title">Zone Geometry</summary>
+        <details class="editor-group">
+          <summary class="editor-group-title">Export / Import</summary>
           <div class="editor-group-body">
-            <div class="editor-help">Boundary editing is enabled for both `CU` and `Block` polygons.</div>
-            <button id="save-edits-btn" type="button" class="editor-save-btn" disabled>Save Geometry</button>
-            <div id="editor-status">No pending changes</div>
+            <div class="editor-help">Export the CLD list, copy SSIDs by status, or import a list to change its status.</div>
+            <div class="editor-row-actions">
+              <button id="dwelling-export-btn" type="button" class="editor-save-btn">Export XLS</button>
+              <label class="editor-label">Copy status
+                <select id="copy-ssid-status" class="editor-input">
+                  <option value="429" selected>429</option>
+                  <option value="400">400</option>
+                  <option value="402">402</option>
+                  <option value="701">701</option>
+                  <option value="500">500</option>
+                  <option value="312">312</option>
+                  <option value="324">324</option>
+                  <option value="000">000</option>
+                  <option value="001">001</option>
+                  <option value="601">601</option>
+                </select>
+              </label>
+              <button id="copy-ssids-btn" type="button" class="editor-save-btn">COPY SSID</button>
+            </div>
+            <label class="editor-label">Bulk status SSIDs
+              <textarea id="bulk-status-ssids" class="editor-input editor-textarea" rows="4" placeholder="One SSID per line"></textarea>
+            </label>
+            <label class="editor-label">New status
+              <select id="bulk-status-code" class="editor-input">
+                <option value="429">429</option>
+                <option value="400">400</option>
+                <option value="402">402</option>
+                <option value="701">701</option>
+                <option value="500">500</option>
+                <option value="312">312</option>
+                <option value="324">324</option>
+                <option value="000">000</option>
+                <option value="001">001</option>
+                <option value="601">601</option>
+              </select>
+            </label>
+            <button id="bulk-status-apply-btn" type="button" class="editor-save-btn">Apply Status to List</button>
           </div>
         </details>
+
+        <details class="editor-group">
+          <summary class="editor-group-title">Bulk notes update</summary>
+          <div class="editor-group-body">
+            <div class="editor-help">Upload XLS/XLSX: column 1 is SSID, column 2 is a note. A note is appended to the current note; an empty second cell clears it.</div>
+            <label class="editor-label">XLS/XLSX file
+              <input id="bulk-notes-file" class="editor-input" type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            </label>
+            <button id="bulk-notes-apply-btn" type="button" class="editor-save-btn">Apply Notes from File</button>
+          </div>
+        </details>
+
+        <details class="editor-group">
+          <summary class="editor-group-title">Today's updates</summary>
+          <div class="editor-group-body">
+            <div class="editor-help">Download today's changed dwellings as XLS (Winnipeg time): SSID, NEW CODE, NOTE.</div>
+            <button id="today-updates-export-btn" type="button" class="editor-save-btn">Export Today's Updates XLS</button>
+          </div>
+        </details>
+
       </div>
     </section>
 
-    <script src="/vendor/leaflet/leaflet.js?v=20260618a"></script>
-    <script src="/vendor/leaflet-draw/leaflet.draw.js?v=20260618a"></script>
-    <script src="/app-edit.js?v=20260618a"></script>
+    <script src="/vendor/leaflet/leaflet.js?v=20260721a"></script>
+    <script src="/api-client.js?v=20260804a"></script>
+    <script src="/app-auth.js?v=20260820a"></script>
+    <script src="/offline-data.js?v=20260820a"></script>
+    <script src="/map-data-helpers.js?v=20260820b"></script>
+    <script src="/region-client.js?v=20260820b"></script>
+    <script src="/map-actions.js?v=20260820a"></script>
+    <script src="/map-runtime.js?v=20260820a"></script>
+    <script src="/vendor/xlsx/xlsx.full.min.js"></script>
+    <script src="/app-edit.js?v=20260820b"></script>
   </body>
 </html>
