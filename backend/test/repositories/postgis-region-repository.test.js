@@ -14,4 +14,7 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
   const features = await repository.readFeatures("1234", "dwellings");
   assert.equal(features[0].properties.cu, "12340001");
   assert.deepEqual(calls[1].values, ["1234", "dwellings"]);
+  await repository.writeIndex("1234", { label: "Updated", ssids: ["B"], cuCodes: ["12340002"] });
+  assert.deepEqual(calls[2].values, ["1234", "Updated", ["B"], ["12340002"]]);
+  assert.match(calls[2].query, /UPDATE cld_regions/);
 });

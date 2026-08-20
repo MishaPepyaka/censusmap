@@ -43,6 +43,7 @@ implementation.
   - [x] Define and wire a single `RegionRepository` interface for region routes.
   - [ ] Move PostGIS and temporary file-store implementations behind dedicated repository adapters.
     - [x] Extract PostGIS existence/index/features read adapter.
+    - [x] Extract PostGIS region-index write adapter.
     - [x] Extract temporary file-store existence/index/features/bundle read adapter.
     - [x] Extract temporary file-store index and feature-collection write adapter.
     - [x] Extract temporary file-store region initialisation and media-directory handling.

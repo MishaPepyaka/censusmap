@@ -596,23 +596,7 @@ async function readRegionIndex(cld) {
 async function writeRegionIndex(cld, index) {
   if (!useFileStore) {
     await ensureRegionRecord(cld, index.label || `CLD ${cld}`);
-    await pool.query(
-      `
-        UPDATE cld_regions
-        SET
-          label = $2,
-          ssids = $3::text[],
-          cu_codes = $4::text[],
-          updated_at = NOW()
-        WHERE cld = $1;
-      `,
-      [
-        cld,
-        index.label || `CLD ${cld}`,
-        Array.isArray(index.ssids) ? index.ssids : [],
-        Array.isArray(index.cuCodes) ? index.cuCodes : []
-      ]
-    );
+    await postgisRegionRepository.writeIndex(cld, index);
     return;
   }
   await fileRegionRepository.writeIndex(cld, index);

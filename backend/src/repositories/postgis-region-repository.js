@@ -27,6 +27,25 @@ export function createPostgisRegionRepository(pool) {
     async readFeatures(cld, type) {
       const { rows } = await pool.query("SELECT id, properties, ST_AsGeoJSON(geom)::json AS geometry FROM region_features WHERE cld = $1 AND feature_type = $2 ORDER BY id;", [cld, type]);
       return rows.map(toRegionFeature);
+    },
+    async writeIndex(cld, index) {
+      await pool.query(
+        `
+          UPDATE cld_regions
+          SET
+            label = $2,
+            ssids = $3::text[],
+            cu_codes = $4::text[],
+            updated_at = NOW()
+          WHERE cld = $1;
+        `,
+        [
+          cld,
+          index.label || `CLD ${cld}`,
+          Array.isArray(index.ssids) ? index.ssids : [],
+          Array.isArray(index.cuCodes) ? index.cuCodes : []
+        ]
+      );
     }
   });
 }
