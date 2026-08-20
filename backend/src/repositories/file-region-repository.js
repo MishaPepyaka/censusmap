@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { buildFeatureCollection, featureFileNames, normalizeClD, normalizeRegionFeature, normalizeSsid } from "../domain/region-feature.js";
+import { buildFeatureCollection, extractCuCode, featureFileNames, normalizeClD, normalizeRegionFeature, normalizeSsid } from "../domain/region-feature.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "../infrastructure/json-files.js";
 
 export function createFileRegionRepository(cldRootDir) {
@@ -90,6 +90,23 @@ export function createFileRegionRepository(cldRootDir) {
         if (feature) return { type, feature };
       }
       return null;
+    },
+    async createFeature(cld, type, feature) {
+      const index = await readIndex(cld);
+      const nextId = Number.isFinite(Number(index.nextFeatureId)) ? Number(index.nextFeatureId) : 1;
+      const normalized = normalizeRegionFeature({ ...feature, id: nextId });
+      const features = await readFeatures(cld, type);
+      features.push(normalized);
+      await writeJsonFile(featurePath(cld, type), buildFeatureCollection(features));
+      if (type !== "dwellings") {
+        const cuCodes = new Set(Array.isArray(index.cuCodes) ? index.cuCodes : []);
+        const cuCode = extractCuCode(normalized.properties || {});
+        if (cuCode) cuCodes.add(cuCode);
+        index.cuCodes = [...cuCodes].sort();
+      }
+      index.nextFeatureId = nextId + 1;
+      await writeJsonFile(indexPath(cld), { ...index, cld, updatedAt: new Date().toISOString() });
+      return nextId;
     },
     async readBundle(cld) {
       const [index, cu, blocks, dwellings] = await Promise.all([

@@ -55,6 +55,7 @@ implementation.
     - [x] Extract PostGIS and file-store CLD catalog loading.
     - [x] Extract PostGIS and file-store CLD/CU/SSID lookup resolution.
     - [x] Extract PostGIS and file-store feature lookup by ID.
+    - [x] Extract PostGIS and file-store feature creation.
     - [x] Extract temporary file-store existence/index/features/bundle read adapter.
     - [x] Extract temporary file-store index and feature-collection write adapter.
     - [x] Extract temporary file-store region initialisation and media-directory handling.

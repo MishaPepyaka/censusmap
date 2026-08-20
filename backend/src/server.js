@@ -610,21 +610,7 @@ async function createRegionFeature(cld, feature) {
     return id;
   }
 
-  const index = await readRegionIndex(cld);
-  const nextId = Number.isFinite(Number(index.nextFeatureId)) ? Number(index.nextFeatureId) : 1;
-  normalized.id = nextId;
-  collection.push(normalized);
-  await writeRegionFeatures(cld, type, collection);
-
-  if (type !== "dwellings") {
-    const cuCodes = new Set(Array.isArray(index.cuCodes) ? index.cuCodes : []);
-    const cuCode = extractCuCode(normalized.properties || {});
-    if (cuCode) cuCodes.add(cuCode);
-    index.cuCodes = [...cuCodes].sort();
-  }
-  index.nextFeatureId = nextId + 1;
-  await writeRegionIndex(cld, index);
-  return nextId;
+  return fileRegionRepository.createFeature(cld, type, normalized);
 }
 
 async function updateRegionFeature(cld, id, feature) {
