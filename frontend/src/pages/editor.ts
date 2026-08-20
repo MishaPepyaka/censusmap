@@ -96,11 +96,11 @@
     editorRouteLabel.textContent = `CLD ${cld} editor`;
   }
   if (editorViewLink) {
-    editorViewLink.href = `/${cld}`;
+    editorViewLink.href = `/${cld}${window.location.search}`;
   }
 
   if (geometryEditorLink) {
-    geometryEditorLink.href = `/${cld}/edit_geometry`;
+    geometryEditorLink.href = `/${cld}/edit_geometry${window.location.search}`;
   }
 
   function getViewerShareUrl() {

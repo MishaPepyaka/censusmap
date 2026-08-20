@@ -128,7 +128,7 @@
   await loadCurrentUser();
   if (editRouteLink) {
     const canEdit = Boolean(currentUser?.isAdmin || currentUser?.role === "crew_leader");
-    editRouteLink.href = `/${cld}/edit`;
+    editRouteLink.href = `/${cld}/edit${window.location.search}`;
     editRouteLink.hidden = !canEdit;
   }
 
