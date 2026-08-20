@@ -13,7 +13,7 @@ The new target architecture is:
 
 - Dedicated-server deployment only.
 - Region-first navigation by `CLD`.
-- File-based geometry and dwelling storage per `CLD`.
+- PostgreSQL/PostGIS storage for CLD metadata and geometry.
 - Viewer mode for field use.
 - Editor mode for geometry and dwelling maintenance.
 - iPhone-compatible editing and camera upload flow.
@@ -36,18 +36,15 @@ The new target architecture is:
 
 ## Data Storage Model
 
-Data should move to a file-based region structure instead of a single mixed feature store.
+Production region data is stored in PostgreSQL/PostGIS. The CLD file structure
+is retained for media, import/export, backups, and temporary migration input.
 
-Suggested canonical layout:
+Disk layout for media and migration inputs:
 
 ```text
 data/
   cld/
     <CLD_number>/
-      index.json              # CLD metadata, SSID mappings, labels, version
-      cu.geojson              # CU geometry for this CLD
-      blocks.geojson          # Block geometry for this CLD
-      dwellings.geojson       # Dwelling points and attributes for this CLD
       media/
         dwellings/
           <dwelling_id>/
@@ -59,8 +56,8 @@ data/
 
 Rules:
 - One folder per `CLD`.
-- `SSID` to `CLD` lookup is resolved through metadata, not hard-coded routes.
-- `CU`, `Block`, and `dwelling` files are loaded only for the requested `CLD`.
+- `SSID` to `CLD` lookup and all region features are read from PostgreSQL/PostGIS.
+- GeoJSON files under `data/` are explicit import/export or migration artifacts, not live production data.
 - Uploaded photos must be compressed server-side before long-term storage.
 
 ## Editing Requirements
@@ -85,7 +82,7 @@ Rules:
 
 - Resolve `CLD` and `SSID` on the landing route.
 - Serve region-specific viewer and editor routes.
-- Read/write per-CLD GeoJSON and metadata files.
+- Read/write CLD-scoped metadata and geometry through the region repository.
 - Validate geometry and dwelling payloads before save.
 - Accept image uploads, compress them, and store stable file references.
 - Protect edit endpoints with authentication before public deployment.
@@ -95,16 +92,15 @@ Rules:
 Recommended production shape for a dedicated server:
 - `Node.js` app for routes, APIs, uploads, and static assets,
 - `Nginx` as reverse proxy,
-- local disk storage under `data/cld/`,
+- PostgreSQL/PostGIS for region data and local disk storage for uploaded media,
 - optional nightly backup to object storage.
 
 ## Operational Notes
 
-- The runtime stack is file-store only; Postgres is not required for production.
+- PostgreSQL/PostGIS is the production source of truth for region metadata and geometry; see [docs/DATA_STORE.md](docs/DATA_STORE.md).
+- Set `USE_FILE_STORE=false` in production. File-store mode is temporary migration/recovery compatibility only.
 - Set `EDIT_USERNAME` and `EDIT_PASSWORD` to protect `/<CLD_number>/edit` and write APIs with HTTP Basic auth.
-- Use `scripts/backup-cld-data.sh` to create a compressed snapshot of `data/cld/`.
-- Use `scripts/sync-cld-data-to-server.sh <ssh_target> <remote_app_dir>` to publish local `data/cld/` to the server.
-- On first startup, the server migrates legacy shared feature data into `data/cld/` if no CLD folders exist yet.
+- Use `scripts/backup-cld-data.sh` to archive media and CLD import/export files. Back up PostgreSQL separately.
 
 ## Current Status
 

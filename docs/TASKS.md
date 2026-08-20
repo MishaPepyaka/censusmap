@@ -13,10 +13,10 @@ implementation.
 
 ## Phase 0 — Baseline and decisions
 
-- [ ] R100 Document the current production data-store choice and make it explicit in deployment configuration.
-  - Decide whether Postgres/PostGIS or CLD-scoped files is the sole runtime source of truth.
-  - Define backup, restore, import, and migration responsibilities for the chosen store.
-  - Do not keep both runtime CRUD implementations after migration.
+- [x] R100 Document the production data-store choice and make it explicit in deployment configuration.
+  - PostgreSQL/PostGIS is the sole production source of truth; see `docs/DATA_STORE.md`.
+  - Production defaults set `USE_FILE_STORE=false`; the file store remains temporary migration/recovery compatibility.
+  - R112 will remove its duplicate runtime CRUD after migration verification.
 
 - [ ] R101 Add a test baseline.
   - Add unit tests for CLD/SSID, feature classification, dwelling identity, and status normalisation.

@@ -4,9 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${PORT:-8080}"
 FILE_STORE_PATH="${FILE_STORE_PATH:-$ROOT_DIR/data/file-store.json}"
-USE_FILE_STORE="${USE_FILE_STORE:-true}"
+USE_FILE_STORE="${USE_FILE_STORE:-false}"
 
-if [[ ! -f "$FILE_STORE_PATH" ]]; then
+if [[ "$USE_FILE_STORE" == "true" && ! -f "$FILE_STORE_PATH" ]]; then
   echo "Data file not found: $FILE_STORE_PATH" >&2
   exit 1
 fi
@@ -18,7 +18,7 @@ export USE_FILE_STORE
 
 echo "Starting backend..."
 echo "URL: http://localhost:${PORT}"
-echo "API: http://localhost:${PORT}/api/features"
+echo "API: http://localhost:${PORT}/api/cld/:cld/features"
 echo "USE_FILE_STORE=${USE_FILE_STORE}"
 echo "FILE_STORE_PATH=${FILE_STORE_PATH}"
 echo

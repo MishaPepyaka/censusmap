@@ -19,7 +19,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8080
-      USE_FILE_STORE: "${USE_FILE_STORE:-true}"
+      USE_FILE_STORE: "${USE_FILE_STORE:-false}"
       FILE_STORE_PATH: /data/file-store.json
       POSTGRES_HOST: "${POSTGRES_HOST:-db}"
       POSTGRES_PORT: "${POSTGRES_PORT:-5432}"

@@ -7,6 +7,10 @@ The current runtime is still centred on `backend/src/server.js` and static scrip
 in `backend/public/`; this is the destination, not a claim that the migration is
 complete.
 
+PostgreSQL/PostGIS is the selected production source of truth for region
+metadata and geometry. See [DATA_STORE.md](DATA_STORE.md) for the migration and
+backup boundary.
+
 ## Target Layout
 
 ```text
