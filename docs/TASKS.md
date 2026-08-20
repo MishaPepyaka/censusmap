@@ -114,6 +114,7 @@ implementation.
 
 - [ ] R130 Store CLD snapshots in IndexedDB.
   - [x] Persist each downloaded CLD GeoJSON snapshot with its timestamp and server revision.
+  - [x] Show shared unavailable, downloading, ready, stale, and failed snapshot states in viewer and editor.
   - Download CU, blocks, dwellings, special locations, snapshot timestamp, and revision per CLD.
   - Render a downloaded snapshot and build search indexes without a network connection.
   - Show clear states for unavailable, downloading, ready, stale, and failed snapshots.

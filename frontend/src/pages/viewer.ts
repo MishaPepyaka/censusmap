@@ -20,7 +20,7 @@
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
-  const { loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
+  const { describeOfflineSnapshotState, loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
   const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
   const { createCommonMapShell } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
@@ -100,9 +100,14 @@
   }
 
   async function getMapData(forceNetwork = false) {
-    const snapshot = await loadRegionSnapshot(cld, { forceNetwork });
+    const snapshot = await loadRegionSnapshot(cld, {
+      forceNetwork,
+      onOfflineStateChange: (state) => {
+        if (state === "downloading" && routeSubtitle) routeSubtitle.textContent = describeOfflineSnapshotState(state);
+      }
+    });
     if (Number.isFinite(Number(snapshot.revision))) regionRevision = Number(snapshot.revision);
-    return { ...partitionRegionFeatures(snapshot.features), loadError: snapshot.loadError };
+    return { ...partitionRegionFeatures(snapshot.features), loadError: snapshot.loadError, offlineState: snapshot.offlineState };
   }
 
   function getZoneCenter(layer) {
@@ -167,7 +172,8 @@
     }).length;
     const closedPercent = records.length ? ((closedCases / records.length) * 100).toFixed(1) : "0.0";
     const summaryText = `${summary.counts?.cu || 0} CU · ${summary.counts?.blocks || 0} blocks · ${records.length} dwellings · ${closedCases} completed (${closedPercent}%)`;
-    routeSubtitle.textContent = mapData.loadError ? `${summaryText} · ${mapData.loadError}` : summaryText;
+    const snapshotText = describeOfflineSnapshotState(mapData.offlineState);
+    routeSubtitle.textContent = `${summaryText} · ${snapshotText}${mapData.loadError ? ` · ${mapData.loadError}` : ""}`;
   }
   updateRouteSubtitle();
   const cuCodes = zones.map((feature) => extractCuCode(feature.properties || {}));

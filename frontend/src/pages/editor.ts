@@ -20,7 +20,7 @@
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
-  const { loadRegionSnapshot, partitionRegionFeatures } = window.CensusMapRegion;
+  const { describeOfflineSnapshotState, loadRegionSnapshot, partitionRegionFeatures } = window.CensusMapRegion;
   const { buildMapActionButtons } = window.CensusMapActions;
   const { createCommonMapShell } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
@@ -150,13 +150,19 @@
   }
 
   async function getMapData(forceNetwork = false) {
-    const snapshot = await loadRegionSnapshot(cld, { forceNetwork });
+    const snapshot = await loadRegionSnapshot(cld, {
+      forceNetwork,
+      onOfflineStateChange: (state) => {
+        if (state === "downloading") setStatus(describeOfflineSnapshotState(state));
+      }
+    });
     if (Number.isFinite(Number(snapshot.revision))) regionRevision = Number(snapshot.revision);
     const features = snapshot.features.filter((feature) => !isExcludedCuFeature(feature));
     const partitioned = partitionRegionFeatures(features);
     return {
       source: snapshot.source,
       loadError: snapshot.loadError,
+      offlineState: snapshot.offlineState,
       blocks: partitioned.zones,
       dwellings: partitioned.dwellings,
       specialLocations: partitioned.specialLocations
@@ -270,7 +276,7 @@
       completedStatuses.has(normalizeDwellingStatus(marker.feature?.properties?.status))
     ).length;
     const percent = markers.length ? ((completed / markers.length) * 100).toFixed(1) : "0.0";
-    editorRouteSummary.textContent = `${cuCodes.size} CU · ${blockCount} blocks · ${markers.length} dwellings · ${completed} completed (${percent}%)`;
+    editorRouteSummary.textContent = `${cuCodes.size} CU · ${blockCount} blocks · ${markers.length} dwellings · ${completed} completed (${percent}%) · ${describeOfflineSnapshotState(data.offlineState)}`;
   }
 
   if (data.loadError) {

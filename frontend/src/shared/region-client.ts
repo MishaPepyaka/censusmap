@@ -3,11 +3,13 @@ import { isDwellingFeature, isSpecialLocationFeature, isZoneFeature, type Region
 import { applyLocalPendingMutations, readCachedFeatures, saveCachedFeatures } from "./offline-data.js";
 
 export type RegionSnapshotSource = "api" | "cache" | "none";
+export type OfflineSnapshotState = "unavailable" | "downloading" | "ready" | "stale" | "failed";
 export type RegionSnapshot = {
   features: RegionFeature[];
   loadError: string;
   revision: number | null;
   source: RegionSnapshotSource;
+  offlineState: OfflineSnapshotState;
 };
 
 export type RegionSummary = {
@@ -44,8 +46,22 @@ function asRevision(payload: unknown): number | null {
   return Number.isSafeInteger(revision) && revision >= 1 ? revision : null;
 }
 
-export async function loadRegionSnapshot(cld: string | number, { forceNetwork = false } = {}): Promise<RegionSnapshot> {
+export function describeOfflineSnapshotState(state: OfflineSnapshotState): string {
+  return {
+    unavailable: "Offline snapshot unavailable",
+    downloading: "Downloading offline snapshot",
+    ready: "Offline snapshot ready",
+    stale: "Offline snapshot is stale",
+    failed: "Offline snapshot download failed"
+  }[state];
+}
+
+export async function loadRegionSnapshot(
+  cld: string | number,
+  { forceNetwork = false, onOfflineStateChange }: { forceNetwork?: boolean; onOfflineStateChange?: (state: OfflineSnapshotState) => void } = {}
+): Promise<RegionSnapshot> {
   const normalizedCld = String(cld);
+  onOfflineStateChange?.("downloading");
   try {
     if (!isOnline()) throw new Error("Offline");
     const refresh = forceNetwork ? `?refresh=${Date.now()}` : "";
@@ -54,20 +70,25 @@ export async function loadRegionSnapshot(cld: string | number, { forceNetwork = 
     if (features.length === 0) throw new Error("The map server returned an empty feature list");
     const revision = asRevision(payload);
     saveCachedFeatures(normalizedCld, features, revision);
-    return { features: applyLocalPendingMutations(normalizedCld, features) as RegionFeature[], loadError: "", revision, source: "api" };
+    onOfflineStateChange?.("ready");
+    return { features: applyLocalPendingMutations(normalizedCld, features) as RegionFeature[], loadError: "", revision, source: "api", offlineState: "ready" };
   } catch (error) {
     const snapshot = await readCachedFeatures(normalizedCld);
     const features = Array.isArray(snapshot?.features) ? snapshot.features as RegionFeature[] : [];
     if (features.length > 0) {
-      return { features: applyLocalPendingMutations(normalizedCld, features) as RegionFeature[], loadError: "Offline: showing the last map saved on this device.", revision: asRevision(snapshot), source: "cache" };
+      onOfflineStateChange?.("stale");
+      return { features: applyLocalPendingMutations(normalizedCld, features) as RegionFeature[], loadError: "Offline: showing the last map saved on this device.", revision: asRevision(snapshot), source: "cache", offlineState: "stale" };
     }
+    const offlineState: OfflineSnapshotState = isOnline() ? "failed" : "unavailable";
+    onOfflineStateChange?.(offlineState);
     return {
       features: [],
       loadError: isOnline()
         ? `Map data could not be loaded: ${errorMessage(error)}`
         : "Offline: application shell is ready. Connect once to download this CLD for offline use.",
       revision: null,
-      source: "none"
+      source: "none",
+      offlineState
     };
   }
 }
