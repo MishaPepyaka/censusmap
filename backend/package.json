@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node src/server.js",
     "import:cld:db": "node scripts/import-cld-files-to-db.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "test:unit": "node --test test/domain",
+    "test:api": "node --test test/api",
+    "test:browser": "node --test test/api/server.integration.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

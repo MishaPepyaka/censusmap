@@ -10,6 +10,7 @@ import { execFile } from "node:child_process";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
+import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
   classifyFeature,
@@ -32,10 +33,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..", "..");
 const publicDir = path.join(__dirname, "..", "public");
-const dataDir = path.join(repoRoot, "data");
+const dataDir = path.resolve(process.env.DATA_DIR || path.join(repoRoot, "data"));
 const cldRootDir = path.join(dataDir, "cld");
 
-const app = express();
+export const app = express();
 const port = Number(process.env.PORT || 8080);
 const useFileStore = String(process.env.USE_FILE_STORE || "false").toLowerCase() === "true";
 const fileStorePath = process.env.FILE_STORE_PATH || path.join(dataDir, "file-store.json");
@@ -1906,18 +1907,29 @@ app.get("*", (_req, res) => {
   res.redirect("/");
 });
 
-const startup = useFileStore ? ensureFileStore() : initDb();
+async function initializeApp() {
+  if (useFileStore) {
+    await ensureFileStore();
+    await migrateLegacyDataToClDStore();
+    return;
+  }
+  await initDb();
+}
 
-startup
-  .then(async () => {
-    if (useFileStore) {
-      await migrateLegacyDataToClDStore();
-    }
-    app.listen(port, () => {
-      console.log(`Map app is running on port ${port} (${useFileStore ? "file-store mode" : "postgis mode"})`);
+export async function startServer({ listenPort = port } = {}) {
+  await initializeApp();
+  return new Promise((resolve, reject) => {
+    const server = app.listen(listenPort, () => {
+      console.log(`Map app is running on port ${listenPort} (${useFileStore ? "file-store mode" : "postgis mode"})`);
+      resolve(server);
     });
-  })
-  .catch((error) => {
+    server.once("error", reject);
+  });
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  startServer().catch((error) => {
     console.error("Failed to initialize app:", error);
     process.exit(1);
   });
+}

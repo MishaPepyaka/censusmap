@@ -19,9 +19,10 @@ implementation.
   - R112 will remove its duplicate runtime CRUD after migration verification.
 
 - [ ] R101 Add a test baseline.
-  - Add unit tests for CLD/SSID, feature classification, dwelling identity, and status normalisation.
-  - Add API integration tests for authentication, CLD access, and feature CRUD.
-  - Add one browser smoke test for login, viewer, and editor navigation.
+  - [x] Add unit tests for CLD/SSID, feature classification, dwelling identity, status normalisation, and JSON persistence.
+  - [x] Add isolated file-store API integration coverage for health, lookup, and anonymous access rejection.
+  - [x] Add a Chromium smoke test for login and anonymous viewer/editor redirects.
+  - [ ] Add PostGIS-backed authenticated CRUD and CLD-access integration coverage.
 
 ## Phase 1 — Canonical domain and backend
 
