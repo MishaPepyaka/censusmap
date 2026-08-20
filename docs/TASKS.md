@@ -33,7 +33,8 @@ implementation.
 
 - [ ] R111 Split the Express monolith.
   - [x] Extract Express app setup, middleware, and static asset registration from `backend/src/server.js`.
-  - [ ] Add central error handling and move auth/access, regions, users, uploads, and tile proxy routes into route modules.
+  - [x] Move auth, regions, users, uploads, system, and tile proxy routes into route modules.
+  - [ ] Add central error handling.
   - [ ] Move data access and business rules into repositories and services.
 
 - [ ] R112 Consolidate region persistence.
