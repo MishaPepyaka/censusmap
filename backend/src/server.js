@@ -698,69 +698,8 @@ async function buildLookupRecords() {
 }
 
 async function resolveClDFromLookup(queryValue) {
-  const normalizedDigits = normalizeClD(queryValue);
-  const normalizedText = normalizeSsid(queryValue);
-
-  if (!useFileStore) {
-    if (normalizedDigits) {
-      const { rows: directRows } = await pool.query(
-        "SELECT cld, label FROM cld_regions WHERE cld = $1 LIMIT 1;",
-        [normalizedDigits]
-      );
-      if (directRows.length > 0) {
-        return { cld: directRows[0].cld, matchedBy: "cld", label: directRows[0].label };
-      }
-
-      const { rows: cuRows } = await pool.query(
-        "SELECT cld, label FROM cld_regions WHERE $1 = ANY(cu_codes) LIMIT 1;",
-        [normalizedDigits]
-      );
-      if (cuRows.length > 0) {
-        return { cld: cuRows[0].cld, matchedBy: "cu", label: cuRows[0].label };
-      }
-    }
-
-    if (normalizedText) {
-      const { rows: ssidRows } = await pool.query(
-        `
-          SELECT cld, label
-          FROM cld_regions
-          WHERE EXISTS (
-            SELECT 1
-            FROM unnest(ssids) AS ssid
-            WHERE UPPER(BTRIM(ssid)) = $1
-          )
-          LIMIT 1;
-        `,
-        [normalizedText]
-      );
-      if (ssidRows.length > 0) {
-        return { cld: ssidRows[0].cld, matchedBy: "ssid", label: ssidRows[0].label };
-      }
-    }
-    return null;
-  }
-
-  const records = await buildLookupRecords();
-
-  const directClD = records.find((record) => record.cld === normalizedDigits);
-  if (directClD) {
-    return { cld: directClD.cld, matchedBy: "cld", label: directClD.label };
-  }
-
-  const byCu = records.find((record) => record.cuCodes.includes(normalizedDigits));
-  if (byCu) {
-    return { cld: byCu.cld, matchedBy: "cu", label: byCu.label };
-  }
-
-  const bySsid = records.find((record) =>
-    record.ssids.some((ssid) => normalizeSsid(ssid) === normalizedText)
-  );
-  if (bySsid) {
-    return { cld: bySsid.cld, matchedBy: "ssid", label: bySsid.label };
-  }
-
-  return null;
+  const repository = useFileStore ? fileRegionRepository : postgisRegionRepository;
+  return repository.resolveLookup(queryValue);
 }
 
 function mediaUrlFromFilePath(filePath) {

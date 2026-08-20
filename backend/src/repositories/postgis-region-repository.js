@@ -1,4 +1,4 @@
-import { extractCuCode, normalizeRegionFeature, uniqueSorted } from "../domain/region-feature.js";
+import { extractCuCode, normalizeClD, normalizeRegionFeature, normalizeSsid, uniqueSorted } from "../domain/region-feature.js";
 
 function toRegionIndex(row) {
   return {
@@ -34,6 +34,37 @@ export function createPostgisRegionRepository(pool) {
         "SELECT cld, label, ssids, cu_codes, created_at, updated_at FROM cld_regions ORDER BY cld;"
       );
       return rows.map(toRegionIndex);
+    },
+    async resolveLookup(queryValue) {
+      const normalizedDigits = normalizeClD(queryValue);
+      const normalizedText = normalizeSsid(queryValue);
+      if (normalizedDigits) {
+        const { rows: directRows } = await pool.query(
+          "SELECT cld, label FROM cld_regions WHERE cld = $1 LIMIT 1;",
+          [normalizedDigits]
+        );
+        if (directRows.length > 0) return { cld: directRows[0].cld, matchedBy: "cld", label: directRows[0].label };
+        const { rows: cuRows } = await pool.query(
+          "SELECT cld, label FROM cld_regions WHERE $1 = ANY(cu_codes) LIMIT 1;",
+          [normalizedDigits]
+        );
+        if (cuRows.length > 0) return { cld: cuRows[0].cld, matchedBy: "cu", label: cuRows[0].label };
+      }
+      if (!normalizedText) return null;
+      const { rows: ssidRows } = await pool.query(
+        `
+          SELECT cld, label
+          FROM cld_regions
+          WHERE EXISTS (
+            SELECT 1
+            FROM unnest(ssids) AS ssid
+            WHERE UPPER(BTRIM(ssid)) = $1
+          )
+          LIMIT 1;
+        `,
+        [normalizedText]
+      );
+      return ssidRows.length > 0 ? { cld: ssidRows[0].cld, matchedBy: "ssid", label: ssidRows[0].label } : null;
     },
     async readIndex(cld) {
       const { rows } = await pool.query("SELECT cld, label, ssids, cu_codes, created_at, updated_at FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);

@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { buildFeatureCollection, featureFileNames, normalizeRegionFeature } from "../domain/region-feature.js";
+import { buildFeatureCollection, featureFileNames, normalizeClD, normalizeRegionFeature, normalizeSsid } from "../domain/region-feature.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "../infrastructure/json-files.js";
 
 export function createFileRegionRepository(cldRootDir) {
@@ -42,6 +42,18 @@ export function createFileRegionRepository(cldRootDir) {
     return indexes.filter(Boolean);
   }
 
+  async function resolveLookup(queryValue) {
+    const normalizedDigits = normalizeClD(queryValue);
+    const normalizedText = normalizeSsid(queryValue);
+    const records = await listIndexes();
+    const directClD = records.find((record) => record.cld === normalizedDigits);
+    if (directClD) return { cld: directClD.cld, matchedBy: "cld", label: directClD.label || `CLD ${directClD.cld}` };
+    const byCu = records.find((record) => (Array.isArray(record.cuCodes) ? record.cuCodes : []).includes(normalizedDigits));
+    if (byCu) return { cld: byCu.cld, matchedBy: "cu", label: byCu.label || `CLD ${byCu.cld}` };
+    const bySsid = records.find((record) => (Array.isArray(record.ssids) ? record.ssids : []).some((ssid) => normalizeSsid(ssid) === normalizedText));
+    return bySsid ? { cld: bySsid.cld, matchedBy: "ssid", label: bySsid.label || `CLD ${bySsid.cld}` } : null;
+  }
+
   return Object.freeze({
     exists(cld) {
       return exists(indexPath(cld));
@@ -68,6 +80,7 @@ export function createFileRegionRepository(cldRootDir) {
     },
     ensureMediaDirs,
     listIndexes,
+    resolveLookup,
     readIndex,
     readFeatures,
     async readBundle(cld) {
