@@ -621,8 +621,6 @@ async function updateRegionFeature(cld, id, feature) {
   if (!existing.type) return false;
 
   const collection = await readRegionFeatures(cld, existing.type);
-  const targetIndex = collection.findIndex((item) => Number(item?.id) === Number(id));
-  if (targetIndex === -1) return false;
 
   normalized.id = Number(id);
   const candidateType = inferRegionFeatureType(normalized);
@@ -639,9 +637,7 @@ async function updateRegionFeature(cld, id, feature) {
     }
     return true;
   }
-  collection[targetIndex] = normalized;
-  await writeRegionFeatures(cld, existing.type, collection);
-  return true;
+  return fileRegionRepository.updateFeature(cld, existing.type, id, normalized);
 }
 
 async function deleteRegionFeature(cld, id) {
