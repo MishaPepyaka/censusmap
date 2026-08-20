@@ -22,7 +22,7 @@
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { describeOfflineSnapshotMetadata, describeOfflineSnapshotState, loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
   const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
-  const { createCommonMapShell } = window.CensusMapRuntime;
+  const { createCommonMapShell, getBlockFillOpacity, getFeatureLayerCenter, toFeatureCollection } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
@@ -88,13 +88,6 @@
     return `${digits.slice(0, 2)} ${digits.slice(2, 4)} ${digits.slice(4)}`;
   }
 
-  function buildFeatureCollection(features) {
-    return {
-      type: "FeatureCollection",
-      features: Array.isArray(features) ? features : []
-    };
-  }
-
   async function loadRegionSummary() {
     return loadSharedRegionSummary(cld);
   }
@@ -108,17 +101,6 @@
     });
     if (Number.isFinite(Number(snapshot.revision))) regionRevision = Number(snapshot.revision);
     return { ...partitionRegionFeatures(snapshot.features), loadError: snapshot.loadError, offlineState: snapshot.offlineState, revision: snapshot.revision, savedAt: snapshot.savedAt };
-  }
-
-  function getZoneCenter(layer) {
-    if (typeof layer.getCenter === "function") {
-      try {
-        return layer.getCenter();
-      } catch {
-        return layer.getBounds().getCenter();
-      }
-    }
-    return layer.getBounds().getCenter();
   }
 
   function normalizeSearchCode(value) {
@@ -179,14 +161,8 @@
   updateRouteSubtitle();
   const cuCodes = zones.map((feature) => extractCuCode(feature.properties || {}));
   const colorMap = buildColorMap(cuCodes);
-  const BLOCK_FILL_TRANSITION_ZOOM = 15;
-  const BLOCK_FILL_FADE_ZOOM = 18;
-
   function blockFillOpacity(selected) {
-    const zoom = map.getZoom();
-    if (zoom >= BLOCK_FILL_FADE_ZOOM) return selected ? 0.14 : 0.07;
-    if (zoom >= BLOCK_FILL_TRANSITION_ZOOM) return selected ? 0.24 : 0.16;
-    return selected ? 0.34 : 0.2;
+    return getBlockFillOpacity(map.getZoom(), selected);
   }
 
   function styleForFeature(feature, selected) {
@@ -214,7 +190,7 @@
   const dwellingsLayer = L.layerGroup().addTo(map);
   const specialLocationsLayer = L.layerGroup().addTo(map);
   const dwellingClusterLayer = L.layerGroup().addTo(map);
-  polygonLayer.addData(buildFeatureCollection(zones.filter((feature) => !isHiddenBlock(feature.properties || {}))));
+  polygonLayer.addData(toFeatureCollection(zones.filter((feature) => !isHiddenBlock(feature.properties || {}))));
 
   function selectZone(layer, popupLatLng = null) {
     if (selectedPolygonLayer && selectedPolygonLayer !== layer) {
@@ -227,7 +203,7 @@
     const block = extractBlockCode(props);
     const zoneKind = getZoneKind(props) === "cu" ? "CU" : "Block";
     const details = block ? `${zoneKind}: ${escapeHtml(block)}` : zoneKind;
-    const point = popupLatLng || getZoneCenter(layer);
+    const point = popupLatLng || getFeatureLayerCenter(layer);
     const shareTitle = block ? `Block ${cu}/${block}` : `CU ${cu}`;
     layer.bindPopup([
       `<div class="dw-popup">`,
@@ -250,7 +226,7 @@
       if (zoneKind !== "block") return;
       const cu = extractCuCode(props);
       const code = extractBlockCode(props);
-      const center = getZoneCenter(layer);
+      const center = getFeatureLayerCenter(layer);
       const icon = L.divIcon({
         className: "zone-chip-wrap",
         html: `<span class="zone-chip"><span class="block-badge">${escapeHtml(code || "CU")}</span><span class="zone-chip-text">${escapeHtml(cu)}</span></span>`,
@@ -616,7 +592,7 @@
   function replaceZoneFeatures(nextZones) {
     selectedPolygonLayer = null;
     polygonLayer.clearLayers();
-    polygonLayer.addData(buildFeatureCollection(nextZones.filter((feature) => !isHiddenBlock(feature.properties || {}))));
+    polygonLayer.addData(toFeatureCollection(nextZones.filter((feature) => !isHiddenBlock(feature.properties || {}))));
     bindPolygonInteractions();
     redrawPolygonLayers();
   }

@@ -22,7 +22,7 @@
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { describeOfflineSnapshotMetadata, describeOfflineSnapshotState, loadRegionSnapshot, partitionRegionFeatures } = window.CensusMapRegion;
   const { buildMapActionButtons } = window.CensusMapActions;
-  const { createCommonMapShell } = window.CensusMapRuntime;
+  const { createCommonMapShell, getBlockFillOpacity, getFeatureLayerCenter } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
@@ -171,17 +171,6 @@
     };
   }
 
-  function getZoneCenter(layer) {
-    if (typeof layer.getCenter === "function") {
-      try {
-        return layer.getCenter();
-      } catch {
-        // Fall through to bounds center when layer center is unavailable.
-      }
-    }
-    return layer.getBounds().getCenter();
-  }
-
   function getFeatureId(feature) {
     const id = feature?.id ?? feature?.properties?._id;
     if (Number.isFinite(Number(id))) return Number(id);
@@ -288,14 +277,8 @@
 
   const cuCodes = blocks.map((f) => extractCuCode(f.properties || {}));
   const colorMap = buildColorMap(cuCodes);
-  const BLOCK_FILL_TRANSITION_ZOOM = 15;
-  const BLOCK_FILL_FADE_ZOOM = 18;
-
   function blockFillOpacity(selected) {
-    const zoom = map.getZoom();
-    if (zoom >= BLOCK_FILL_FADE_ZOOM) return selected ? 0.14 : 0.07;
-    if (zoom >= BLOCK_FILL_TRANSITION_ZOOM) return selected ? 0.24 : 0.16;
-    return selected ? 0.38 : 0.24;
+    return getBlockFillOpacity(map.getZoom(), selected, { selected: [0.38, 0.24, 0.14], unselected: [0.24, 0.16, 0.07] });
   }
 
   function styleForFeature(feature, selected) {
@@ -512,7 +495,7 @@
     const zoneKind = getZoneKind(props) === "cu" ? "CU" : "Block";
     if (showPopup) {
       const details = block ? `${zoneKind}: ${block}` : zoneKind;
-      const point = popupLatLng || getZoneCenter(layer);
+      const point = popupLatLng || getFeatureLayerCenter(layer);
       const shareTitle = block ? `Block ${cu}/${block}` : `CU ${cu}`;
       layer.bindPopup([
         `<div class="dw-popup">`,
@@ -570,7 +553,7 @@
       if (zoneKind !== "block") return;
       const cu = extractCuCode(props);
       const code = extractBlockCode(props);
-      const center = getZoneCenter(layer);
+      const center = getFeatureLayerCenter(layer);
       const icon = L.divIcon({
         className: "zone-chip-wrap",
         html: `<span class="zone-chip"><span class="block-badge">${code}</span><span class="zone-chip-text">${cu}</span></span>`,
@@ -1421,7 +1404,7 @@
     const ctxCu = selectedPolygonLayer ? extractCuCode(selectedPolygonLayer.feature?.properties || {}) : (cuCodes[0] || "46221114");
     const selectedBlock = selectedPolygonLayer ? extractBlockCode(selectedPolygonLayer.feature?.properties || {}) : "";
     const ctxBlock = selectedBlock || "01";
-    const point = preferredLatLng || (selectedPolygonLayer ? getZoneCenter(selectedPolygonLayer) : map.getCenter());
+    const point = preferredLatLng || (selectedPolygonLayer ? getFeatureLayerCenter(selectedPolygonLayer) : map.getCenter());
 
     return {
       type: "Feature",

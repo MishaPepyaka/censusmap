@@ -34,6 +34,12 @@ export type CommonMapShellOptions = {
   userLocationMarkerOptions?: Record<string, unknown>;
   onQueryChange?: (query: string) => void;
 };
+export type BlockFillOpacityOptions = {
+  transitionZoom?: number;
+  fadeZoom?: number;
+  selected?: [number, number, number];
+  unselected?: [number, number, number];
+};
 
 export function readMapUrlState(): MapUrlState {
   const params = new URLSearchParams(window.location.search);
@@ -144,6 +150,30 @@ export function createCommonMapShell(options: CommonMapShellOptions = {}) {
     });
   }
   return { map, mapUrlState, baseMap, userLocationTracker };
+}
+
+export function toFeatureCollection<T>(features: T[] | undefined | null): { type: "FeatureCollection"; features: T[] } {
+  return { type: "FeatureCollection", features: Array.isArray(features) ? features : [] };
+}
+
+export function getFeatureLayerCenter(layer: { getCenter?: () => Coordinates; getBounds: () => { getCenter: () => Coordinates } }): Coordinates {
+  if (typeof layer.getCenter === "function") {
+    try {
+      return layer.getCenter();
+    } catch {
+      // Polygon layers without a direct center use their bounds center.
+    }
+  }
+  return layer.getBounds().getCenter();
+}
+
+export function getBlockFillOpacity(zoom: number, selected: boolean, options: BlockFillOpacityOptions = {}): number {
+  const transitionZoom = options.transitionZoom ?? 15;
+  const fadeZoom = options.fadeZoom ?? 18;
+  const selectedValues = options.selected ?? [0.34, 0.24, 0.14];
+  const unselectedValues = options.unselected ?? [0.2, 0.16, 0.07];
+  const index = zoom >= fadeZoom ? 2 : zoom >= transitionZoom ? 1 : 0;
+  return (selected ? selectedValues : unselectedValues)[index];
 }
 
 export function createUserLocationTracker(map: MapLike, markerOptions: Record<string, unknown> = {}) {
