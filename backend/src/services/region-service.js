@@ -19,6 +19,7 @@ export function assertDwellingNoUnique(feature, dwellings, excludeId = null) {
 export function summarizeRegion(index, bundle) {
   return {
     cld: index.cld,
+    revision: Number.isFinite(Number(index.revision)) ? Number(index.revision) : 1,
     label: index.label || `CLD ${index.cld}`,
     ssids: Array.isArray(index.ssids) ? index.ssids : [],
     cuCodes: Array.isArray(index.cuCodes) ? index.cuCodes : [],

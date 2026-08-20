@@ -36,7 +36,9 @@ export function registerRegionRoutes(app, {
     if (!cld) return res.status(400).json({ error: "Invalid CLD" });
     try {
       const bundle = await readRegionBundle(cld);
-      return res.json(buildFeatureCollection([...bundle.cu, ...bundle.blocks, ...bundle.dwellings]));
+      const revision = Number.isFinite(Number(bundle.index.revision)) ? Number(bundle.index.revision) : 1;
+      res.set("etag", `\"${revision}\"`);
+      return res.json({ ...buildFeatureCollection([...bundle.cu, ...bundle.blocks, ...bundle.dwellings]), revision });
     } catch (error) {
       return res.status(404).json({ error: error.message });
     }

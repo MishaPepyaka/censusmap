@@ -5,6 +5,7 @@ function toRegionIndex(row) {
     cld: row.cld, label: row.label || `CLD ${row.cld}`,
     ssids: Array.isArray(row.ssids) ? row.ssids : [],
     cuCodes: Array.isArray(row.cu_codes) ? row.cu_codes : [],
+    revision: Number.isFinite(Number(row.revision)) ? Number(row.revision) : 1,
     createdAt: row.created_at, updatedAt: row.updated_at
   };
 }
@@ -31,7 +32,7 @@ export function createPostgisRegionRepository(pool) {
     },
     async listIndexes() {
       const { rows } = await pool.query(
-        "SELECT cld, label, ssids, cu_codes, created_at, updated_at FROM cld_regions ORDER BY cld;"
+        "SELECT cld, label, ssids, cu_codes, revision, created_at, updated_at FROM cld_regions ORDER BY cld;"
       );
       return rows.map(toRegionIndex);
     },
@@ -67,7 +68,7 @@ export function createPostgisRegionRepository(pool) {
       return ssidRows.length > 0 ? { cld: ssidRows[0].cld, matchedBy: "ssid", label: ssidRows[0].label } : null;
     },
     async readIndex(cld) {
-      const { rows } = await pool.query("SELECT cld, label, ssids, cu_codes, created_at, updated_at FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);
+      const { rows } = await pool.query("SELECT cld, label, ssids, cu_codes, revision, created_at, updated_at FROM cld_regions WHERE cld = $1 LIMIT 1;", [cld]);
       if (rows.length === 0) throw new Error(`Unknown CLD ${cld}`);
       return toRegionIndex(rows[0]);
     },

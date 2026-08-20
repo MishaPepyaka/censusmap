@@ -67,7 +67,7 @@ implementation.
   - Remove obsolete `/api/features` CRUD and `map_features` code after migration verification.
 
 - [ ] R113 Add safe concurrent editing.
-  - Return a revision/version with each region snapshot.
+  - [x] Return a revision/version with each region snapshot.
   - Require the revision for writes and return a conflict response rather than silently overwriting a newer edit.
 
 ## Phase 2 — Shared frontend foundation

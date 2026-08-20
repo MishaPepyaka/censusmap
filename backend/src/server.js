@@ -359,10 +359,12 @@ async function initDb() {
         label TEXT NOT NULL,
         ssids TEXT[] NOT NULL DEFAULT '{}',
         cu_codes TEXT[] NOT NULL DEFAULT '{}',
+        revision BIGINT NOT NULL DEFAULT 1,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
+    await client.query("ALTER TABLE cld_regions ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 1;");
     await client.query(`
       CREATE TABLE IF NOT EXISTS region_features (
         id BIGSERIAL PRIMARY KEY,
@@ -534,6 +536,7 @@ async function migrateLegacyDataToClDStore() {
       label: `CLD ${cld}`,
       ssids: [],
       cuCodes: [...bucket.cuCodes].sort(),
+      revision: 1,
       nextFeatureId: bucket.maxId + 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

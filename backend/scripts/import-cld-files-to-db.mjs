@@ -65,6 +65,7 @@ async function initDb(pool) {
         label TEXT NOT NULL,
         ssids TEXT[] NOT NULL DEFAULT '{}',
         cu_codes TEXT[] NOT NULL DEFAULT '{}',
+        revision BIGINT NOT NULL DEFAULT 1,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );

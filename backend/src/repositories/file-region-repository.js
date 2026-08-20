@@ -72,6 +72,7 @@ export function createFileRegionRepository(cldRootDir) {
           label: `CLD ${cld}`,
           ssids: [],
           cuCodes: [],
+          revision: 1,
           nextFeatureId: 1,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()

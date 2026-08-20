@@ -11,6 +11,7 @@ test("region service rejects duplicate dwelling identities", () => {
 
 test("region service classifies and summarizes region data", () => {
   assert.equal(inferRegionFeatureType({ properties: { _group: "cu" }, geometry: { type: "Polygon", coordinates: [] } }), "cu");
-  const summary = summarizeRegion({ cld: "1234", ssids: ["A"], cuCodes: ["12340001"] }, { cu: [{}], blocks: [{}], dwellings: [dwelling(1, "0001"), { properties: { _group: "special_locations" }, geometry: { type: "Point", coordinates: [-97, 56] } }] });
+  const summary = summarizeRegion({ cld: "1234", revision: 4, ssids: ["A"], cuCodes: ["12340001"] }, { cu: [{}], blocks: [{}], dwellings: [dwelling(1, "0001"), { properties: { _group: "special_locations" }, geometry: { type: "Point", coordinates: [-97, 56] } }] });
   assert.deepEqual(summary.counts, { cu: 1, blocks: 1, dwellings: 1, specialLocations: 1 });
+  assert.equal(summary.revision, 4);
 });

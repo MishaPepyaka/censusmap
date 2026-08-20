@@ -18,7 +18,7 @@ test("PostGIS region repository maps index and GeoJSON feature rows", async () =
     return { rows: [{ id: 7, properties: { CUID: "12340001" }, geometry: { type: "Point", coordinates: [-97, 56] } }] };
   }, connect: async () => client };
   const repository = createPostgisRegionRepository(pool);
-  assert.deepEqual(await repository.readIndex("1234"), { cld: "1234", label: "Test", ssids: ["A"], cuCodes: ["12340001"], createdAt: "a", updatedAt: "b" });
+  assert.deepEqual(await repository.readIndex("1234"), { cld: "1234", label: "Test", ssids: ["A"], cuCodes: ["12340001"], revision: 1, createdAt: "a", updatedAt: "b" });
   const features = await repository.readFeatures("1234", "dwellings");
   assert.equal(features[0].properties.cu, "12340001");
   assert.deepEqual(calls[1].values, ["1234", "dwellings"]);

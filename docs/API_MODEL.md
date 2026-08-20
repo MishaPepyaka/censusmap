@@ -28,8 +28,11 @@ do not require a dwelling identity.
 
 ## Region Summary
 
-`GET /api/cld/:cld` returns a `RegionSummary` with `cld`, `label`, `ssids`,
-`cuCodes`, and counts for CU, blocks, dwellings, and special locations.
+`GET /api/cld/:cld` returns a `RegionSummary` with `cld`, `revision`, `label`,
+`ssids`, `cuCodes`, and counts for CU, blocks, dwellings, and special locations.
+
+`GET /api/cld/:cld/features` includes the same numeric `revision` as a
+top-level GeoJSON extension and sends it as the `ETag` response header.
 
 ## Compatibility Policy
 
