@@ -1,6 +1,7 @@
 export type OfflineSnapshot = {
   cld: string;
   features: unknown[];
+  revision?: number | null;
   savedAt: number;
 };
 
@@ -37,9 +38,14 @@ export async function readSnapshot(cld: string | number): Promise<OfflineSnapsho
   });
 }
 
-export async function saveSnapshot(cld: string | number, features: unknown[]): Promise<OfflineSnapshot> {
+export async function saveSnapshot(cld: string | number, features: unknown[], revision: number | null = null): Promise<OfflineSnapshot> {
   const database = await openDatabase();
-  const snapshot: OfflineSnapshot = { cld: String(cld), features: Array.isArray(features) ? features : [], savedAt: Date.now() };
+  const snapshot: OfflineSnapshot = {
+    cld: String(cld),
+    features: Array.isArray(features) ? features : [],
+    revision: typeof revision === "number" && Number.isSafeInteger(revision) && revision >= 1 ? revision : null,
+    savedAt: Date.now()
+  };
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(SNAPSHOT_STORE, "readwrite");
     transaction.objectStore(SNAPSHOT_STORE).put(snapshot);
@@ -70,9 +76,14 @@ export async function readCachedFeatures(cld: string | number): Promise<OfflineS
   }
 }
 
-export function saveCachedFeatures(cld: string | number, features: unknown[]): void {
-  const snapshot: OfflineSnapshot = { cld: String(cld), features: Array.isArray(features) ? features : [], savedAt: Date.now() };
-  void saveSnapshot(cld, snapshot.features).catch(() => {});
+export function saveCachedFeatures(cld: string | number, features: unknown[], revision: number | null = null): void {
+  const snapshot: OfflineSnapshot = {
+    cld: String(cld),
+    features: Array.isArray(features) ? features : [],
+    revision: typeof revision === "number" && Number.isSafeInteger(revision) && revision >= 1 ? revision : null,
+    savedAt: Date.now()
+  };
+  void saveSnapshot(cld, snapshot.features, snapshot.revision).catch(() => {});
   try {
     localStorage.setItem(localSnapshotKey(cld), JSON.stringify(snapshot));
   } catch {

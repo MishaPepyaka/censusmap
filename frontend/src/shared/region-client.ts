@@ -52,13 +52,14 @@ export async function loadRegionSnapshot(cld: string | number, { forceNetwork = 
     const payload = await getJsonWithTimeout<unknown>(`/api/cld/${encodeURIComponent(normalizedCld)}/features${refresh}`, {}, 15000);
     const features = asFeatures(payload);
     if (features.length === 0) throw new Error("The map server returned an empty feature list");
-    saveCachedFeatures(normalizedCld, features);
-    return { features, loadError: "", revision: asRevision(payload), source: "api" };
+    const revision = asRevision(payload);
+    saveCachedFeatures(normalizedCld, features, revision);
+    return { features, loadError: "", revision, source: "api" };
   } catch (error) {
     const snapshot = await readCachedFeatures(normalizedCld);
     const features = Array.isArray(snapshot?.features) ? snapshot.features as RegionFeature[] : [];
     if (features.length > 0) {
-      return { features, loadError: "Offline: showing the last map saved on this device.", revision: null, source: "cache" };
+      return { features, loadError: "Offline: showing the last map saved on this device.", revision: asRevision(snapshot), source: "cache" };
     }
     return {
       features: [],
