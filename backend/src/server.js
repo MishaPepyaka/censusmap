@@ -602,7 +602,7 @@ registerAuthRoutes(app, {
   jwt,
   jwtSecret,
   loadUserById,
-  findUserByUsername: (username) => userRepository.findByUsername(username),
+  findUserByUsername: userRepository ? (username) => userRepository.findByUsername(username) : null,
   mapConfig,
   normalizeUserRole,
   requireAuth,

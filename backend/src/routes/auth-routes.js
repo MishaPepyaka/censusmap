@@ -15,6 +15,9 @@ export function registerAuthRoutes(app, {
   app.post("/api/login", async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+    if (typeof findUserByUsername !== "function") {
+      return res.status(503).json({ error: "Authentication is unavailable in file-store mode. Start with PostGIS to sign in." });
+    }
     try {
       const user = await findUserByUsername(username);
       if (!user) return res.status(401).json({ error: "Invalid credentials" });
