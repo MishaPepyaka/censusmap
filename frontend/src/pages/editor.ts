@@ -52,6 +52,7 @@
   let selectedPolygonLayer = null;
   let selectedDwellingMarker = null;
   let regionRevision = 1;
+  const DWELLING_STATUSES = ["429", "400", "402", "701", "500", "312", "324", "000", "001", "601"];
   let badgesReady = false;
   let editorMode = "editing";
   let specialLocationPlacementPending = false;
