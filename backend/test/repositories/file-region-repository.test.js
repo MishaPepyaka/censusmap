@@ -47,6 +47,8 @@ test("file region repository reads and normalizes a region bundle", async (t) =>
   assert.equal((await repository.readFeatures("5678", "dwellings"))[0].properties.dwellingNo, "0003");
   assert.equal(await repository.updateFeature("5678", "dwellings", 1, { properties: { CUID: "56780001", DWELLING_NO: "4" }, geometry: { type: "Point", coordinates: [-97, 56] } }), true);
   assert.equal((await repository.readFeatures("5678", "dwellings"))[0].properties.dwellingNo, "0004");
+  assert.equal(await repository.deleteFeature("5678", "dwellings", 1), true);
+  assert.deepEqual(await repository.readFeatures("5678", "dwellings"), []);
   assert.deepEqual((await repository.listIndexes()).map((index) => index.cld), ["1234", "5678"]);
   assert.deepEqual(await repository.resolveLookup("12340001"), { cld: "1234", matchedBy: "cu", label: "Updated" });
 });

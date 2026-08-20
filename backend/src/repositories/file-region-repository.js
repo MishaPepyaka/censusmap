@@ -116,6 +116,13 @@ export function createFileRegionRepository(cldRootDir) {
       await writeJsonFile(featurePath(cld, type), buildFeatureCollection(features));
       return true;
     },
+    async deleteFeature(cld, type, id) {
+      const features = await readFeatures(cld, type);
+      const next = features.filter((item) => Number(item?.id) !== Number(id));
+      if (next.length === features.length) return false;
+      await writeJsonFile(featurePath(cld, type), buildFeatureCollection(next));
+      return true;
+    },
     async readBundle(cld) {
       const [index, cu, blocks, dwellings] = await Promise.all([
         readIndex(cld), readFeatures(cld, "cu"), readFeatures(cld, "blocks"), readFeatures(cld, "dwellings")

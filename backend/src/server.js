@@ -644,9 +644,6 @@ async function deleteRegionFeature(cld, id) {
   if (!Number.isFinite(Number(id))) throw new Error("Invalid feature id");
   const existing = await findRegionFeatureById(cld, id);
   if (!existing.type) return false;
-  const collection = await readRegionFeatures(cld, existing.type);
-  const next = collection.filter((item) => Number(item?.id) !== Number(id));
-  if (next.length === collection.length) return false;
   if (!useFileStore) {
     await postgisRegionRepository.deleteFeature(cld, id);
     if (existing.type === "cu") {
@@ -654,8 +651,7 @@ async function deleteRegionFeature(cld, id) {
     }
     return true;
   }
-  await writeRegionFeatures(cld, existing.type, next);
-  return true;
+  return fileRegionRepository.deleteFeature(cld, existing.type, id);
 }
 
 async function buildLookupRecords() {

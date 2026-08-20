@@ -57,6 +57,7 @@ implementation.
     - [x] Extract PostGIS and file-store feature lookup by ID.
     - [x] Extract PostGIS and file-store feature creation.
     - [x] Extract PostGIS and file-store feature update.
+    - [x] Extract PostGIS and file-store feature deletion.
     - [x] Extract temporary file-store existence/index/features/bundle read adapter.
     - [x] Extract temporary file-store index and feature-collection write adapter.
     - [x] Extract temporary file-store region initialisation and media-directory handling.
