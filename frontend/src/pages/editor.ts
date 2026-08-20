@@ -38,6 +38,7 @@
 
   let selectedPolygonLayer = null;
   let selectedDwellingMarker = null;
+  let regionRevision = 1;
   let badgesReady = false;
   let editorMode = "editing";
   let specialLocationPlacementPending = false;
@@ -1207,7 +1208,6 @@
   }
 
   const offlineQueueKey = `cld-map-pending:${cld}`;
-  let regionRevision = 1;
   let offlineQueueHasConflict = false;
   let offlineQueueFlushInProgress = false;
 
