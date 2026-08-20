@@ -2,85 +2,83 @@
 
 ## Purpose
 
-This file defines the target repository layout for the dedicated-server CLD viewer/editor application.
+This document defines the target layout after the duplication-reduction rewrite.
+The current runtime is still centred on `backend/src/server.js` and static scripts
+in `backend/public/`; this is the destination, not a claim that the migration is
+complete.
 
-The main architectural shift is:
-- route by `CLD`,
-- store region data in separate files per `CLD`,
-- keep media files next to region data,
-- support viewer and editor flows on desktop and iPhone.
-
-## Canonical Layout
+## Target Layout
 
 ```text
 selfhost-map-cmp/
-├── backend/                          # Node/Express app
-│   ├── src/                          # Server routes, services, upload/compression logic
-│   └── public/                       # Frontend assets for landing/view/edit flows
+├── backend/
+│   ├── src/
+│   │   ├── app.ts                    # Express app composition
+│   │   ├── server.ts                 # HTTP startup only
+│   │   ├── config/                   # validated environment configuration
+│   │   ├── domain/                   # canonical GeoJSON, dwelling, CLD types/rules
+│   │   ├── middleware/               # auth, access control, errors
+│   │   ├── repositories/             # selected runtime persistence adapter
+│   │   ├── routes/                   # auth, regions, users, uploads, tiles
+│   │   └── services/                 # region, lookup, upload, revision services
+│   ├── public/                       # generated frontend assets and static media only
+│   ├── test/                         # API and service integration tests
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── api/                      # typed HTTP clients
+│   │   ├── domain/                   # client-side canonical model helpers
+│   │   ├── map/                      # Leaflet shell, rendering, search index
+│   │   ├── offline/                  # IndexedDB snapshots and mutation queue
+│   │   ├── pages/                    # landing, viewer, editor, geometry editor
+│   │   ├── ui/                       # shared controls, panels, popup components
+│   │   └── styles/                   # tokens and component/page styles
+│   ├── test/                         # unit and browser-facing tests
+│   └── package.json
 ├── data/
-│   ├── cld/
-│   │   └── <CLD_number>/
-│   │       ├── index.json            # CLD metadata, SSID mapping, labels
-│   │       ├── cu.geojson            # CU geometry for this CLD
-│   │       ├── blocks.geojson        # Block geometry for this CLD
-│   │       ├── dwellings.geojson     # Dwelling points and attributes
-│   │       └── media/
-│   │           ├── dwellings/        # Per-dwelling photo collections
-│   │           └── uploads/          # Unattached editor uploads if needed
-│   ├── import/                       # Import source files and migration inputs
-│   ├── tmp/                          # Temporary processing files
-│   └── backups/                      # Snapshot exports or scheduled backups
-├── deploy/                           # Nginx, systemd, container, and backup configs
-├── docs/                             # Architecture, tasks, and operating notes
-├── scripts/                          # Import, migration, backup, and maintenance utilities
-├── docker-compose.yml                # Local/dev stack
-├── README.md                         # Product and architecture summary
-└── agents.md                         # Working context for future coding sessions
+│   ├── import/                       # source files and explicit migration inputs
+│   ├── tmp/                          # disposable processing output
+│   └── backups/                      # timestamped, restorable backups
+├── scripts/                          # import, migration, audit, backup, restore tools
+├── deploy/                           # Docker, Nginx, production deployment material
+├── docs/                             # architecture and active backlog
+├── docker-compose.yml
+├── README.md
+└── agents.md
 ```
+
+## Ownership Boundaries
+
+| Area | Owns | Must not own |
+| --- | --- | --- |
+| `domain/` | Data types, normalisation, validation, feature classification | HTTP, database/filesystem, DOM/Leaflet |
+| `repositories/` | Reads and writes for the selected runtime store | Express request handling or business policy |
+| `services/` | Use cases: region CRUD, lookup, upload, conflict detection | Route registration or UI rendering |
+| `routes/` | Request parsing, response status, calling services | SQL/filesystem code and duplicated validation |
+| `frontend/api/` | API requests and response mapping | Leaflet/UI state |
+| `frontend/map/` | Shared map lifecycle and feature rendering | Page-specific edit forms |
+| `frontend/pages/` | Viewer/editor flow and page-specific interaction | Duplicate loading, offline, and map setup |
+
+## Data Model Rules
+
+1. The API exposes one canonical feature shape; legacy field names are converted only during import or at the backend boundary.
+2. A region has a revision. Writes include the expected revision so conflicts are explicit.
+3. Exactly one repository is the runtime source of truth. A second store is permitted only for backup, import, export, or one-time migration.
+4. CLD access is checked in middleware/services before a repository operation.
+5. Uploaded media is scoped to a CLD and referenced by a stable media identifier, never by arbitrary client path.
 
 ## Routing Layout
 
-- `/` serves the CLD/SSID lookup page.
-- `/:cld` serves the region viewer.
-- `/:cld/edit` serves the region editor.
-- `/api/cld/:cld/*` serves region-specific data APIs.
-- `/api/uploads/*` handles media upload and retrieval.
+- `/` — authenticated CLD/SSID lookup.
+- `/:cld` — region viewer.
+- `/:cld/edit` — region editor.
+- `/:cld/edit_geometry` — geometry editor, if retained.
+- `/api/cld/:cld/*` — region-scoped API.
+- `/api/*` — authentication, user management, uploads, configuration, and tile proxy APIs.
 
-## Backend Responsibilities
+## Migration Rules
 
-Files that should live under `backend/src/`:
-- route handlers for landing, viewer, and editor pages,
-- `CLD` resolution service from `CLD` or `SSID`,
-- per-CLD file storage service,
-- geometry validation service,
-- dwelling CRUD service,
-- image upload and compression service,
-- authentication middleware for edit routes.
-
-## Frontend Responsibilities
-
-Files that should live under `backend/public/`:
-- landing page UI for `CLD`/`SSID` lookup,
-- region viewer UI with `Edit` entry point,
-- region editor UI with touch-friendly controls,
-- geometry editor for `CU` and `Block` boundaries,
-- dwelling editor with photo upload flow,
-- iPhone-safe camera capture controls.
-
-## Data Rules
-
-1. Each `CLD` owns its own folder under `data/cld/`.
-2. `CU`, `Block`, and `dwelling` data are never mixed across CLDs in a single shared file.
-3. Media files are stored under the same `CLD` folder as their related data.
-4. `index.json` is the source of truth for `SSID` to `CLD` resolution.
-5. Temporary files must stay in `data/tmp/`.
-6. Backups and exports must not overwrite source region files in place.
-
-## Migration Direction
-
-Legacy artifacts currently present in the repository include:
-- shared feature stores,
-- prototype static HTML routes,
-- release-specific standalone variants.
-
-The implementation goal is to migrate runtime behavior to the CLD-scoped structure above while preserving release artifacts as history only.
+1. Preserve existing routes while their replacement is introduced behind the same API contract.
+2. Add tests before moving or deleting behaviour.
+3. Migrate one vertical slice at a time: domain rule, service, route, frontend caller, then removal of the old path.
+4. Do not delete legacy data or routes until import verification and a restorable backup exist.
