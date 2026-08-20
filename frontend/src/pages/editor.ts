@@ -1250,6 +1250,7 @@
 
   const offlineQueueKey = `cld-map-pending:${cld}`;
   let regionRevision = 1;
+  let offlineQueueHasConflict = false;
   let offlineQueueFlushInProgress = false;
 
   function readOfflineQueue() {
@@ -1285,7 +1286,7 @@
     if (existing >= 0) queue.splice(existing, 1, item);
     else queue.push(item);
     writeOfflineQueue(queue);
-    setSyncStatus("Waiting to send", "pending");
+    setSyncStatus(`Waiting to send (${queue.length})`, "pending");
     void flushOfflineQueue();
     return item;
   }
@@ -1321,13 +1322,14 @@
   }
 
   async function flushOfflineQueue() {
-    if (!navigator.onLine || offlineQueueFlushInProgress) return;
+    if (!navigator.onLine || offlineQueueFlushInProgress || offlineQueueHasConflict) return;
     const queue = readOfflineQueue();
     if (queue.length === 0) return;
     offlineQueueFlushInProgress = true;
     setSyncStatus(`Sending ${queue.length} change${queue.length === 1 ? "" : "s"}…`, "pending");
     const remaining = [];
     let queuedDuringFlush = false;
+    let conflictRevision = null;
     try {
       for (const item of queue) {
         try {
@@ -1338,8 +1340,12 @@
           });
           if (Number.isFinite(Number(result?.revision))) regionRevision = Number(result.revision);
           applyQueuedCreateResult(item, result);
-        } catch {
+        } catch (error) {
           remaining.push(item);
+          if (Number(error?.status) === 409) {
+            const currentRevision = Number(error?.payload?.revision);
+            conflictRevision = Number.isSafeInteger(currentRevision) && currentRevision >= 1 ? currentRevision : regionRevision;
+          }
         }
       }
       // Do not overwrite changes queued while this older snapshot was sent.
@@ -1353,7 +1359,13 @@
       const nextQueue = [...remaining.filter((item) => !newerIds.has(item.id)), ...newerItems];
       queuedDuringFlush = newerItems.length > 0;
       writeOfflineQueue(nextQueue);
-      setSyncStatus(nextQueue.length ? "Waiting to send" : "Saved", nextQueue.length ? "pending" : "saved");
+      if (conflictRevision !== null) {
+        regionRevision = conflictRevision;
+        offlineQueueHasConflict = true;
+        setSyncStatus(`Conflict at revision ${conflictRevision}: reload the latest map before retrying`, "error");
+      } else {
+        setSyncStatus(nextQueue.length ? `Waiting to send (${nextQueue.length})` : "Saved", nextQueue.length ? "pending" : "saved");
+      }
     } finally {
       offlineQueueFlushInProgress = false;
       if (queuedDuringFlush) void flushOfflineQueue();
@@ -1377,6 +1389,10 @@
     setStatus("Uploading changes…", false);
     try {
       await saveAllDirtyDwellings();
+      if (offlineQueueHasConflict) {
+        setStatus("A server conflict is pending. Reload the latest map before retrying queued changes.", true);
+        return;
+      }
       // Wait for an already-running request, then drain every queued batch.
       while (offlineQueueFlushInProgress) await wait(40);
       let attempts = 0;

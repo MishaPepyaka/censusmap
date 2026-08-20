@@ -116,6 +116,7 @@ implementation.
 - [ ] R131 Make offline edits durable and synchronised.
   - [x] Persist and restore the CLD pending-mutation queue through IndexedDB, with localStorage compatibility fallback.
   - [x] Apply the restored pending-mutation queue optimistically whenever a CLD snapshot is loaded.
+  - [x] Show editor pending counts and pause retries with the current server revision after a write conflict.
   - Store pending mutations in IndexedDB and apply them optimistically to the local snapshot.
   - Retry on application open and connectivity restoration.
   - Surface pending counts and server revision conflicts in the editor.
