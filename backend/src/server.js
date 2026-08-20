@@ -10,6 +10,21 @@ import { execFile } from "node:child_process";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
+import {
+  buildFeatureCollection,
+  classifyFeature,
+  extractClDFromProperties,
+  extractCuCode,
+  featureFileNames,
+  hasText,
+  isSpecialLocationFeature,
+  normalizeClD,
+  normalizeDwellingNo,
+  normalizeFeatures,
+  normalizeRegionFeature,
+  normalizeSsid,
+  uniqueSorted
+} from "./domain/region-feature.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -73,130 +88,6 @@ app.use("/media/cld", express.static(cldRootDir));
 
 const AUTH_COOKIE = "census_session";
 const USER_ROLES = new Set(["admin", "crew_leader", "enumerator"]);
-
-function hasText(value) {
-  return value !== undefined && value !== null && String(value).trim().length > 0;
-}
-
-function normalizeClD(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-  return digits || "";
-}
-
-function normalizeSsid(value) {
-  return String(value || "").trim().toUpperCase();
-}
-
-function normalizeDwellingNo(value) {
-  if (!hasText(value)) return null;
-  const digits = String(value).replace(/\D/g, "");
-  if (!digits) return null;
-  return digits.padStart(4, "0").slice(-4);
-}
-
-function buildFeatureCollection(features) {
-  return {
-    type: "FeatureCollection",
-    features: Array.isArray(features) ? features : []
-  };
-}
-
-function uniqueSorted(values) {
-  return [...new Set((Array.isArray(values) ? values : []).map((value) => String(value || "").trim()).filter(Boolean))].sort();
-}
-
-function featureFileNames() {
-  return {
-    cu: "cu.geojson",
-    blocks: "blocks.geojson",
-    dwellings: "dwellings.geojson"
-  };
-}
-
-function extractClDFromProperties(properties) {
-  if (!properties || typeof properties !== "object") return "";
-  const direct = normalizeClD(properties.cld || properties.CLD || properties.CFOP_CLD_ID);
-  if (direct) return direct;
-  const zone = normalizeClD(properties.zone || properties.CFOP_ZONE_ID);
-  if (zone) return zone.slice(0, 4);
-  return "";
-}
-
-function extractCuCode(properties) {
-  if (!properties || typeof properties !== "object") return "";
-  const direct = String(properties.CUID || properties.cu || "").trim();
-  if (direct) return direct;
-  const fromName = String(properties.name || properties.label || "").split("/")[0].trim();
-  return fromName;
-}
-
-function isPointGeometry(geometry) {
-  return geometry?.type === "Point";
-}
-
-function isPolygonGeometry(geometry) {
-  return geometry?.type === "Polygon" || geometry?.type === "MultiPolygon";
-}
-
-function hasDwellingIdentifier(properties) {
-  return Boolean(
-    normalizeDwellingNo(properties?.dwellingNo ?? properties?.DWELLING_NO ?? properties?.vrNumber ?? properties?.VR_NUMBER)
-  );
-}
-
-function isSpecialLocationFeature(feature) {
-  return String(feature?.properties?._group || "").trim().toLowerCase() === "special_locations";
-}
-
-function normalizeRegionFeature(feature) {
-  const normalized = feature && typeof feature === "object" ? { ...feature } : {};
-  normalized.type = "Feature";
-  normalized.properties = normalized.properties && typeof normalized.properties === "object" ? { ...normalized.properties } : {};
-  normalized.geometry = normalized.geometry && typeof normalized.geometry === "object" ? { ...normalized.geometry } : null;
-  if (normalized.id !== undefined && normalized.id !== null && normalized.id !== "") {
-    const numericId = Number(normalized.id);
-    normalized.id = Number.isFinite(numericId) ? numericId : normalized.id;
-  }
-  return normalized;
-}
-
-function classifyFeature(feature) {
-  const normalized = normalizeRegionFeature(feature);
-  const properties = normalized.properties || {};
-  const geometry = normalized.geometry || {};
-  const group = String(properties._group || "").trim().toLowerCase();
-  if (isPointGeometry(geometry)) {
-    if (group === "dwellings" || group === "dwelling" || hasDwellingIdentifier(properties)) {
-      return "dwellings";
-    }
-    return "dwellings";
-  }
-  if (!isPolygonGeometry(geometry)) return "";
-  if (group === "cu" || group === "cus") return "cu";
-  if (group === "blocks" || group === "block") return "blocks";
-  if (hasText(properties.COLB_UID) || hasText(properties.CB_COLCODE) || hasText(properties.block) || hasText(properties.GEOCODE)) {
-    return "blocks";
-  }
-  if (hasText(properties.CUID) || hasText(properties.cu) || hasText(properties.CU_TYPE)) {
-    return "cu";
-  }
-  return "";
-}
-
-function normalizeFeatures(payload) {
-  if (Array.isArray(payload)) {
-    return payload.map((feature) => normalizeRegionFeature(feature));
-  }
-  if (payload && typeof payload === "object") {
-    if (Array.isArray(payload.features)) {
-      return payload.features.map((feature) => normalizeRegionFeature(feature));
-    }
-    if (payload.type === "Feature") {
-      return [normalizeRegionFeature(payload)];
-    }
-  }
-  return [];
-}
 
 function normalizeUserRole(value) {
   const role = String(value || "").trim().toLowerCase();

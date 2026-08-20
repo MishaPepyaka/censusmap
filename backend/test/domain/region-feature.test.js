@@ -1,0 +1,41 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  classifyFeature,
+  extractClDFromProperties,
+  normalizeClD,
+  normalizeDwellingNo,
+  normalizeFeatures,
+  normalizeSsid
+} from "../../src/domain/region-feature.js";
+
+test("normalises CLD, SSID, and dwelling identifiers", () => {
+  assert.equal(normalizeClD("CLD 30-38"), "3038");
+  assert.equal(normalizeSsid("  ab-123 "), "AB-123");
+  assert.equal(normalizeDwellingNo("VR-21"), "0021");
+  assert.equal(normalizeDwellingNo("no number"), null);
+});
+
+test("resolves a CLD from direct and zone properties", () => {
+  assert.equal(extractClDFromProperties({ CFOP_CLD_ID: "3038" }), "3038");
+  assert.equal(extractClDFromProperties({ CFOP_ZONE_ID: "30381234" }), "3038");
+  assert.equal(extractClDFromProperties({}), "");
+});
+
+test("classifies canonical and legacy region features", () => {
+  assert.equal(classifyFeature({ geometry: { type: "Point" }, properties: { dwellingNo: "1" } }), "dwellings");
+  assert.equal(classifyFeature({ geometry: { type: "Polygon" }, properties: { _group: "cu" } }), "cu");
+  assert.equal(classifyFeature({ geometry: { type: "Polygon" }, properties: { CB_COLCODE: "01" } }), "blocks");
+  assert.equal(classifyFeature({ geometry: { type: "LineString" }, properties: {} }), "");
+});
+
+test("normalises Feature and FeatureCollection payloads", () => {
+  const feature = { type: "Feature", id: "12", properties: null, geometry: { type: "Point", coordinates: [0, 0] } };
+  assert.deepEqual(normalizeFeatures(feature), [{
+    id: 12,
+    type: "Feature",
+    properties: {},
+    geometry: { type: "Point", coordinates: [0, 0] }
+  }]);
+  assert.equal(normalizeFeatures({ type: "FeatureCollection", features: [feature] }).length, 1);
+});
