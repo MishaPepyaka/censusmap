@@ -115,22 +115,22 @@ implementation.
 
 ## Phase 3 — Durable offline work
 
-- [ ] R130 Store CLD snapshots in IndexedDB.
+- [x] R130 Store CLD snapshots in IndexedDB.
   - [x] Persist each downloaded CLD GeoJSON snapshot with its timestamp and server revision.
   - [x] Show shared unavailable, downloading, ready, stale, and failed snapshot states in viewer and editor.
   - [x] Show the cached snapshot timestamp and revision in viewer and editor.
-  - Download CU, blocks, dwellings, special locations, snapshot timestamp, and revision per CLD.
-  - Render a downloaded snapshot and build search indexes without a network connection.
-  - Show clear states for unavailable, downloading, ready, stale, and failed snapshots.
+  - [x] Download CU, blocks, dwellings, special locations, snapshot timestamp, and revision per CLD.
+  - [x] Render a downloaded snapshot and build search indexes without a network connection.
+  - [x] Show clear states for unavailable, downloading, ready, stale, and failed snapshots.
 
-- [ ] R131 Make offline edits durable and synchronised.
+- [x] R131 Make offline edits durable and synchronised.
   - [x] Persist and restore the CLD pending-mutation queue through IndexedDB, with localStorage compatibility fallback.
   - [x] Apply the restored pending-mutation queue optimistically whenever a CLD snapshot is loaded.
   - [x] Show editor pending counts and pause retries with the current server revision after a write conflict.
   - [x] Retry queued editor and geometry changes on application open and connectivity restoration.
-  - Store pending mutations in IndexedDB and apply them optimistically to the local snapshot.
-  - Retry on application open and connectivity restoration.
-  - Surface pending counts and server revision conflicts in the editor.
+  - [x] Store pending mutations in IndexedDB and apply them optimistically to the local snapshot.
+  - [x] Retry on application open and connectivity restoration.
+  - [x] Surface pending counts and server revision conflicts in the editor.
 
 - [ ] R132 Validate supported offline behaviour.
   - Test initial download, airplane-mode reload, search, editing, restart, reconnect, and conflict resolution on iPhone Safari and Chromium.
