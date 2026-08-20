@@ -12,17 +12,15 @@ import { registerRegionRoutes } from "./routes/region-routes.js";
 import { registerTileRoutes } from "./routes/tile-routes.js";
 import { registerAuthRoutes } from "./routes/auth-routes.js";
 import { registerUserRoutes } from "./routes/user-routes.js";
+import { assertDwellingNoUnique, classifyRegionFeature, inferRegionFeatureType, summarizeRegion } from "./services/region-service.js";
 import { ensureDir, exists, readJsonFile, writeJsonFile } from "./infrastructure/json-files.js";
 import {
   buildFeatureCollection,
   assertValidRegionFeature,
-  classifyFeature,
   extractClDFromProperties,
   extractCuCode,
   featureFileNames,
-  getDwellingIdentity,
   hasText,
-  isSpecialLocationFeature,
   normalizeClD,
   normalizeDwellingNo,
   normalizeFeatures,
@@ -577,7 +575,7 @@ async function migrateLegacyDataToClDStore() {
     }
     const bucket = grouped.get(cld);
     const normalized = normalizeRegionFeature(feature);
-    const featureType = classifyFeature(normalized);
+    const featureType = classifyRegionFeature(normalized);
     const featureId = Number(normalized.id);
     if (Number.isFinite(featureId)) {
       bucket.maxId = Math.max(bucket.maxId, featureId);
@@ -776,50 +774,6 @@ async function readRegionBundle(cld) {
   return { index, cu, blocks, dwellings };
 }
 
-function buildDwellingDuplicateError(cuCode, dwellingNo, conflictingId) {
-  const suffix = Number.isFinite(conflictingId) ? ` (feature id ${conflictingId})` : "";
-  return new Error(`Dwelling ${dwellingNo} already exists in CU ${cuCode}${suffix}`);
-}
-
-async function assertDwellingNoUnique(feature, dwellings, excludeId = null) {
-  const identity = getDwellingIdentity(feature?.properties || {});
-  if (!identity) return;
-  const { cuCode, dwellingNo } = identity;
-  const conflict = dwellings.find((item) => {
-    const itemId = Number(item?.id);
-    if (Number.isFinite(excludeId) && itemId === Number(excludeId)) return false;
-    const itemIdentity = getDwellingIdentity(item?.properties || {});
-    if (!itemIdentity) return false;
-    return itemIdentity.cuCode === cuCode && itemIdentity.dwellingNo === dwellingNo;
-  });
-  if (conflict) {
-    throw buildDwellingDuplicateError(cuCode, dwellingNo, Number(conflict.id));
-  }
-}
-
-function summarizeRegion(index, bundle) {
-  return {
-    cld: index.cld,
-    label: index.label || `CLD ${index.cld}`,
-    ssids: Array.isArray(index.ssids) ? index.ssids : [],
-    cuCodes: Array.isArray(index.cuCodes) ? index.cuCodes : [],
-    counts: {
-      cu: bundle.cu.length,
-      blocks: bundle.blocks.length,
-      dwellings: bundle.dwellings.filter((feature) => !isSpecialLocationFeature(feature)).length,
-      specialLocations: bundle.dwellings.filter((feature) => isSpecialLocationFeature(feature)).length
-    }
-  };
-}
-
-function inferFileTypeFromFeature(feature) {
-  const featureType = classifyFeature(feature);
-  if (featureType === "cu" || featureType === "blocks" || featureType === "dwellings") {
-    return featureType;
-  }
-  throw new Error("Unsupported feature type");
-}
-
 async function findRegionFeatureById(cld, id) {
   if (!useFileStore) {
     const { rows } = await pool.query(
@@ -858,10 +812,10 @@ async function createRegionFeature(cld, feature) {
     throw new Error(`Unknown CLD ${cld}`);
   }
 
-  const type = inferFileTypeFromFeature(normalized);
+  const type = inferRegionFeatureType(normalized);
   const collection = await readRegionFeatures(cld, type);
   const dwellings = type === "dwellings" ? collection : await readRegionFeatures(cld, "dwellings");
-  await assertDwellingNoUnique(normalized, dwellings);
+  assertDwellingNoUnique(normalized, dwellings);
 
   if (!useFileStore) {
     const properties = normalized.properties || {};
@@ -907,13 +861,13 @@ async function updateRegionFeature(cld, id, feature) {
   if (targetIndex === -1) return false;
 
   normalized.id = Number(id);
-  const candidateType = inferFileTypeFromFeature(normalized);
+  const candidateType = inferRegionFeatureType(normalized);
   if (candidateType !== existing.type) {
     throw new Error("Changing feature type is not supported");
   }
 
   const dwellings = existing.type === "dwellings" ? collection : await readRegionFeatures(cld, "dwellings");
-  await assertDwellingNoUnique(normalized, dwellings, Number(id));
+  assertDwellingNoUnique(normalized, dwellings, Number(id));
   if (!useFileStore) {
     await pool.query(
       `
@@ -1277,7 +1231,7 @@ app.post("/api/features", async (req, res) => {
       for (const feature of features) {
         const normalized = normalizeRegionFeature(feature);
         if (!normalized.geometry) throw new Error("Feature geometry is required");
-        await assertDwellingNoUnique(normalized, store.features);
+        assertDwellingNoUnique(normalized, store.features);
         const properties = normalized.properties || {};
         const now = new Date().toISOString();
         const id = store.nextId;
@@ -1380,7 +1334,7 @@ app.put("/api/features/:id", async (req, res) => {
       if (!row) {
         return res.status(404).json({ error: "Feature not found" });
       }
-      await assertDwellingNoUnique(features[0], store.features, id);
+      assertDwellingNoUnique(features[0], store.features, id);
       row.properties = features[0].properties || {};
       row.geometry = features[0].geometry;
       row.updatedAt = new Date().toISOString();

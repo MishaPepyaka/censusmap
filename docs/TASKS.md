@@ -36,6 +36,8 @@ implementation.
   - [x] Move auth, regions, users, uploads, system, and tile proxy routes into route modules.
   - [x] Add central error handling.
   - [ ] Move data access and business rules into repositories and services.
+    - [x] Move region summary, feature-type classification, and dwelling uniqueness rules into `services/region-service.js`.
+    - [ ] Extract persistence adapters into repositories.
 
 - [ ] R112 Consolidate region persistence.
   - Implement a single `RegionRepository` interface for the selected runtime store.
