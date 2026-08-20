@@ -73,9 +73,11 @@ implementation.
 ## Phase 2 — Shared frontend foundation
 
 - [ ] R120 Introduce a frontend module build and typed source layout.
+  - [x] Establish a Vite build, TypeScript type-checking, and `frontend/src/` source layout.
   - Move page scripts from `backend/public/` into `frontend/src/` modules.
   - Keep generated static assets as the only runtime files under `backend/public/`.
-  - Convert shared domain, API, map, and offline modules before converting page-specific UI.
+  - [ ] Convert shared domain, API, map, and offline modules before converting page-specific UI.
+    - [x] Convert the shared API client while preserving `window.CensusMapApi` for existing pages.
 
 - [ ] R121 Create one region data client.
   - Centralise CLD loading, canonical feature parsing, caching, and error handling.
