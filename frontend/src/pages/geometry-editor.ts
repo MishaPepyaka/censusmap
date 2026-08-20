@@ -28,7 +28,7 @@
 
   const map = L.map("map", { zoomControl: false }).setView([56, -96], 4);
   L.control.zoom({ position: "bottomright" }).addTo(map);
-  L.tileLayer("/tiles/satellite/{z}/{y}/{x}", {
+  L.tileLayer("/tiles/satellite/{z}/{y}/{x}?v=2", {
     maxZoom: 22, maxNativeZoom: 17, attribution: "Tiles © Esri"
   }).addTo(map);
 

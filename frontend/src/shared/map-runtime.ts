@@ -76,7 +76,7 @@ export function bindMapUrlState(map: MapLike, requested: MapUrlState, onQueryCha
 }
 
 export function setupBaseMap(map: MapLike, button?: HTMLElement | null) {
-  const satelliteLayer = leaflet.tileLayer("/tiles/satellite/{z}/{y}/{x}", { maxZoom: 22, maxNativeZoom: 17, attribution: "Tiles &copy; Esri" });
+  const satelliteLayer = leaflet.tileLayer("/tiles/satellite/{z}/{y}/{x}?v=2", { maxZoom: 22, maxNativeZoom: 17, attribution: "Tiles &copy; Esri" });
   const schematicLayer = leaflet.tileLayer("/tiles/schematic/{z}/{y}/{x}", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" });
   let currentMode: "satellite" | "schematic" = "satellite";
   satelliteLayer.addTo(map);
