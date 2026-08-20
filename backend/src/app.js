@@ -21,3 +21,18 @@ export function createApp({ cldRootDir, nodeModulesDir }) {
 export function registerPublicAssets(app, publicDir) {
   app.use(express.static(publicDir));
 }
+
+export function createErrorHandler({ logger = console.error } = {}) {
+  return (error, req, res, next) => {
+    if (res.headersSent) return next(error);
+    logger("Unhandled request error:", error);
+    if (req.path.startsWith("/api/")) {
+      return res.status(500).json({ error: "Internal server error" });
+    }
+    return res.status(500).type("text").send("Internal server error");
+  };
+}
+
+export function registerErrorHandler(app, options) {
+  app.use(createErrorHandler(options));
+}

@@ -7,7 +7,7 @@
     "start": "node src/server.js",
     "import:cld:db": "node scripts/import-cld-files-to-db.mjs",
     "test": "node --test",
-    "test:unit": "node --test test/domain/*.test.js test/infrastructure/*.test.js",
+    "test:unit": "node --test test/*.test.js test/domain/*.test.js test/infrastructure/*.test.js",
     "test:api": "node --test test/api/*.test.js",
     "test:browser": "node --test test/api/server.integration.test.js"
   },

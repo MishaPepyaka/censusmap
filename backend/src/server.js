@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { createApp, registerPublicAssets } from "./app.js";
+import { createApp, registerErrorHandler, registerPublicAssets } from "./app.js";
 import { registerSystemRoutes } from "./routes/system-routes.js";
 import { registerRegionRoutes } from "./routes/region-routes.js";
 import { registerTileRoutes } from "./routes/tile-routes.js";
@@ -1471,6 +1471,8 @@ app.get("/:cld", requireAuth, requireClDAccess, async (req, res, next) => {
 app.get("*", (_req, res) => {
   res.redirect("/");
 });
+
+registerErrorHandler(app);
 
 async function initializeApp() {
   if (useFileStore) {
