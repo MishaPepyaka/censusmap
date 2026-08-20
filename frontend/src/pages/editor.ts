@@ -22,26 +22,14 @@
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { describeOfflineSnapshotState, loadRegionSnapshot, partitionRegionFeatures } = window.CensusMapRegion;
   const { buildMapActionButtons } = window.CensusMapActions;
-  const { bindZoomUiMode, createCommonMapShell, createRegionPolygonStyle, getBlockFillOpacity, getFeatureLayerCenter } = window.CensusMapRuntime;
+  const { bindZoomUiMode, createCommonMapShell, createRegionPolygonStyle, getBlockFillOpacity, getFeatureLayerCenter, readMapUrlState } = window.CensusMapRuntime;
   const routeMatch = window.location.pathname.match(/^\/(\d+)\/edit(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
   if (!cld) {
     window.location.replace("/");
     return;
   }
-  const requestedMapView = (() => {
-    const query = new URLSearchParams(window.location.search);
-    const rawZoom = query.get("zoom");
-    const rawLat = query.get("lat");
-    const rawLng = query.get("lng");
-    const zoom = rawZoom === null ? Number.NaN : Number(rawZoom);
-    const lat = rawLat === null ? Number.NaN : Number(rawLat);
-    const lng = rawLng === null ? Number.NaN : Number(rawLng);
-    return {
-      zoom,
-      hasCenter: Number.isFinite(lat) && lat >= -90 && lat <= 90 && Number.isFinite(lng) && lng >= -180 && lng <= 180
-    };
-  })();
+  const requestedMapView = readMapUrlState();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {

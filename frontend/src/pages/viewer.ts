@@ -22,7 +22,7 @@
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
   const { describeOfflineSnapshotState, loadRegionSnapshot, loadRegionSummary: loadSharedRegionSummary, partitionRegionFeatures } = window.CensusMapRegion;
   const { getGoogleMapsLink, buildMapActionButtons } = window.CensusMapActions;
-  const { bindZoomUiMode, createCommonMapShell, createRegionPolygonStyle, getBlockFillOpacity, getFeatureLayerCenter, toFeatureCollection } = window.CensusMapRuntime;
+  const { bindZoomUiMode, createCommonMapShell, createRegionPolygonStyle, getBlockFillOpacity, getFeatureLayerCenter, readMapUrlState, toFeatureCollection } = window.CensusMapRuntime;
   const { createDwellingSearchIndex } = window.CensusMapDwellingSearch;
   const routeMatch = window.location.pathname.match(/^\/(\d+)(?:\/)?$/);
   const cld = routeMatch ? routeMatch[1] : "";
@@ -30,6 +30,7 @@
     window.location.replace("/");
     return;
   }
+  const requestedMapView = readMapUrlState();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {
