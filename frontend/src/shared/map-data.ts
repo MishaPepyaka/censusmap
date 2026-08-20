@@ -70,6 +70,33 @@ export function extractCuCode(props: FeatureProperties | null | undefined): stri
   return "UNKNOWN";
 }
 
+export function extractBlockCode(props: FeatureProperties | null | undefined, fallback = ""): string {
+  if (isNonEmpty(props?.CB_COLCODE)) return String(props?.CB_COLCODE).trim().padStart(2, "0");
+  if (isNonEmpty(props?.block)) return String(props?.block).trim().padStart(2, "0");
+  if (isNonEmpty(props?.GEOCODE)) return String(props?.GEOCODE).trim().slice(-2);
+  const fromName = isNonEmpty(props?.name) ? String(props?.name).split("/")[1] : "";
+  return fromName && fromName.trim().length > 0 ? fromName.trim().padStart(2, "0") : fallback;
+}
+
+export function extractDwellingNo(props: FeatureProperties | null | undefined, fallback = "0000"): string {
+  const raw = props?.dwellingNo ?? props?.DWELLING_NO ?? props?.vrNumber ?? props?.VR_NUMBER;
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  return digits ? digits.padStart(4, "0").slice(-4) : fallback;
+}
+
+export function displayDwellingNo(props: FeatureProperties | null | undefined, fallback = "0000"): string {
+  const normalized = extractDwellingNo(props, fallback);
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) ? String(numeric) : normalized;
+}
+
+const DWELLING_STATUSES = new Set(["429", "400", "402", "701", "500", "312", "324", "000", "001", "601"]);
+
+export function normalizeDwellingStatus(value: unknown): string {
+  const status = String(value ?? "").trim();
+  return DWELLING_STATUSES.has(status) ? status : "429";
+}
+
 export function hashText(value: unknown): number {
   const text = String(value || "");
   let hash = 0;

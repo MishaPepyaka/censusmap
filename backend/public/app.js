@@ -11,6 +11,10 @@
     isDwellingFeature,
     isSpecialLocationFeature,
     extractCuCode,
+    extractBlockCode,
+    extractDwellingNo,
+    displayDwellingNo,
+    normalizeDwellingStatus,
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
@@ -74,31 +78,6 @@
     } catch {
       currentUser = null;
     }
-  }
-
-  function extractBlockCode(props) {
-    if (isNonEmpty(props.CB_COLCODE)) return String(props.CB_COLCODE).trim().padStart(2, "0");
-    if (isNonEmpty(props.block)) return String(props.block).trim().padStart(2, "0");
-    if (isNonEmpty(props.GEOCODE)) return String(props.GEOCODE).trim().slice(-2);
-    const fromName = isNonEmpty(props.name) ? String(props.name).split("/")[1] : "";
-    return fromName && fromName.trim().length > 0 ? fromName.trim().padStart(2, "0") : "";
-  }
-
-  function extractDwellingNo(props) {
-    const raw = props.dwellingNo ?? props.DWELLING_NO ?? props.vrNumber ?? props.VR_NUMBER;
-    if (!isNonEmpty(raw)) return "0000";
-    return String(raw).trim().replace(/\D/g, "").padStart(4, "0").slice(-4);
-  }
-
-  function displayDwellingNo(props) {
-    const normalized = extractDwellingNo(props);
-    const numeric = Number(normalized);
-    return Number.isFinite(numeric) ? String(numeric) : normalized;
-  }
-
-  function normalizeDwellingStatus(value) {
-    const status = String(value ?? "").trim();
-    return ["429", "400", "402", "701", "500", "312", "324", "000", "001", "601"].includes(status) ? status : "429";
   }
 
   function formatSsidDisplay(value) {

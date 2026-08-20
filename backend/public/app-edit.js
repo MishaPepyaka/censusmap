@@ -11,6 +11,10 @@
     isDwellingFeature,
     isSpecialLocationFeature,
     extractCuCode,
+    extractBlockCode: extractSharedBlockCode,
+    extractDwellingNo: extractSharedDwellingNo,
+    displayDwellingNo: displaySharedDwellingNo,
+    normalizeDwellingStatus,
     buildColorMap
   } = window.CensusMapData;
   const { getJson, getJsonWithTimeout } = window.CensusMapApi;
@@ -133,22 +137,15 @@
   }
 
   function extractBlockCode(props) {
-    if (isNonEmpty(props.CB_COLCODE)) return String(props.CB_COLCODE).trim().padStart(2, "0");
-    if (isNonEmpty(props.block)) return String(props.block).trim().padStart(2, "0");
-    if (isNonEmpty(props.GEOCODE)) return String(props.GEOCODE).trim().slice(-2);
-    return "01";
+    return extractSharedBlockCode(props, "01");
   }
 
   function extractDwellingNo(props) {
-    const raw = props.dwellingNo ?? props.DWELLING_NO ?? props.vrNumber ?? props.VR_NUMBER;
-    if (!isNonEmpty(raw)) return "0001";
-    return String(raw).trim().padStart(4, "0");
+    return extractSharedDwellingNo(props, "0001");
   }
 
   function displayDwellingNo(props) {
-    const normalized = extractDwellingNo(props);
-    const numeric = Number(String(normalized).replace(/\D/g, ""));
-    return Number.isFinite(numeric) ? String(numeric) : normalized;
+    return displaySharedDwellingNo(props, "0001");
   }
 
   function applyPendingMutations(features) {
@@ -208,13 +205,6 @@
 
   function formatDwellingNo(raw) {
     return String(raw || "").trim().replace(/\D/g, "").padStart(4, "0").slice(-4);
-  }
-
-  const DWELLING_STATUSES = new Set(["429", "400", "402", "701", "500", "312", "324", "000", "001", "601"]);
-
-  function normalizeDwellingStatus(value) {
-    const status = String(value ?? "").trim();
-    return DWELLING_STATUSES.has(status) ? status : "429";
   }
 
   function ringContainsLngLat(ring, lng, lat) {

@@ -90,6 +90,7 @@ implementation.
 
 - [ ] R121 Create one region data client.
   - [x] Centralise viewer/editor CLD snapshot loading, revision extraction, feature partitioning, offline-cache fallback, and load errors.
+  - [x] Centralise viewer/editor dwelling status and CLD feature identifier normalisation.
   - Centralise CLD loading, canonical feature parsing, caching, and error handling.
   - Remove duplicate `getMapData`, feature partitioning, identifier extraction, and status normalisation from viewer/editor/StatCan code.
 
