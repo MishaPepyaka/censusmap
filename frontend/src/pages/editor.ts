@@ -303,6 +303,12 @@
   const blockLayers = [];
   const SPECIAL_LOCATIONS_MIN_VISIBLE_ZOOM = 10;
 
+  function getDwellingBounds() {
+    const bounds = L.latLngBounds([]);
+    dwellingsLayer.eachLayer((marker) => bounds.extend(marker.getLatLng()));
+    return bounds;
+  }
+
   async function showGeometryLinkForAdmin() {
     try {
       const me = await getJson("/api/me");
@@ -1204,7 +1210,7 @@
   if (!Number.isFinite(requestedMapView.zoom) && editableLayer.getLayers().length > 0) {
     map.fitBounds(editableLayer.getBounds(), { padding: [20, 20] });
   } else if (!Number.isFinite(requestedMapView.zoom) && dwellingsLayer.getLayers().length > 0) {
-    const dwellingBounds = dwellingsLayer.getBounds();
+    const dwellingBounds = getDwellingBounds();
     if (dwellingBounds.isValid()) {
       map.fitBounds(dwellingBounds, { padding: [20, 20] });
     }
@@ -1212,7 +1218,7 @@
     setStatus(data.loadError || `No region geometry loaded for CLD ${cld}.`, true);
   }
   mapUrlState.applyRequestedMapView();
-  const dwellingBounds = dwellingsLayer.getBounds();
+  const dwellingBounds = getDwellingBounds();
   if (dwellingBounds.isValid() && !map.getBounds().intersects(dwellingBounds)) {
     map.fitBounds(dwellingBounds, { padding: [20, 20] });
     setStatus("Map focused on this CLD's dwellings.", false);
